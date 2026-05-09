@@ -58,6 +58,10 @@ function padTestLoop() {
       if (latencyState && latencyState.targetBit === i) handleLatencyHit(i, now);
       else if (latencyState && latencyState.targetBit !== null) handleLatencyHit(i, now);
       if (ghostState) handleGhostHit(i, now);
+      // Calibration screen: any of the 4 arrows counts as a tap
+      if (typeof currentScreen !== 'undefined' && currentScreen === 'calib' && i < 4) {
+        if (typeof calibRegisterPress === 'function') calibRegisterPress();
+      }
     }
   }
   if (anyChange) {

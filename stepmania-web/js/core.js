@@ -112,6 +112,15 @@ async function dbDelete(id) {
     req.onerror = () => rej(req.error);
   });
 }
+async function dbPut(song) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('songs', 'readwrite');
+    const req = tx.objectStore('songs').put(song);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
 async function dbScoreGet(songId, chartKey) {
   const db = await openDB();
   return new Promise((res, rej) => {
@@ -136,6 +145,15 @@ async function dbScoresForSong(songId) {
     const tx = db.transaction('scores', 'readonly');
     const req = tx.objectStore('scores').index('songId').getAll(songId);
     req.onsuccess = () => res(req.result || []);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function dbScoreDelete(songId, chartKey) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('scores', 'readwrite');
+    const req = tx.objectStore('scores').delete(songId + ':' + chartKey);
+    req.onsuccess = () => res();
     req.onerror = () => rej(req.error);
   });
 }

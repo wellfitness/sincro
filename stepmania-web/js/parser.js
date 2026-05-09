@@ -3,6 +3,13 @@
 //  notes-to-events with quant colors. Mirrors StepMania TimingData.cpp.
 // ============================================================================
 
+// Handles BOTH formats:
+//   .ssc — `#NOTEDATA;` opens a chart block, then per-chart tags (DIFFICULTY,
+//          METER, RADARVALUES, OFFSET, BPMS, etc.), then `#NOTES:body;`.
+//   .sm  — no #NOTEDATA; instead `#NOTES:type:desc:diff:meter:radar:body;`
+//          (legacy 3.9 format, common in old packs).
+// Per-chart values override header values in buildTimingEngine via the
+// `chartHeader[k] || header[k]` lookup.
 function parseSscOrSm(text) {
   text = text.replace(/\/\/[^\n]*/g, '');
   const tags = [];
@@ -26,6 +33,7 @@ function parseSscOrSm(text) {
       cur = {};
     } else if (key === 'NOTES') {
       if (cur === null) {
+        // Legacy .sm: 6 colon-separated parts (type, desc, diff, meter, radar, body)
         const parts = val.split(':');
         if (parts.length >= 6) charts.push({
           STEPSTYPE: parts[0].trim(), DESCRIPTION: parts[1].trim(),
@@ -62,6 +70,22 @@ function buildTimingEngine(header, chartHeader) {
   const stops  = parseSscPairs(get('STOPS'));
   const delays = parseSscPairs(get('DELAYS'));
   const warps  = parseSscPairs(get('WARPS'));
+  const fakes  = parseSscPairs(get('FAKES'));    // beat=length pairs, range [beat, beat+length)
+  const ticks  = parseSscPairs(get('TICKCOUNTS')); // beat=ticks-per-beat
+  // SCROLLS — beat=multiplier (negative = reverse direction). Pure pair format.
+  const scrolls = parseSscPairs(get('SCROLLS'));
+  // SPEEDS — 4-tuple per entry: beat=ratio=delay=unit. We read just (beat, ratio).
+  const speedsRaw = (get('SPEEDS') || '').replace(/\s+/g, '').split(',').filter(Boolean);
+  const speeds = speedsRaw.map(p => {
+    const parts = p.split('=').map(parseFloat);
+    return { beat: parts[0], val: parts[1] };
+  }).filter(x => isFinite(x.beat) && isFinite(x.val)).sort((a,b)=>a.beat-b.beat);
+  // COMBOS — beat=mul (or beat=hit=miss; we use hit if both present)
+  const combosRaw = (get('COMBOS') || '').replace(/\s+/g, '').split(',').filter(Boolean);
+  const combos = combosRaw.map(p => {
+    const parts = p.split('=').map(parseFloat);
+    return { beat: parts[0], val: parts[1] };
+  }).filter(x => isFinite(x.beat) && isFinite(x.val)).sort((a,b)=>a.beat-b.beat);
   const offset = parseFloat(get('OFFSET') || '0') || 0;
   if (!bpms.length) bpms.push({ beat: 0, val: 120 });
   if (bpms[0].beat > 0) bpms.unshift({ beat: 0, val: bpms[0].val });
@@ -96,7 +120,74 @@ function buildTimingEngine(header, chartHeader) {
   }
   let minBpm = Infinity, maxBpm = -Infinity;
   for (const b of bpms) { if (b.val < minBpm) minBpm = b.val; if (b.val > maxBpm) maxBpm = b.val; }
-  return { beatToTime, bpmAtBeat, minBpm, maxBpm, offset, hasChanges: bpms.length > 1 || stops.length > 0 || delays.length > 0 || warps.length > 0 };
+  function isInFake(beat) {
+    for (const f of fakes) if (beat >= f.beat && beat < f.beat + f.val) return true;
+    return false;
+  }
+  function ticksPerBeatAt(beat) {
+    let v = 4; // StepMania default
+    for (const t of ticks) if (t.beat <= beat) v = t.val;
+    return v;
+  }
+  function scrollAtBeat(beat) {
+    let v = 1;
+    for (const s of scrolls) if (s.beat <= beat) v = s.val;
+    return v;
+  }
+  function speedAtBeat(beat) {
+    if (!speeds.length) return 1;
+    let v = speeds[0].val;
+    for (const s of speeds) if (s.beat <= beat) v = s.val;
+    return v;
+  }
+  function comboMulAt(beat) {
+    let v = 1;
+    for (const c of combos) if (c.beat <= beat) v = c.val;
+    return v;
+  }
+  // Inverse of beatToTime — segment-walk through bpms, ignoring stops/delays/warps
+  // for sub-frame approximation. Good enough for render-time speed/scroll lookup.
+  function timeToBeat(audioTime) {
+    let t = -offset;
+    let cur = 0;
+    for (let i = 0; i < bpms.length; i++) {
+      const segEnd = (i+1 < bpms.length) ? bpms[i+1].beat : Infinity;
+      const segBpm = bpms[i].val || 120;
+      const segDur = (segEnd - cur) * 60 / segBpm;
+      if (t + segDur >= audioTime) {
+        const frac = (audioTime - t) / (60 / segBpm);
+        return cur + Math.max(0, frac);
+      }
+      t += segDur;
+      cur = segEnd;
+    }
+    return cur;
+  }
+  return { beatToTime, timeToBeat, bpmAtBeat, isInFake, ticksPerBeatAt, scrollAtBeat, speedAtBeat, comboMulAt, minBpm, maxBpm, offset, hasChanges: bpms.length > 1 || stops.length > 0 || delays.length > 0 || warps.length > 0 };
+}
+
+// Parse #ATTACKS field. Format example:
+//   TIME=10.5:LEN=4.5:MODS=*1.5 +500% confusion mirror,TIME=...
+// We only extract (time, len, mods string). The game applies the subset of mods
+// it understands (mirror/left/right/shuffle/hidden/sudden) and ignores rest.
+function parseAttacks(text) {
+  if (!text) return [];
+  const out = [];
+  for (const block of text.split(',').map(s => s.trim()).filter(Boolean)) {
+    const m = block.match(/TIME=([\d.\-]+):LEN=([\d.\-]+):MODS=(.+)/i);
+    if (!m) continue;
+    const time = parseFloat(m[1]);
+    const len  = parseFloat(m[2]);
+    const modsRaw = m[3].trim();
+    if (!isFinite(time) || !isFinite(len)) continue;
+    const known = ['mirror','left','right','shuffle','hidden','sudden'];
+    const found = new Set();
+    for (const k of known) {
+      if (new RegExp(`\\b${k}\\b`, 'i').test(modsRaw)) found.add(k);
+    }
+    out.push({ time, len, mods: found, raw: modsRaw });
+  }
+  return out;
 }
 
 // Per-row beat = measure*4 + r/total*4. Each measure is exactly 4 beats.
@@ -120,7 +211,8 @@ function parseNotesToEvents(notesText, timingEngine) {
         else if (ch === '3') type = 'hold-tail';
         else if (ch === '4') type = 'roll-head';
         else if (ch === 'M' || ch === 'm') type = 'mine';
-        else if (ch === 'L' || ch === 'F') type = 'tap';
+        else if (ch === 'L' || ch === 'l') type = 'lift';   // judged on RELEASE
+        else if (ch === 'F' || ch === 'f') type = 'fake';   // rendered, no score
         else continue;
         events.push({ beat, lane, type, row: r, total });
       }
@@ -131,10 +223,19 @@ function parseNotesToEvents(notesText, timingEngine) {
   for (const e of events) {
     const t = timingEngine.beatToTime(e.beat);
     if (t === null) continue;
-    if (e.type === 'tap' || e.type === 'mine') {
-      finalNotes.push({ beat: e.beat, lane: e.lane, type: e.type, time: t, row: e.row, total: e.total });
+    // Notes inside a #FAKES range become fake regardless of original char
+    const inFake = timingEngine.isInFake && timingEngine.isInFake(e.beat);
+    if (e.type === 'tap' || e.type === 'mine' || e.type === 'lift' || e.type === 'fake') {
+      const finalType = inFake && e.type !== 'mine' ? 'fake' : e.type;
+      finalNotes.push({ beat: e.beat, lane: e.lane, type: finalType, time: t, row: e.row, total: e.total });
     } else if (e.type === 'hold-head' || e.type === 'roll-head') {
-      const note = { beat: e.beat, lane: e.lane, type: e.type === 'roll-head' ? 'roll' : 'hold', time: t, endBeat: null, endTime: null, row: e.row, total: e.total };
+      // Hold tick rate: combine TICKCOUNTS section with BPM at the head.
+      // Used by game.js to award +5 per tick held correctly. Falls back to
+      // 4 ticks/beat if the engine doesn't expose ticksPerBeatAt.
+      const tpb = (timingEngine.ticksPerBeatAt ? timingEngine.ticksPerBeatAt(e.beat) : 4);
+      const bpm = timingEngine.bpmAtBeat(e.beat);
+      const tickInterval = 60 / (bpm * Math.max(1, tpb));
+      const note = { beat: e.beat, lane: e.lane, type: e.type === 'roll-head' ? 'roll' : 'hold', time: t, endBeat: null, endTime: null, row: e.row, total: e.total, tickInterval };
       finalNotes.push(note);
       openHolds[e.lane] = note;
     } else if (e.type === 'hold-tail') {

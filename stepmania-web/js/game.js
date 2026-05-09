@@ -38,13 +38,107 @@ const ARROW_SIZE = 56;
 const arrowSpriteCache = new Map(); // key = laneRotation+'_'+color
 function buildArrowSprites() { arrowSpriteCache.clear(); }
 const LANE_ROTATION = [-90, 180, 0, 90]; // L, D, U, R — rotation of base arrow (which points up)
+
+// Optional user-uploaded NoteSkin PNG. If present, overrides the polygonal
+// sprite. Color tint is applied via 'source-atop' overlay so quant colors
+// still work. Persisted in localStorage as a dataURL.
+const NOTESKIN_KEY = 'stepmania-web-noteskin';
+let noteskinImage = null;
+(function loadNoteskinIfStored() {
+  try {
+    const stored = localStorage.getItem(NOTESKIN_KEY);
+    if (!stored) return;
+    const img = new Image();
+    img.onload = () => { noteskinImage = img; arrowSpriteCache.clear(); };
+    img.src = stored;
+  } catch (e) {}
+})();
+function setNoteskinFromFile(file) {
+  if (!file) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try { localStorage.setItem(NOTESKIN_KEY, fr.result); } catch (e) {}
+    const img = new Image();
+    img.onload = () => { noteskinImage = img; arrowSpriteCache.clear(); };
+    img.src = fr.result;
+  };
+  fr.readAsDataURL(file);
+}
+function clearNoteskin() {
+  try { localStorage.removeItem(NOTESKIN_KEY); } catch (e) {}
+  noteskinImage = null;
+  arrowSpriteCache.clear();
+}
+
+// ----- Optional global background image -------------------------------------
+// Persisted as dataURL in localStorage. Falls back to a per-song procedural
+// gradient (drawProceduralBg) when nothing is loaded, so the play screen
+// never looks like flat black. Video was intentionally removed — too costly
+// to drawImage every frame and distracts from the rhythm focus.
+const BG_KEY = 'stepmania-web-bg-data';
+let bgImage = null;
+(function loadStoredBg() {
+  try {
+    // Cleanup leftover key from older versions that supported video BG
+    localStorage.removeItem('stepmania-web-bg-type');
+    const data = localStorage.getItem(BG_KEY);
+    if (!data) return;
+    const img = new Image();
+    img.onload = () => { bgImage = img; };
+    img.src = data;
+  } catch (e) {}
+})();
+function setBgFromFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      bgImage = img;
+      try { localStorage.setItem(BG_KEY, fr.result); } catch(e) {}
+    };
+    img.src = fr.result;
+  };
+  fr.readAsDataURL(file);
+}
+function clearBg() {
+  bgImage = null;
+  try { localStorage.removeItem(BG_KEY); } catch(e) {}
+}
+
+// Per-song procedural background — derives 2 hue values from title hash
+// for a unique gradient. Works as a deterministic visual identity per song.
+function drawProceduralBg(W, H, title) {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) hash = (hash * 31 + title.charCodeAt(i)) | 0;
+  const h1 = ((hash >>> 0) % 360);
+  const h2 = ((hash >>> 8) % 360);
+  const grad = ctx2d.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, `hsl(${h1}, 50%, 8%)`);
+  grad.addColorStop(1, `hsl(${h2}, 50%, 4%)`);
+  ctx2d.fillStyle = grad;
+  ctx2d.fillRect(0, 0, W, H);
+}
 function getArrowSprite(lane, color) {
-  const key = LANE_ROTATION[lane] + '_' + color;
+  const key = LANE_ROTATION[lane] + '_' + color + (noteskinImage ? '_png' : '');
   let s = arrowSpriteCache.get(key);
   if (s) return s;
   const c = document.createElement('canvas');
   c.width = c.height = ARROW_SIZE;
   const cx = c.getContext('2d');
+  // PNG noteskin path — draw image rotated, then tint with quant color
+  if (noteskinImage) {
+    cx.translate(ARROW_SIZE/2, ARROW_SIZE/2);
+    cx.rotate(LANE_ROTATION[lane] * Math.PI/180);
+    cx.drawImage(noteskinImage, -ARROW_SIZE/2, -ARROW_SIZE/2, ARROW_SIZE, ARROW_SIZE);
+    // Tint: only paints where the image already has alpha
+    cx.globalCompositeOperation = 'source-atop';
+    cx.fillStyle = color;
+    cx.globalAlpha = 0.55;
+    cx.fillRect(-ARROW_SIZE/2, -ARROW_SIZE/2, ARROW_SIZE, ARROW_SIZE);
+    arrowSpriteCache.set(key, c);
+    return c;
+  }
   cx.translate(ARROW_SIZE/2, ARROW_SIZE/2);
   cx.rotate(LANE_ROTATION[lane] * Math.PI/180);
   // Up-pointing arrow
@@ -95,6 +189,11 @@ async function startGame() {
   const parsed = parseSscOrSm(selectedSong.sscText);
   const chartData = parsed.charts.find(c => (c.DIFFICULTY||'').toLowerCase() === selectedChart.key) || parsed.charts[0];
   const tEngine = buildTimingEngine(parsed.header, chartData);
+  // Parse #ATTACKS — chart-level overrides song-level. Stored on gameState
+  // and applied per-frame in gameLoop. Snapshot user mods so attacks don't
+  // permanently mutate them across plays.
+  const attacks = parseAttacks((chartData && chartData.ATTACKS) || parsed.header.ATTACKS || '');
+  const baseMods = { ...activeMods };
   let notes = parseNotesToEvents(chartData.NOTES, tEngine);
   // Apply lane permutation modifiers
   for (const n of notes) n.lane = applyModsToLane(n.lane);
@@ -135,12 +234,15 @@ async function startGame() {
     judgments: { marvelous: 0, perfect: 0, great: 0, good: 0, bad: 0, miss: 0 },
     pressedLanes: [false, false, false, false],
     keyHeld: [false, false, false, false],
+    padPrev:  [false, false, false, false],
     flashTime: [0, 0, 0, 0],
     hitFx: [],   // {lane, t}
     songInfo: `${selectedSong.title} — ${selectedChart.name} ★${selectedChart.rating}`,
     finished: false,
     pixelsPerSec: 600 * settings.scrollSpeed * activeMods.chartSpeed,
     timing: getTimingWindows(),
+    attacks,
+    baseMods,
   };
   document.getElementById('hudSongInfo').textContent = gameState.songInfo;
   document.getElementById('hudScore').textContent = '0';
@@ -181,6 +283,8 @@ function runCountdown() {
 function stopGame() {
   if (!gameState) return;
   try { gameState.src.stop(); } catch(e) {}
+  // Restore user mods snapshot so attacks don't bleed into the next play
+  if (gameState.baseMods) Object.assign(activeMods, gameState.baseMods);
   window.removeEventListener('keydown', onKeyDown);
   window.removeEventListener('keyup', onKeyUp);
   gameState = null;
@@ -203,7 +307,38 @@ function onKeyUp(e) {
   const lane = LANE_KEYS.indexOf(e.code);
   if (lane === -1) return;
   gameState.keyHeld[lane] = false;
-  if (!gamepadButtonState[LANE_PAD[lane]]) gameState.pressedLanes[lane] = false;
+  if (!gamepadButtonState[LANE_PAD[lane]]) {
+    gameState.pressedLanes[lane] = false;
+    handleLaneRelease(lane);
+  }
+}
+
+// Lift notes are judged when the player RELEASES the lane (instead of pressing).
+// We pick the closest unjudged lift in window, like handleLanePress does.
+function handleLaneRelease(lane) {
+  if (!gameState || gameState.finished) return;
+  const audioTime = (audioCtx.currentTime - gameState.startTime) - settings.globalOffset / 1000;
+  const T = gameState.timing;
+  let best = null, bestDist = Infinity;
+  for (const n of gameState.notes) {
+    if (n.lane !== lane || n.judged || n.type !== 'lift') continue;
+    const dist = Math.abs(audioTime - n.time);
+    if (dist < bestDist && dist <= T.bad) { best = n; bestDist = dist; }
+  }
+  if (!best) return;
+  let judg;
+  if (bestDist <= T.marvelous) judg = 'marvelous';
+  else if (bestDist <= T.perfect) judg = 'perfect';
+  else if (bestDist <= T.great)   judg = 'great';
+  else if (bestDist <= T.good)    judg = 'good';
+  else                             judg = 'bad';
+  best.judged = judg;
+  gameState.judgments[judg]++;
+  gameState.score += SCORES[judg];
+  if (judg === 'bad') gameState.combo = 0;
+  else { gameState.combo++; gameState.maxCombo = Math.max(gameState.maxCombo, gameState.combo); }
+  gameState.hitFx.push(makeHitFx(lane));
+  showJudgment(judg);
 }
 
 function gameLoop() {
@@ -212,15 +347,31 @@ function gameLoop() {
   const audioTime = (audioCtx.currentTime - gameState.startTime) - settings.globalOffset / 1000;
   const T = gameState.timing;
 
-  // Gamepad input
+  // Apply per-time #ATTACKS by overriding activeMods. Reset to baseMods first
+  // so we don't accumulate stale flags across attack windows.
+  if (gameState.attacks && gameState.attacks.length) {
+    Object.assign(activeMods, gameState.baseMods);
+    for (const a of gameState.attacks) {
+      if (audioTime >= a.time && audioTime < a.time + a.len) {
+        for (const m of a.mods) activeMods[m] = true;
+      }
+    }
+  }
+
+  // Gamepad input — track press AND release for lift notes
   for (let i = 0; i < 4; i++) {
     const padBtn = LANE_PAD[i];
     const pressed = gamepadButtonState[padBtn];
+    const wasPressed = gameState.padPrev[i];
     if (gamepadJustPressed[padBtn]) {
       gameState.pressedLanes[i] = true;
       gameState.flashTime[i] = performance.now();
       handleLanePress(i);
     }
+    if (wasPressed && !pressed && !gameState.keyHeld[i]) {
+      handleLaneRelease(i);
+    }
+    gameState.padPrev[i] = pressed;
     // Combine keyboard + gamepad for hold detection
     gameState.pressedLanes[i] = pressed || gameState.keyHeld[i];
   }
@@ -228,8 +379,12 @@ function gameLoop() {
   // Missed taps + mine handling
   for (const n of gameState.notes) {
     if (n.judged) continue;
+    if (n.type === 'fake') {
+      // Fakes never score; mark them passed once their window closes
+      if (audioTime > n.time + T.bad) n.judged = 'fake-pass';
+      continue;
+    }
     if (n.type === 'mine') {
-      // Mine within tight window AND lane pressed = penalty
       if (Math.abs(audioTime - n.time) <= T.mine && gameState.pressedLanes[n.lane]) {
         n.judged = 'mine-hit';
         gameState.score = Math.max(0, gameState.score - 200);
@@ -248,16 +403,26 @@ function gameLoop() {
     }
   }
 
-  // Hold/roll lifecycle
+  // Hold/roll lifecycle (with TICKCOUNTS-aware tick scoring)
   for (const n of gameState.notes) {
     if (n.type !== 'hold' && n.type !== 'roll') continue;
     if (!n.judged || n.endTime === null) continue;
     if (!['marvelous','perfect','great','good','bad'].includes(n.judged)) continue;
     if (n.holdState === 'ok' || n.holdState === 'ng') continue;
-    if (n.holdState === null) { n.holdState = 'active'; n.lastHoldHeldAt = audioTime; }
+    if (n.holdState === null) {
+      n.holdState = 'active';
+      n.lastHoldHeldAt = audioTime;
+      n.lastTickAt = n.time; // first tick eligible at note's start time
+    }
     if (gameState.pressedLanes[n.lane]) {
       n.lastHoldHeldAt = audioTime;
       if (n.holdState === 'released-grace') n.holdState = 'active';
+      // Award +5 per tick interval the user holds correctly
+      const interval = n.tickInterval || 0.125; // ~4 ticks/beat at 120bpm
+      while (n.lastTickAt + interval <= Math.min(audioTime, n.endTime)) {
+        n.lastTickAt += interval;
+        gameState.score += 5;
+      }
     } else if (n.holdState === 'active') {
       if (audioTime - n.lastHoldHeldAt > HOLD_LIFE) n.holdState = 'released-grace';
     }
@@ -265,7 +430,7 @@ function gameLoop() {
       const heldOk = (n.lastHoldHeldAt !== null && (audioTime - n.lastHoldHeldAt) <= HOLD_LIFE);
       if (heldOk) {
         n.holdState = 'ok';
-        gameState.score += 200;
+        gameState.score += 100; // hold completion bonus (ticks already paid above)
       } else {
         n.holdState = 'ng';
         gameState.combo = 0;
@@ -289,7 +454,7 @@ function handleLanePress(lane) {
   let best = null, bestDist = Infinity;
   for (const n of gameState.notes) {
     if (n.lane !== lane || n.judged) continue;
-    if (n.type === 'mine') continue;
+    if (n.type === 'mine' || n.type === 'lift' || n.type === 'fake') continue;
     const dist = Math.abs(audioTime - n.time);
     if (dist < bestDist && dist <= T.bad) { best = n; bestDist = dist; }
   }
@@ -303,15 +468,37 @@ function handleLanePress(lane) {
   else                             judg = 'bad';
   best.judged = judg;
   gameState.judgments[judg]++;
-  gameState.score += SCORES[judg];
+  // Apply per-section #COMBOS multiplier to score AND combo gain
+  const tEng = gameState.timingEngine;
+  const curBeat = tEng.timeToBeat ? tEng.timeToBeat(audioTime) : 0;
+  const cm = tEng.comboMulAt ? tEng.comboMulAt(curBeat) : 1;
+  gameState.score += SCORES[judg] * cm;
   if (judg === 'bad') {
     gameState.combo = 0;
   } else {
-    gameState.combo++;
+    gameState.combo += Math.max(1, Math.round(cm));
     gameState.maxCombo = Math.max(gameState.maxCombo, gameState.combo);
   }
-  gameState.hitFx.push({ lane, t: performance.now() });
+  gameState.hitFx.push(makeHitFx(lane));
   showJudgment(judg);
+}
+
+// Particle burst on hit. Each particle has its own velocity + gravity for
+// natural arc. ~10 particles per hit, ~350ms life. Cleanup is handled in render
+// (filter by age). Cheap: ~100 active particles in worst case.
+function makeHitFx(lane) {
+  const particles = [];
+  const N = 10;
+  for (let i = 0; i < N; i++) {
+    const angle = (Math.PI * 2 * i / N) + (Math.random() - 0.5) * 0.3;
+    const speed = 80 + Math.random() * 120;
+    particles.push({
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 60,    // initial upward bias
+      x0: 0, y0: 0
+    });
+  }
+  return { lane, t: performance.now(), particles };
 }
 
 function showJudgment(judg) {
@@ -327,11 +514,26 @@ function render(audioTime) {
   const W = canvasW, H = canvasH;
   ctx2d.clearRect(0, 0, W, H);
 
+  // Background layer: user-loaded image > procedural gradient per song.
+  if (bgImage && bgImage.complete) {
+    ctx2d.drawImage(bgImage, 0, 0, W, H);
+    ctx2d.fillStyle = 'rgba(0,0,0,0.55)'; // dim so notes pop
+    ctx2d.fillRect(0, 0, W, H);
+  } else if (selectedSong) {
+    drawProceduralBg(W, H, selectedSong.title || '');
+  }
+
   const laneWidth = 80;
   const totalWidth = laneWidth * 4;
   const startX = W/2 - totalWidth/2;
   const receptorY = 110;
-  const pps = gameState.pixelsPerSec;
+  // Apply per-section #SPEEDS and #SCROLLS modifiers based on current beat.
+  // Negative scroll = reverse direction (notes flow upward from below).
+  const T = gameState.timingEngine;
+  const curBeat = T.timeToBeat ? T.timeToBeat(audioTime) : 0;
+  const localSpeed = T.speedAtBeat ? T.speedAtBeat(curBeat) : 1;
+  const localScroll = T.scrollAtBeat ? T.scrollAtBeat(curBeat) : 1;
+  const pps = gameState.pixelsPerSec * localSpeed * localScroll;
 
   // Lane background gradient
   const bg = ctx2d.createLinearGradient(startX, 0, startX+totalWidth, 0);
@@ -351,14 +553,20 @@ function render(audioTime) {
     ctx2d.stroke();
   }
 
-  // Beat pulse: dim flash on receptor on every beat
+  // Beat pulse: subtle flash on each quarter note, stronger on downbeats (every 4).
+  // Pulse duration scales with current BPM so it never overlaps the next beat.
   let beatPulse = 0;
   if (gameState.beatTimes && gameState.beatTimes.length) {
     let lo = 0, hi = gameState.beatTimes.length - 1;
     while (lo < hi) { const m = (lo+hi)>>1; if (gameState.beatTimes[m] < audioTime) lo = m+1; else hi = m; }
     const prevIdx = Math.max(0, lo-1);
     const dt = audioTime - gameState.beatTimes[prevIdx];
-    if (dt >= 0 && dt < 0.20) beatPulse = 1 - dt/0.20;
+    const bpmHere = gameState.timingEngine.bpmAtBeat ? gameState.timingEngine.bpmAtBeat(curBeat) : gameState.bpm;
+    const beatDur = 60 / bpmHere;
+    const pulseDur = beatDur * 0.15; // 15% of beat — never overlaps
+    const isDownbeat = (prevIdx % 4) === 0;
+    const intensity = isDownbeat ? 1.0 : 0.5;
+    if (dt >= 0 && dt < pulseDur) beatPulse = (1 - dt/pulseDur) * intensity;
   }
 
   // Receptor row
@@ -421,12 +629,16 @@ function render(audioTime) {
     ctx2d.fill();
   }
 
-  // Note heads (taps + mines + hold heads)
+  // Note heads (taps + mines + hold heads + lifts + fakes)
   for (const n of gameState.notes) {
     const dt = n.time - audioTime;
     if (dt > 5 || dt < -1) continue;
     if (['marvelous','perfect','great','good','bad'].includes(n.judged) && n.type !== 'hold' && n.type !== 'roll') continue;
-    const y = receptorY + dt * pps;
+    // For active holds/rolls the head is stuck to the receptor while held —
+    // body shrinks underneath. Only force receptorY while still in active grace.
+    const inProgress = (n.type === 'hold' || n.type === 'roll')
+      && (n.holdState === 'active' || n.holdState === 'released-grace');
+    const y = inProgress ? receptorY : receptorY + dt * pps;
     const cx = startX + n.lane*laneWidth + laneWidth/2;
     if (y < -50 || y > H + 50) continue;
 
@@ -457,6 +669,35 @@ function render(audioTime) {
       continue;
     }
 
+    if (n.type === 'fake') {
+      // Fakes: ghosted arrow (40% alpha), no scoring
+      ctx2d.save();
+      ctx2d.globalAlpha = alpha * 0.4;
+      const sprite = getArrowSprite(n.lane, '#888');
+      ctx2d.drawImage(sprite, cx - ARROW_SIZE/2, y - ARROW_SIZE/2);
+      ctx2d.restore();
+      continue;
+    }
+
+    if (n.type === 'lift') {
+      // Lifts: hollow arrow outline (released-on-beat semantics)
+      ctx2d.save();
+      ctx2d.globalAlpha = alpha;
+      const color = quantColorFor(n.row || 0, n.total || 4);
+      const sprite = getArrowSprite(n.lane, color);
+      // Draw the sprite at lower alpha + a bright outline ring
+      ctx2d.globalAlpha = alpha * 0.5;
+      ctx2d.drawImage(sprite, cx - ARROW_SIZE/2, y - ARROW_SIZE/2);
+      ctx2d.globalAlpha = alpha;
+      ctx2d.strokeStyle = color;
+      ctx2d.lineWidth = 3;
+      ctx2d.beginPath();
+      ctx2d.arc(cx, y, ARROW_SIZE/2 - 2, 0, Math.PI*2);
+      ctx2d.stroke();
+      ctx2d.restore();
+      continue;
+    }
+
     if (n.judged === 'miss') {
       ctx2d.save();
       ctx2d.globalAlpha = alpha * 0.4;
@@ -474,20 +715,58 @@ function render(audioTime) {
     ctx2d.restore();
   }
 
-  // Hit FX (radial flash on hit)
+  // Lane covers (hidden / sudden) — physical opaque gradients over the lanes
+  // for the ITG-authentic look (alpha tween on each note still works as backup).
+  if (activeMods.hidden) {
+    const fadeStart = H * 0.30, fadeEnd = H * 0.55;
+    const grad = ctx2d.createLinearGradient(0, fadeStart, 0, fadeEnd);
+    grad.addColorStop(0, 'rgba(0,0,0,0.95)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx2d.fillStyle = grad;
+    ctx2d.fillRect(startX, 0, totalWidth, fadeEnd);
+  }
+  if (activeMods.sudden) {
+    const showStart = H * 0.60, showEnd = H * 0.85;
+    const grad = ctx2d.createLinearGradient(0, showStart, 0, showEnd);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.95)');
+    ctx2d.fillStyle = grad;
+    ctx2d.fillRect(startX, showStart, totalWidth, H - showStart);
+  }
+
+  // Hit FX: radial ring + particle burst per hit. Particles use ballistic
+  // motion (vx const, vy with gravity) — gives a fountain-like splash.
   const now = performance.now();
   gameState.hitFx = gameState.hitFx.filter(fx => now - fx.t < 350);
   for (const fx of gameState.hitFx) {
-    const age = (now - fx.t) / 350;
+    const ageMs = now - fx.t;
+    const age = ageMs / 350;
     const alpha = 1 - age;
     const radius = 30 + age * 50;
     const cx = startX + fx.lane*laneWidth + laneWidth/2;
-    ctx2d.strokeStyle = `rgba(255,255,255,${alpha*0.7})`;
+    // Outer white ring
+    ctx2d.strokeStyle = `rgba(255,255,255,${alpha*0.6})`;
     ctx2d.lineWidth = 3 * (1-age);
     ctx2d.beginPath(); ctx2d.arc(cx, receptorY, radius, 0, Math.PI*2); ctx2d.stroke();
+    // Lane-tinted ring (smaller)
     ctx2d.strokeStyle = `${LANE_TINT[fx.lane]}${Math.floor(alpha*255).toString(16).padStart(2,'0')}`;
     ctx2d.lineWidth = 5 * (1-age);
     ctx2d.beginPath(); ctx2d.arc(cx, receptorY, radius*0.7, 0, Math.PI*2); ctx2d.stroke();
+    // Particles (if present — old fx without particles still render the rings)
+    if (fx.particles) {
+      const t = ageMs / 1000;
+      const G = 280; // gravity (px/s²)
+      ctx2d.fillStyle = LANE_TINT[fx.lane];
+      for (const p of fx.particles) {
+        const px = cx + p.vx * t;
+        const py = receptorY + p.vy * t + 0.5 * G * t * t;
+        const size = 4 * (1 - age);
+        if (size <= 0) continue;
+        ctx2d.globalAlpha = alpha;
+        ctx2d.beginPath(); ctx2d.arc(px, py, size, 0, Math.PI*2); ctx2d.fill();
+      }
+      ctx2d.globalAlpha = 1;
+    }
   }
 
   // Progress bar

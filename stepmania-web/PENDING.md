@@ -1,6 +1,6 @@
 # StepMania Web — Pendiente
 
-Estado al 2026-05-09. La extracción a módulos clásicos está **completa**. El HTML monolítico (`stepmania-web.html`, antes ~2570 líneas) es ahora un entry slim de 366 líneas: solo body + `<link>` al CSS + 8 `<script src>` en orden de dependencia. El doble-click sobre el `.html` sigue funcionando sin servidor.
+Estado al 2026-05-10. La extracción a módulos clásicos está **completa** y el Design System de Movimiento Funcional (paleta turquesa+dorado, `Righteous`+`ABeeZee`, glow sutil) está aplicado a los 3 HTMLs del directorio. El doble-click sobre cualquier `.html` sigue funcionando sin servidor.
 
 ## Estado actual
 
@@ -13,7 +13,7 @@ Estado al 2026-05-09. La extracción a módulos clásicos está **completa**. El
 
 | Archivo | Líneas | Contenido |
 |---|---|---|
-| `css/styles.css` | 362 | Todo el CSS |
+| `css/styles.css` | 421 | CSS completo + bloque `:root` con variables MF |
 | `js/core.js` | 165 | utils + audioCtx + gamepad polling + IndexedDB (songs+scores) + settings persistence + `TIMING_WIN_LABEL` |
 | `js/parser.js` | 160 | `parseSscOrSm` + `buildTimingEngine` (BPMS+STOPS+DELAYS+WARPS) + `parseNotesToEvents` + `quantColorFor` |
 | `js/autostepper.js` | 575 | Queue + drop zone + decode/envelope/ODF/BPM/offset + chart gen + presets + `saveAllToLibrary` + `downloadAllZip` + ZIP encoder |
@@ -22,6 +22,14 @@ Estado al 2026-05-09. La extracción a módulos clásicos está **completa**. El
 | `js/pad-test.js` | 160 | LED grid init, tab bindings, `padCounts`, `padTestLoop`, `resetPadCounts`, latency, ghost |
 | `js/game.js` | 536 | Timing windows (J4..J7), sprite cache, `startGame`/`runCountdown`/`stopGame`, `onKeyDown`/`onKeyUp`, `gameLoop`, `handleLanePress`, `render`, `endGame` |
 | `js/app.js` | 51 | `SCREENS`, `CRUMBS`, `goto`, `bindSettingsControls`, kickoff (`pollGamepad`+`padTestLoop`+`goto('menu')`) |
+
+**HTMLs hermanos con design system MF aplicado:**
+
+- `stepmania-web.html` (366 líneas, entry slim)
+- `test-alfombra.html` (1087 líneas, monolítico standalone)
+- `autostepper.html` (1801 líneas, monolítico standalone)
+
+Los 3 importan `'Righteous'` + `'ABeeZee'` desde Google Fonts y usan el mismo bloque `:root` con la paleta MF (turquesa primary, dorado highlights, rosa crítico, grises neutros, verde/naranja/rojo semánticos). Los selectores funcionales del juego (`#gameCanvas`, `.gameHUD`, `.judgment.*`, `.grade-*`, `.log .*`) preservan colores arcade hardcoded.
 
 Orden de carga en `stepmania-web.html`:
 
@@ -94,6 +102,14 @@ Mencionado en CLAUDE.md como "lo que NO replicaríamos", pero si el alcance crec
 - Test con warps (charts modernos de Etterna).
 - Probar con `.sm` legacy (sin `#NOTEDATA`, formato 3.9 — abundante en packs viejos).
 - Verificar que `globalOffset` y `chartSpeed` se aplican correctamente en combinación con shuffle.
+
+## Pendiente: despliegue
+
+- **Dominio destino**: `stepmania.movimientofuncional.app` (subdominio del sitio principal de Movimiento Funcional, mencionado en `CLAUDE.md`).
+- **Credenciales del host**: en `.env.local` en la raíz del proyecto. **Nunca commitear** — el archivo está ignorado por `.gitignore` (regla `.env.*`).
+- **Estrategia de despliegue**: la app es 100% estática (HTML+CSS+JS sin servidor). Cualquier hosting de archivos estáticos funciona (Netlify, Vercel, Cloudflare Pages, GitHub Pages, FTP a un VPS). El subdominio sugiere que ya hay infraestructura — leer `.env.local` para detectar el provider y usar su CLI/API correspondiente.
+- **Estructura a subir**: la raíz `d:\SOFTWARE\stepmania-web\` con `stepmania-web.html` como entry, junto con la carpeta `stepmania-web/` (css + js) y los HTMLs hermanos `test-alfombra.html` + `autostepper.html`. NO subir `stepmania-5_1-new/` (referencia oficial, ~MB grandes), `design-system/` (skill local), ni archivos de configuración (`CLAUDE.md`, `PENDING.md`, `.env.local`).
+- **`index.html`**: el entry destino debería ser `stepmania-web.html` renombrado a `index.html` o un redirect, para que la URL raíz cargue directamente.
 
 ## Notas arquitectónicas
 

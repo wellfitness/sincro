@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#00bec8">
+
+<title>StepMania Web — Baila, juega, entrena tu cerebro</title>
+<meta name="description" content="Suite de StepMania en navegador con base científica. Juega, genera charts desde MP3 y diagnostica tu alfombra. Cardio, música y cognición en una sola actividad — avalado por la mayor revisión sistemática de ejercicio y cognición publicada hasta la fecha.">
+<meta name="author" content="Movimiento Funcional">
+<meta name="keywords" content="StepMania, exergaming, dance dance revolution, cardio cognitivo, neurociencia ejercicio, ritmo coordinación, movimiento funcional">
+
+<link rel="canonical" href="https://stepmania.movimientofuncional.app/">
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='86'%3E%F0%9F%8E%AE%3C/text%3E%3C/svg%3E">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://stepmania.movimientofuncional.app/">
+<meta property="og:title" content="StepMania Web — Baila, juega, entrena tu cerebro">
+<meta property="og:description" content="Cardio, música y cognición en una sola actividad. Suite de StepMania en navegador con base científica revisada por pares.">
+<meta property="og:locale" content="es_ES">
+<meta property="og:site_name" content="StepMania Web">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="StepMania Web — Baila, juega, entrena tu cerebro">
+<meta name="twitter:description" content="Cardio, música y cognición en una sola actividad. Avalado por la mayor revisión sistemática de ejercicio y cognición.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=ABeeZee&family=Righteous&display=swap" rel="stylesheet">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "StepMania Web",
+  "applicationCategory": "GameApplication",
+  "operatingSystem": "Any (browser-based)",
+  "url": "https://stepmania.movimientofuncional.app/",
+  "description": "Suite de StepMania en navegador: motor de juego, generador automático de charts (AutoStepper) y diagnóstico de alfombra de baile. Funciona sin instalación.",
+  "browserRequirements": "Requires JavaScript. HTML5 Web Audio + Canvas + Gamepad API.",
+  "inLanguage": "es",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Movimiento Funcional",
+    "url": "https://movimientofuncional.app/"
+  }
+}
+</script>
+
+<style>
+:root {
+  --turquesa-100: #cdfffb;
+  --turquesa-400: #18f8f6;
+  --turquesa-600: #00bec8;
+  --turquesa-700: #088b96;
+  --rosa-500: #e11d48;
+  --rosa-600: #be123c;
+  --tulip-tree-400: #facc15;
+  --tulip-tree-500: #eab308;
+  --tulip-tree-600: #ca8a04;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error:   #ef4444;
+  --gris-100: #f3f4f6;
+  --gris-300: #d1d5db;
+  --gris-400: #9ca3af;
+  --gris-500: #6b7280;
+  --gris-700: #374151;
+  --gris-800: #1f2937;
+  --gris-900: #111827;
+  --font-display: 'Righteous', Arial, sans-serif;
+  --font-sans:    'ABeeZee', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:    'Consolas', 'Courier New', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font-sans);
+  background: #000; color: #fff;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+a { color: var(--turquesa-400); text-decoration: none; }
+a:hover, a:focus-visible { color: var(--tulip-tree-500); }
+:focus-visible {
+  outline: 2px solid var(--turquesa-400);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* skip link for keyboard users */
+.skip-link {
+  position: absolute; top: -100px; left: 0;
+  background: var(--turquesa-400); color: #000;
+  padding: 10px 20px; z-index: 999;
+  font-weight: 700;
+}
+.skip-link:focus { top: 0; }
+
+/* TOPBAR */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 56px;
+  background: rgba(0,0,0,0.85);
+  border-bottom: 1px solid rgba(0,190,200,0.4);
+  display: flex; align-items: center; padding: 0 24px;
+  z-index: 100; backdrop-filter: blur(10px);
+}
+.topbar .brand {
+  font-family: var(--font-display); font-size: 1.15em;
+  background: linear-gradient(90deg, var(--turquesa-600), var(--turquesa-400), var(--tulip-tree-500));
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+.topbar .primary-nav { margin-left: auto; }
+.topbar .primary-nav ul {
+  list-style: none; display: flex; gap: 18px; align-items: center;
+}
+.topbar .primary-nav a:not(.cta-mini) {
+  color: var(--gris-300); font-size: 0.92em;
+}
+.topbar .primary-nav a:not(.cta-mini):hover { color: var(--turquesa-400); }
+.cta-mini {
+  background: linear-gradient(135deg, var(--turquesa-600), var(--turquesa-700));
+  color: #000 !important; font-weight: 700;
+  padding: 8px 16px; border-radius: 8px;
+  font-family: var(--font-display); font-size: 0.85em;
+  letter-spacing: 0.5px;
+  transition: transform .15s ease, box-shadow .2s ease;
+}
+.cta-mini:hover { color: #000 !important; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(24,248,246,0.35); }
+
+/* HERO */
+.hero {
+  min-height: 100vh; padding: 120px 24px 80px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+  background: radial-gradient(ellipse at top, #0a1626 0%, #000 60%);
+}
+.hero::before {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 15% 30%, rgba(0,190,200,0.18), transparent 40%),
+    radial-gradient(circle at 85% 70%, rgba(234,179,8,0.12), transparent 45%);
+  pointer-events: none;
+}
+.hero-grid {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,190,200,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,190,200,0.08) 1px, transparent 1px);
+  background-size: 40px 40px;
+  -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
+          mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
+}
+.arrow-rain {
+  position: absolute; inset: 0; pointer-events: none;
+  display: flex; justify-content: space-around;
+  opacity: 0.35;
+}
+.arrow-lane { width: 60px; height: 100%; position: relative; }
+.arrow-lane span {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-size: 2.4em; font-weight: 800;
+  font-family: var(--font-display);
+  text-shadow: 0 0 12px currentColor;
+  animation: rise 5s linear infinite;
+}
+@keyframes rise {
+  from { bottom: -10%; opacity: 0; }
+  10%, 90% { opacity: 1; }
+  to { bottom: 110%; opacity: 0; }
+}
+.lane-1 span { color: #ff3366; animation-delay: 0s; }
+.lane-2 span { color: var(--tulip-tree-500); animation-delay: 1.2s; }
+.lane-3 span { color: var(--turquesa-400); animation-delay: 2.4s; }
+.lane-4 span { color: #a78bfa; animation-delay: 3.6s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .arrow-lane span, .pulse, .brain-region, .scroll-hint { animation: none !important; }
+  html { scroll-behavior: auto; }
+}
+
+.hero-content { position: relative; z-index: 2; text-align: center; max-width: 980px; }
+.hero-badge {
+  display: inline-block; padding: 6px 16px;
+  background: rgba(234,179,8,0.12);
+  border: 1px solid rgba(234,179,8,0.4);
+  color: var(--tulip-tree-400);
+  border-radius: 999px; font-size: 0.85em; letter-spacing: 1px;
+  font-family: var(--font-mono); text-transform: uppercase;
+  margin-bottom: 24px;
+}
+.hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2.4em, 6.5vw, 4.6em);
+  line-height: 1.05;
+  background: linear-gradient(90deg, var(--turquesa-600) 0%, var(--turquesa-400) 40%, var(--tulip-tree-500) 100%);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  margin-bottom: 18px;
+  filter: drop-shadow(0 4px 24px rgba(24,248,246,0.18));
+}
+.pulse {
+  display: inline-block;
+  background: linear-gradient(90deg, var(--tulip-tree-500), var(--turquesa-400));
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  animation: pulseShadow 1.6s ease-in-out infinite;
+}
+@keyframes pulseShadow {
+  0%,100% { filter: drop-shadow(0 0 6px rgba(234,179,8,0.3)); }
+  50%     { filter: drop-shadow(0 0 18px rgba(234,179,8,0.7)); }
+}
+.tagline {
+  font-size: clamp(1.05em, 1.8vw, 1.3em);
+  color: var(--gris-300);
+  max-width: 720px; margin: 0 auto 36px;
+}
+.tagline strong { color: var(--turquesa-400); }
+
+.cta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 14px 28px; border-radius: 10px;
+  font-family: var(--font-display); font-size: 1em;
+  letter-spacing: 0.6px; text-transform: uppercase;
+  border: 0; cursor: pointer; transition: all .2s ease;
+}
+.btn.primary {
+  background: linear-gradient(135deg, var(--turquesa-600), var(--turquesa-400));
+  color: #000;
+  box-shadow: 0 4px 20px rgba(24,248,246,0.3);
+}
+.btn.primary:hover, .btn.primary:focus-visible {
+  transform: translateY(-2px); color: #000;
+  box-shadow: 0 8px 32px rgba(24,248,246,0.55);
+}
+.btn.secondary {
+  background: transparent; color: var(--turquesa-400);
+  border: 2px solid var(--turquesa-600);
+}
+.btn.secondary:hover, .btn.secondary:focus-visible {
+  background: rgba(0,190,200,0.1); color: var(--turquesa-400); transform: translateY(-2px);
+}
+.btn.gold {
+  background: linear-gradient(135deg, var(--tulip-tree-600), var(--tulip-tree-400));
+  color: #1a1100;
+  box-shadow: 0 4px 20px rgba(234,179,8,0.35);
+}
+.btn.gold:hover, .btn.gold:focus-visible {
+  transform: translateY(-2px); color: #1a1100;
+  box-shadow: 0 8px 32px rgba(234,179,8,0.55);
+}
+
+.scroll-hint {
+  position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%);
+  color: var(--gris-500); font-size: 0.85em;
+  font-family: var(--font-mono);
+  animation: bounce 2s infinite;
+}
+@keyframes bounce { 0%,100%{transform:translate(-50%,0)} 50%{transform:translate(-50%,-8px)} }
+
+/* SECTIONS */
+section { padding: 80px 24px; position: relative; }
+.container { max-width: 1200px; margin: 0 auto; }
+.eyebrow {
+  font-family: var(--font-mono);
+  text-transform: uppercase; letter-spacing: 2px;
+  color: var(--turquesa-400); font-size: 0.85em;
+  margin-bottom: 12px;
+}
+.section-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8em, 4vw, 2.8em);
+  background: linear-gradient(90deg, var(--turquesa-600), var(--tulip-tree-500));
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  margin-bottom: 16px;
+}
+.section-lede {
+  color: var(--gris-300); font-size: 1.1em;
+  max-width: 760px; margin-bottom: 48px;
+}
+
+/* CLAIM */
+.claim-block {
+  text-align: center; padding: 60px 24px;
+  background: linear-gradient(180deg, transparent 0%, rgba(234,179,8,0.04) 50%, transparent 100%);
+}
+.claim-block blockquote {
+  font-family: var(--font-display);
+  font-size: clamp(1.6em, 3.4vw, 2.4em);
+  max-width: 900px; margin: 0 auto;
+  line-height: 1.3; color: #fff;
+  font-style: normal;
+}
+.claim-block blockquote em {
+  font-style: normal;
+  background: linear-gradient(90deg, var(--tulip-tree-500), var(--turquesa-400));
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+.claim-block cite {
+  display: block; margin-top: 18px;
+  color: var(--gris-500);
+  font-family: var(--font-mono); font-size: 0.85em;
+  font-style: normal;
+}
+
+/* PILLARS */
+.pillars { background: linear-gradient(180deg, #000 0%, #050a14 100%); }
+.pillar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+}
+.pillar {
+  background: linear-gradient(160deg, rgba(0,190,200,0.05) 0%, rgba(0,0,0,0.4) 100%);
+  border: 1px solid rgba(0,190,200,0.18);
+  border-radius: 16px; padding: 32px 28px;
+  position: relative; overflow: hidden;
+  transition: transform .25s ease, border-color .25s ease;
+}
+.pillar:hover { transform: translateY(-4px); border-color: rgba(24,248,246,0.4); }
+.pillar::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--turquesa-600), var(--tulip-tree-500));
+  opacity: 0.7;
+}
+.pillar-icon { font-size: 2.6em; margin-bottom: 14px; filter: drop-shadow(0 0 12px rgba(24,248,246,0.4)); }
+.pillar h3 { font-family: var(--font-display); color: var(--turquesa-400); font-size: 1.5em; margin-bottom: 10px; }
+.stat {
+  display: inline-block; padding: 6px 12px;
+  background: rgba(234,179,8,0.12);
+  border: 1px solid rgba(234,179,8,0.3);
+  border-radius: 6px;
+  color: var(--tulip-tree-400);
+  font-family: var(--font-mono); font-size: 0.85em;
+  margin-bottom: 16px;
+}
+.pillar p { color: var(--gris-300); margin-bottom: 14px; }
+.pillar ul { list-style: none; padding: 0; }
+.pillar ul li {
+  padding-left: 22px; position: relative;
+  margin-bottom: 8px; color: var(--gris-300); font-size: 0.95em;
+}
+.pillar ul li::before {
+  content: '▶'; position: absolute; left: 0; top: 1px;
+  color: var(--turquesa-400); font-size: 0.7em;
+}
+.refs {
+  margin-top: 18px; padding-top: 16px;
+  border-top: 1px dashed rgba(255,255,255,0.1);
+  font-size: 0.8em; color: var(--gris-500);
+  font-family: var(--font-mono); line-height: 1.5;
+}
+.refs a { color: var(--turquesa-600); word-break: break-all; }
+
+.pillar.physical::before { background: linear-gradient(90deg, var(--color-success), var(--turquesa-400)); }
+.pillar.physical .pillar-icon { filter: drop-shadow(0 0 12px rgba(16,185,129,0.5)); }
+.pillar.physical h3 { color: var(--color-success); }
+.pillar.mental::before { background: linear-gradient(90deg, #a78bfa, var(--turquesa-400)); }
+.pillar.mental .pillar-icon { filter: drop-shadow(0 0 12px rgba(167,139,250,0.5)); }
+.pillar.mental h3 { color: #c4b5fd; }
+.pillar.cognitive::before { background: linear-gradient(90deg, var(--tulip-tree-500), var(--color-warning)); }
+.pillar.cognitive .pillar-icon { filter: drop-shadow(0 0 12px rgba(234,179,8,0.5)); }
+.pillar.cognitive h3 { color: var(--tulip-tree-400); }
+
+/* BRAIN */
+.brain-section { background: radial-gradient(ellipse at 50% 30%, #0c1224 0%, #000 70%); }
+.brain-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+.brain-text h3 { font-family: var(--font-display); font-size: 1.6em; color: var(--turquesa-400); margin-bottom: 14px; }
+.brain-text p { color: var(--gris-300); margin-bottom: 16px; }
+
+.brain-list { list-style: none; padding: 0; counter-reset: brain-step; }
+.brain-list li {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 14px 0; border-bottom: 1px dashed rgba(255,255,255,0.08);
+  counter-increment: brain-step;
+}
+.brain-list li:last-child { border-bottom: 0; }
+.brain-list li::before {
+  content: counter(brain-step);
+  flex-shrink: 0; width: 36px; height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--turquesa-600), var(--turquesa-400));
+  color: #000;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 700;
+}
+.brain-list strong { color: #fff; display: block; margin-bottom: 4px; }
+.brain-list span { color: var(--gris-400); font-size: 0.92em; }
+
+.brain-figure { margin: 0; display: flex; flex-direction: column; align-items: center; }
+.brain-svg { width: 100%; max-width: 480px; filter: drop-shadow(0 0 24px rgba(0,190,200,0.25)); }
+.brain-region {
+  fill: rgba(0,190,200,0.15);
+  stroke: var(--turquesa-400); stroke-width: 2;
+  transition: fill .3s ease;
+}
+.brain-region:hover { fill: rgba(24,248,246,0.4); }
+.brain-region.r-motor    { animation: pulseFill 3s ease-in-out infinite; }
+.brain-region.r-auditory { animation: pulseFill 3s ease-in-out 0.4s infinite; }
+.brain-region.r-basal    { animation: pulseFill 3s ease-in-out 0.8s infinite; fill: rgba(234,179,8,0.18); stroke: var(--tulip-tree-500); }
+.brain-region.r-cerebel  { animation: pulseFill 3s ease-in-out 1.2s infinite; }
+.brain-region.r-prefront { animation: pulseFill 3s ease-in-out 1.6s infinite; fill: rgba(167,139,250,0.18); stroke: #a78bfa; }
+@keyframes pulseFill { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+.brain-label { font-family: var(--font-mono); font-size: 11px; fill: var(--gris-300); pointer-events: none; }
+.brain-label.gold { fill: var(--tulip-tree-400); }
+.brain-label.purple { fill: #c4b5fd; }
+.brain-figure figcaption {
+  margin-top: 12px; font-size: 0.82em; color: var(--gris-500);
+  font-family: var(--font-mono); text-align: center;
+}
+
+/* COMPARE */
+.compare-section { background: #050a14; }
+.compare-table-wrap {
+  overflow-x: auto; border-radius: 12px;
+  border: 1px solid rgba(0,190,200,0.2);
+}
+.compare-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 0.95em; min-width: 720px;
+}
+.compare-table caption {
+  caption-side: top; text-align: left;
+  padding: 16px 18px; color: var(--gris-400);
+  font-family: var(--font-mono); font-size: 0.85em;
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.compare-table th, .compare-table td {
+  padding: 16px 18px; text-align: left;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.compare-table thead { background: rgba(0,190,200,0.08); }
+.compare-table th {
+  font-family: var(--font-display);
+  color: var(--turquesa-400);
+  font-weight: 400; letter-spacing: 0.5px;
+}
+.compare-table td:first-child { color: var(--gris-300); font-weight: 600; }
+.winner { color: var(--tulip-tree-400); font-weight: 700; font-family: var(--font-mono); }
+.loser  { color: var(--gris-500); font-family: var(--font-mono); }
+.compare-table tbody tr:hover { background: rgba(0,190,200,0.04); }
+.compare-foot { margin-top: 16px; font-size: 0.82em; color: var(--gris-500); font-family: var(--font-mono); line-height: 1.6; }
+.compare-foot a { color: var(--turquesa-600); }
+
+/* TOOLS */
+.tools-section { background: linear-gradient(180deg, #000 0%, #050a14 100%); }
+.tools-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+.tool-card {
+  background: rgba(0,0,0,0.5);
+  border: 1px solid rgba(0,190,200,0.2);
+  border-radius: 14px; padding: 28px;
+  display: flex; flex-direction: column;
+  transition: all .25s ease;
+}
+.tool-card:hover {
+  border-color: var(--turquesa-400); transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(0,190,200,0.18);
+}
+.tool-icon { font-size: 2.6em; margin-bottom: 14px; }
+.tool-card h3 { font-family: var(--font-display); color: var(--turquesa-400); font-size: 1.4em; margin-bottom: 8px; }
+.tool-lede { color: var(--gris-400); font-size: 0.85em; font-family: var(--font-mono); margin-bottom: 14px; }
+.tool-card p { color: var(--gris-300); margin-bottom: 18px; flex: 1; }
+.tool-card .btn { align-self: flex-start; padding: 10px 20px; font-size: 0.85em; }
+.tool-card.featured {
+  background: linear-gradient(160deg, rgba(234,179,8,0.06) 0%, rgba(0,0,0,0.5) 100%);
+  border-color: rgba(234,179,8,0.35);
+}
+.tool-card.featured h3 { color: var(--tulip-tree-400); }
+
+/* FINAL CTA */
+.final-cta { text-align: center; padding: 100px 24px; background: radial-gradient(ellipse at center, rgba(0,190,200,0.08) 0%, #000 70%); }
+.final-cta h2 {
+  font-family: var(--font-display);
+  font-size: clamp(1.8em, 4vw, 2.8em);
+  background: linear-gradient(90deg, var(--turquesa-400), var(--tulip-tree-500));
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  margin-bottom: 18px;
+}
+.final-cta p { color: var(--gris-300); max-width: 600px; margin: 0 auto 32px; font-size: 1.05em; }
+
+/* FOOTER */
+.site-footer {
+  border-top: 1px solid rgba(0,190,200,0.2);
+  padding: 40px 24px 30px;
+  background: #000; color: var(--gris-500); font-size: 0.85em;
+}
+.site-footer .container { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 32px; }
+.site-footer h2 {
+  font-family: var(--font-display);
+  color: var(--turquesa-400);
+  font-size: 1em; margin-bottom: 10px;
+  letter-spacing: 0.5px;
+}
+.site-footer ul { list-style: none; padding: 0; }
+.site-footer li { padding: 4px 0; }
+.legal {
+  margin-top: 30px; padding-top: 20px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  text-align: center; color: var(--gris-700);
+  font-family: var(--font-mono); font-size: 0.78em;
+}
+
+@media (max-width: 768px) {
+  .topbar { padding: 0 16px; }
+  .topbar .primary-nav a:not(.cta-mini) { display: none; }
+  .hero { padding: 100px 20px 60px; min-height: auto; }
+  .arrow-rain { opacity: 0.18; }
+  section { padding: 60px 20px; }
+  .brain-layout { grid-template-columns: 1fr; gap: 32px; }
+  .site-footer .container { grid-template-columns: 1fr; gap: 24px; }
+}
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#contenido">Saltar al contenido principal</a>
+
+<header class="topbar" role="banner">
+  <a href="#hero" class="brand" aria-label="StepMania Web — inicio de la página">🎮 StepMania Web</a>
+  <nav class="primary-nav" aria-label="Navegación principal">
+    <ul>
+      <li><a href="#beneficios">Beneficios</a></li>
+      <li><a href="#cerebro">Tu cerebro</a></li>
+      <li><a href="#herramientas">Herramientas</a></li>
+      <li><a href="stepmania-web.html" class="cta-mini" aria-label="Ir al juego">▶ Jugar</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="contenido">
+
+  <section id="hero" class="hero" aria-labelledby="hero-title">
+    <div class="hero-grid" aria-hidden="true"></div>
+    <div class="arrow-rain" aria-hidden="true">
+      <div class="arrow-lane lane-1"><span>←</span></div>
+      <div class="arrow-lane lane-2"><span>↓</span></div>
+      <div class="arrow-lane lane-3"><span>↑</span></div>
+      <div class="arrow-lane lane-4"><span>→</span></div>
+    </div>
+
+    <div class="hero-content">
+      <p class="hero-badge">⚡ Cardio · Música · Cognición · en una sola actividad</p>
+      <h1 id="hero-title">Pisa el ritmo,<br>entrena <span class="pulse">3 cerebros</span> a la vez</h1>
+      <p class="tagline">
+        Suite completa de <strong>StepMania</strong> en navegador. Genera charts desde cualquier MP3,
+        diagnostica tu alfombra y juega — todo sin instalar nada. Avalado por
+        la mayor revisión sistemática de ejercicio y cognición publicada hasta la fecha.
+      </p>
+      <div class="cta-row" role="group" aria-label="Acciones principales">
+        <a href="stepmania-web.html" class="btn primary">▶ Jugar ahora</a>
+        <a href="autostepper.html" class="btn gold">🎵 Crear un chart</a>
+        <a href="test-alfombra.html" class="btn secondary">🦶 Probar alfombra</a>
+      </div>
+    </div>
+
+    <p class="scroll-hint" aria-hidden="true">▼ La ciencia que lo respalda ▼</p>
+  </section>
+
+  <aside class="claim-block" aria-label="Cita destacada">
+    <blockquote cite="https://doi.org/10.1136/bjsports-2024-108589">
+      De entre todas las modalidades de ejercicio analizadas en
+      <em>2 724 ensayos clínicos con más de 258 000 participantes</em>,
+      los <em>exergames como StepMania</em> son los que producen el mayor efecto
+      sobre la cognición general y la memoria.
+    </blockquote>
+    <cite>
+      Singh et al. (2025) · British Journal of Sports Medicine ·
+      meta‑meta‑análisis de 133 revisiones sistemáticas
+    </cite>
+  </aside>
+
+  <section id="beneficios" class="pillars" aria-labelledby="beneficios-title">
+    <div class="container">
+      <p class="eyebrow">Por qué funciona</p>
+      <h2 id="beneficios-title" class="section-title">Tres beneficios. Una sola actividad.</h2>
+      <p class="section-lede">
+        Mientras tu corazón bombea como en un HIIT, tu cerebro está descodificando ritmo, anticipando patrones
+        y tomando decisiones motoras a 4‑8 hits por segundo. Por eso un cuarto de hora de StepMania activa
+        lo que el gym y el sudoku activan por separado.
+      </p>
+
+      <div class="pillar-grid">
+
+        <article class="pillar physical" aria-labelledby="p-fisico">
+          <p class="pillar-icon" aria-hidden="true">💪</p>
+          <h3 id="p-fisico">Físico</h3>
+          <p class="stat">Mejor que entrenamiento tradicional</p>
+          <p>
+            El exergaming de baile <strong>supera al ejercicio físico convencional</strong> en
+            control postural, equilibrio dinámico y prevención de caídas.
+          </p>
+          <ul>
+            <li>+2,65 puntos en Berg Balance Scale (mayores)</li>
+            <li>−1,04 s en Timed‑Up‑and‑Go</li>
+            <li>−92 ms en tiempo de reacción al paso</li>
+            <li>Gasto calórico equivalente a correr suave</li>
+            <li>Adherencia 76‑100 %, casi sin abandonos</li>
+          </ul>
+          <footer class="refs">
+            Yoong et al. 2024 · J Gerontol A · meta‑análisis de 37 estudios (n = 1 139)<br>
+            <a href="https://doi.org/10.1093/gerona/glae035" target="_blank" rel="noopener noreferrer">doi.org/10.1093/gerona/glae035</a><br><br>
+            Chen et al. 2021 · J Neuroeng Rehabil · meta‑análisis vs entrenamiento físico<br>
+            <a href="https://doi.org/10.1186/s12984-021-00917-0" target="_blank" rel="noopener noreferrer">doi.org/10.1186/s12984-021-00917-0</a>
+          </footer>
+        </article>
+
+        <article class="pillar mental" aria-labelledby="p-mental">
+          <p class="pillar-icon" aria-hidden="true">🎵</p>
+          <h3 id="p-mental">Mental (música)</h3>
+          <p class="stat">Activación cerebral global</p>
+          <p>
+            Escuchar y moverse al ritmo de la música <strong>no usa una zona del cerebro: usa todas</strong>
+            — auditiva, motora, frontal, parietal, cerebelar y límbica simultáneamente.
+          </p>
+          <ul>
+            <li>Estimula neuroplasticidad y nuevas conexiones</li>
+            <li>Mejora función ejecutiva y autorregulación</li>
+            <li>Eleva motivación, ánimo y compromiso</li>
+            <li>Reduce percepción del esfuerzo durante el ejercicio</li>
+            <li>Base de la Neurologic Music Therapy clínica</li>
+          </ul>
+          <footer class="refs">
+            Särkämö et al. 2013 · WIREs Cognitive Science · revisión<br>
+            <a href="https://doi.org/10.1002/wcs.1237" target="_blank" rel="noopener noreferrer">doi.org/10.1002/wcs.1237</a><br><br>
+            Bentley et al. 2022 · Developmental Science · RCT (n = 213)<br>
+            <a href="https://doi.org/10.1111/desc.13358" target="_blank" rel="noopener noreferrer">doi.org/10.1111/desc.13358</a>
+          </footer>
+        </article>
+
+        <article class="pillar cognitive" aria-labelledby="p-cognitivo">
+          <p class="pillar-icon" aria-hidden="true">⚡</p>
+          <h3 id="p-cognitivo">Cognitivo</h3>
+          <p class="stat">Coordinación · Decisión · Atención</p>
+          <p>
+            La <strong>sincronización auditivo‑motora</strong> aumenta la eficiencia funcional
+            de los ganglios basales — el núcleo cerebral de la toma de decisiones motoras.
+          </p>
+          <ul>
+            <li>Mejora atención selectiva e inhibición de respuesta</li>
+            <li>Acelera tiempos de reacción y flexibilidad cognitiva</li>
+            <li>Refuerza memoria de trabajo y rotación visuoespacial 3D</li>
+            <li>Validado en TDAH, Parkinson, ictus, TCE</li>
+            <li>Mayor integración entre red de saliencia y control ejecutivo</li>
+          </ul>
+          <footer class="refs">
+            Lavigne et al. 2025 · Brain and Behavior · fMRI ganglios basales<br>
+            <a href="https://doi.org/10.1002/brb3.70695" target="_blank" rel="noopener noreferrer">doi.org/10.1002/brb3.70695</a><br><br>
+            Benzing &amp; Schmidt 2019 · Scand J Med Sci Sports · RCT TDAH<br>
+            <a href="https://doi.org/10.1111/sms.13446" target="_blank" rel="noopener noreferrer">doi.org/10.1111/sms.13446</a><br><br>
+            Gong et al. 2016 · Neural Plasticity · gamers<br>
+            <a href="https://doi.org/10.1155/2016/9803165" target="_blank" rel="noopener noreferrer">doi.org/10.1155/2016/9803165</a>
+          </footer>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <section id="cerebro" class="brain-section" aria-labelledby="cerebro-title">
+    <div class="container">
+      <p class="eyebrow">Lo que ocurre dentro</p>
+      <h2 id="cerebro-title" class="section-title">Cómo funciona en tu cerebro</h2>
+      <p class="section-lede">
+        Cada flecha que pisas en sincronía con la música activa simultáneamente cinco redes neurales.
+        Esa simultaneidad es lo que el ejercicio aeróbico convencional no puede igualar.
+      </p>
+
+      <div class="brain-layout">
+
+        <div class="brain-text">
+          <h3>5 redes activadas en cada paso</h3>
+          <p>
+            Pisar una flecha en el momento correcto requiere que tu cerebro encadene
+            en menos de <strong>250&nbsp;ms</strong>: oír el beat, predecir el siguiente, decidir el panel,
+            ejecutar el movimiento y corregir el error. Y todo eso, varias veces por segundo.
+          </p>
+
+          <ol class="brain-list">
+            <li>
+              <div>
+                <strong>Corteza auditiva</strong>
+                <span>Descodifica el ritmo, segrega las pistas musicales y predice el siguiente beat.</span>
+              </div>
+            </li>
+            <li>
+              <div>
+                <strong>Ganglios basales (gating motor)</strong>
+                <span>Núcleo de la toma de decisiones motoras. La sincronización auditivo‑motora aumenta su eficiencia funcional medida por fMRI.</span>
+              </div>
+            </li>
+            <li>
+              <div>
+                <strong>Corteza motora suplementaria</strong>
+                <span>Planifica la secuencia de pasos con antelación. Se activa antes de que te muevas.</span>
+              </div>
+            </li>
+            <li>
+              <div>
+                <strong>Cerebelo</strong>
+                <span>Sintoniza la precisión temporal del movimiento al milisegundo y corrige errores en vuelo.</span>
+              </div>
+            </li>
+            <li>
+              <div>
+                <strong>Corteza prefrontal (control ejecutivo)</strong>
+                <span>Inhibe pisadas erróneas, cambia de plan al instante y mantiene la atención sostenida — lo que entrena la función ejecutiva.</span>
+              </div>
+            </li>
+          </ol>
+        </div>
+
+        <figure class="brain-figure">
+          <svg class="brain-svg" viewBox="0 0 400 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="svg-title svg-desc">
+            <title id="svg-title">Diagrama de redes cerebrales activadas por StepMania</title>
+            <desc id="svg-desc">Silueta esquemática del cerebro humano destacando cinco regiones activadas durante el juego: corteza auditiva izquierda y derecha, corteza motora suplementaria, ganglios basales, cerebelo y corteza prefrontal. Líneas pulsantes conectan las regiones para representar la integración funcional.</desc>
+
+            <path d="M 80 220 C 80 130, 140 70, 200 70 C 260 70, 320 130, 320 220 C 320 270, 310 305, 290 330 C 280 345, 260 360, 230 365 L 230 380 C 240 395, 260 405, 260 420 L 140 420 C 140 405, 160 395, 170 380 L 170 365 C 140 360, 120 345, 110 330 C 90 305, 80 270, 80 220 Z"
+                  fill="rgba(0,190,200,0.04)" stroke="rgba(0,190,200,0.4)" stroke-width="2"/>
+
+            <ellipse class="brain-region r-cerebel" cx="200" cy="350" rx="50" ry="22"/>
+            <text class="brain-label" x="200" y="354" text-anchor="middle">cerebelo</text>
+
+            <ellipse class="brain-region r-basal" cx="200" cy="225" rx="38" ry="22"/>
+            <text class="brain-label gold" x="200" y="229" text-anchor="middle">g. basales</text>
+
+            <path class="brain-region r-prefront" d="M 130 110 Q 200 75 270 110 Q 270 145 200 155 Q 130 145 130 110 Z"/>
+            <text class="brain-label purple" x="200" y="125" text-anchor="middle">prefrontal</text>
+
+            <ellipse class="brain-region r-motor" cx="200" cy="180" rx="46" ry="14"/>
+            <text class="brain-label" x="200" y="184" text-anchor="middle">SMA / motora</text>
+
+            <ellipse class="brain-region r-auditory" cx="105" cy="240" rx="22" ry="30"/>
+            <text class="brain-label" x="105" y="285" text-anchor="middle">auditiva</text>
+
+            <ellipse class="brain-region r-auditory" cx="295" cy="240" rx="22" ry="30"/>
+            <text class="brain-label" x="295" y="285" text-anchor="middle">auditiva</text>
+
+            <line x1="115" y1="225" x2="172" y2="220" stroke="rgba(24,248,246,0.4)" stroke-width="1.4" stroke-dasharray="3 3">
+              <animate attributeName="stroke-dashoffset" from="0" to="-12" dur="1s" repeatCount="indefinite"/>
+            </line>
+            <line x1="285" y1="225" x2="228" y2="220" stroke="rgba(24,248,246,0.4)" stroke-width="1.4" stroke-dasharray="3 3">
+              <animate attributeName="stroke-dashoffset" from="0" to="-12" dur="1s" repeatCount="indefinite"/>
+            </line>
+            <line x1="200" y1="200" x2="200" y2="155" stroke="rgba(167,139,250,0.5)" stroke-width="1.4" stroke-dasharray="3 3">
+              <animate attributeName="stroke-dashoffset" from="0" to="-12" dur="1.4s" repeatCount="indefinite"/>
+            </line>
+            <line x1="200" y1="245" x2="200" y2="328" stroke="rgba(234,179,8,0.5)" stroke-width="1.4" stroke-dasharray="3 3">
+              <animate attributeName="stroke-dashoffset" from="0" to="-12" dur="1.6s" repeatCount="indefinite"/>
+            </line>
+          </svg>
+          <figcaption>Esquema simplificado · las regiones reales son tridimensionales y están interconectadas</figcaption>
+        </figure>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="compare-section" aria-labelledby="compare-title">
+    <div class="container">
+      <p class="eyebrow">Cara a cara</p>
+      <h2 id="compare-title" class="section-title">Exergaming vs ejercicio tradicional</h2>
+      <p class="section-lede">
+        Lo que dice la <strong>umbrella review 2025</strong> en <em>British Journal of Sports Medicine</em>
+        (133 revisiones sistemáticas, 2 724 RCTs, 258 279 participantes) sobre los efectos del ejercicio
+        en la cognición — y dónde encajan los exergames como StepMania.
+      </p>
+
+      <div class="compare-table-wrap">
+        <table class="compare-table">
+          <caption>Efectos del ejercicio según outcome cognitivo y físico</caption>
+          <thead>
+            <tr>
+              <th scope="col">Outcome</th>
+              <th scope="col">Efecto del ejercicio (todas las modalidades)</th>
+              <th scope="col">Posición de los exergames</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Cognición general</th>
+              <td class="loser">SMD = 0,42 (significativo)</td>
+              <td class="winner">★ mayor efecto entre todas las modalidades</td>
+            </tr>
+            <tr>
+              <th scope="row">Memoria</th>
+              <td class="loser">SMD = 0,26 (significativo)</td>
+              <td class="winner">★ mayor efecto entre todas las modalidades</td>
+            </tr>
+            <tr>
+              <th scope="row">Función ejecutiva</th>
+              <td class="loser">SMD = 0,24 (significativo)</td>
+              <td class="winner">incluido entre los que más mejoran</td>
+            </tr>
+            <tr>
+              <th scope="row">Equilibrio dinámico (mayores)</th>
+              <td class="loser">mejora consistente con fuerza/Tai Chi</td>
+              <td class="winner">★ +2,65 puntos Berg vs control</td>
+            </tr>
+            <tr>
+              <th scope="row">Tiempo de reacción al paso</th>
+              <td class="loser">apenas medido en aeróbico/fuerza</td>
+              <td class="winner">★ −92 ms vs control</td>
+            </tr>
+            <tr>
+              <th scope="row">Adherencia a 12+ semanas</th>
+              <td class="loser">~55‑65 % en programas tradicionales</td>
+              <td class="winner">★ 76‑100 % en estudios revisados</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="compare-foot">
+        <strong>Cita literal de la umbrella review:</strong> «Las intervenciones más cortas (1‑3 meses) y los <em>exergames</em>
+        (video juegos que requieren movimiento físico) tuvieron los mayores efectos sobre cognición general y memoria».<br><br>
+        Fuentes: Singh et al. 2025 — <a href="https://doi.org/10.1136/bjsports-2024-108589" target="_blank" rel="noopener noreferrer">doi.org/10.1136/bjsports-2024-108589</a> ·
+        Yoong et al. 2024 — <a href="https://doi.org/10.1093/gerona/glae035" target="_blank" rel="noopener noreferrer">doi.org/10.1093/gerona/glae035</a> ·
+        Chen et al. 2021 — <a href="https://doi.org/10.1186/s12984-021-00917-0" target="_blank" rel="noopener noreferrer">doi.org/10.1186/s12984-021-00917-0</a>.
+        SMD = <em>standardised mean difference</em>: 0,2 efecto pequeño · 0,5 medio · 0,8 grande. El efecto de un exergame sobre la cognición general (0,42) es comparable al de muchas intervenciones farmacológicas validadas.
+      </p>
+    </div>
+  </section>
+
+  <section id="herramientas" class="tools-section" aria-labelledby="tools-title">
+    <div class="container">
+      <p class="eyebrow">La suite</p>
+      <h2 id="tools-title" class="section-title">Tres herramientas. Cero instalación.</h2>
+      <p class="section-lede">
+        Todo corre en tu navegador. Tu librería de canciones se guarda localmente (IndexedDB) — privado y portable.
+      </p>
+
+      <div class="tools-grid">
+
+        <article class="tool-card featured" aria-labelledby="t-juego">
+          <p class="tool-icon" aria-hidden="true">🎮</p>
+          <h3 id="t-juego">StepMania Web</h3>
+          <p class="tool-lede">play · songs · scores · mods</p>
+          <p>
+            El juego completo. Motor de timing real (J4‑J7), 6 modifiers (mirror, shuffle, hidden…),
+            librería local, sistema de scores con grades A→AAA, tutorial integrado.
+            Compatible con tu alfombra USB y con teclado.
+          </p>
+          <a href="stepmania-web.html" class="btn primary">▶ Empezar a jugar</a>
+        </article>
+
+        <article class="tool-card" aria-labelledby="t-auto">
+          <p class="tool-icon" aria-hidden="true">🎵</p>
+          <h3 id="t-auto">AutoStepper</h3>
+          <p class="tool-lede">mp3 → chart en 10 s</p>
+          <p>
+            Convierte cualquier MP3/WAV/OGG en un chart de StepMania con 5 dificultades
+            (Beginner → Challenge). Detección automática de BPM por bass‑emphasis,
+            quantización a 192nds, presets Suave/Normal/Intenso.
+          </p>
+          <a href="autostepper.html" class="btn gold">🎵 Crear charts</a>
+        </article>
+
+        <article class="tool-card" aria-labelledby="t-pad">
+          <p class="tool-icon" aria-hidden="true">🦶</p>
+          <h3 id="t-pad">Test de alfombra</h3>
+          <p class="tool-lede">8 pestañas de diagnóstico</p>
+          <p>
+            Estadísticas, latencia, saltos, sync de audio (metrónomo), stress test,
+            ghost inputs, secuencia y ejes crudos. Para verificar que cada sensor
+            de tu pad responde como debe.
+          </p>
+          <a href="test-alfombra.html" class="btn secondary">🦶 Diagnosticar</a>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="final-cta" aria-labelledby="final-title">
+    <div class="container">
+      <h2 id="final-title">Pisa la primera flecha</h2>
+      <p>
+        Doble click sobre cualquiera de los HTML y empiezas. Sin registro, sin instalación, sin servidor.
+        Tu navegador, tu música, tu alfombra (o tu teclado).
+      </p>
+      <div class="cta-row" style="justify-content:center" role="group" aria-label="Acciones finales">
+        <a href="stepmania-web.html" class="btn primary">▶ Jugar ahora</a>
+        <a href="#beneficios" class="btn secondary">Releer los beneficios</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer" role="contentinfo">
+  <div class="container">
+
+    <section aria-labelledby="footer-about">
+      <h2 id="footer-about">🎮 StepMania Web</h2>
+      <p style="color:var(--gris-500);max-width:380px">
+        Suite de herramientas StepMania en navegador, basada en evidencia científica revisada por pares.
+        Código abierto, datos locales, sin tracking.
+      </p>
+    </section>
+
+    <nav aria-labelledby="footer-tools">
+      <h2 id="footer-tools">Herramientas</h2>
+      <ul>
+        <li><a href="stepmania-web.html">▶ Jugar</a></li>
+        <li><a href="autostepper.html">🎵 AutoStepper</a></li>
+        <li><a href="test-alfombra.html">🦶 Test de alfombra</a></li>
+      </ul>
+    </nav>
+
+    <nav aria-labelledby="footer-science">
+      <h2 id="footer-science">Ciencia</h2>
+      <ul>
+        <li><a href="#beneficios">Tres pilares</a></li>
+        <li><a href="#cerebro">Tu cerebro</a></li>
+        <li><a href="https://doi.org/10.1136/bjsports-2024-108589" target="_blank" rel="noopener noreferrer">Umbrella review 2025</a></li>
+        <li><a href="https://doi.org/10.1093/gerona/glae035" target="_blank" rel="noopener noreferrer">Meta‑análisis dance exergames</a></li>
+      </ul>
+    </nav>
+
+  </div>
+
+  <p class="legal">
+    Esta información tiene fines divulgativos. Las referencias citadas provienen de PubMed y Scholar Gateway
+    y no constituyen consejo médico individual. Consulta con un profesional sanitario antes de iniciar
+    cualquier programa de ejercicio si tienes condiciones de salud preexistentes.
+  </p>
+</footer>
+
+</body>
+</html>

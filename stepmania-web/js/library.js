@@ -3,15 +3,33 @@
 //  pairs (best-effort name pairing). Uses parseSscOrSm from parser.js.
 // ============================================================================
 
+// `navigator.storage.estimate()` aggregates IndexedDB + localStorage + caches
+// — it doesn't separate them. In Chrome desktop quota is multi-GB; in Safari
+// iOS it's ~50MB hard cap. Most useful as a "you're nowhere near limit" hint.
+async function getStorageInfo() {
+  if (!navigator.storage || !navigator.storage.estimate) return null;
+  try {
+    const { usage, quota } = await navigator.storage.estimate();
+    const usedMB = (usage / 1024 / 1024).toFixed(1);
+    const quotaMB = (quota / 1024 / 1024).toFixed(0);
+    const pct = quota ? ((usage / quota) * 100).toFixed(1) : '?';
+    return { usedMB, quotaMB, pct, usage, quota };
+  } catch (e) { return null; }
+}
+
 async function refreshLibrary() {
   const c = document.getElementById('libraryContainer');
   c.innerHTML = 'Cargando...';
-  const songs = await dbAll();
+  const [songs, info] = await Promise.all([dbAll(), getStorageInfo()]);
+  const storageBar = info
+    ? `<div style="margin-bottom:14px;padding:10px 14px;background:rgba(0,190,200,0.08);border:1px solid rgba(0,190,200,0.2);border-radius:8px;font-size:0.85em;color:var(--gris-300)">
+         💾 Librería ocupa <strong style="color:var(--turquesa-400)">${info.usedMB} MB</strong> de ${info.quotaMB} MB disponibles (${info.pct}%)
+       </div>` : '';
   if (!songs.length) {
-    c.innerHTML = '<p style="color:#aaa;text-align:center;padding:30px">Tu librería está vacía. <a href="#" onclick="goto(\'create\')" style="color:#ff006e">Crea tu primer chart</a> o <button class="icon-btn" onclick="document.getElementById(\'importInput\').click()">importa archivos</button>.</p>';
+    c.innerHTML = storageBar + '<p style="color:var(--gris-400);text-align:center;padding:30px">Tu librería está vacía. <a href="#" onclick="goto(\'create\')" style="color:var(--turquesa-600)">Crea tu primer chart</a> o <button class="icon-btn" onclick="document.getElementById(\'importInput\').click()">importa archivos</button>.</p>';
     return;
   }
-  let html = `<div class="queue"><div class="queue-row header"><div>Canción</div><div>BPM</div><div>Duración</div><div>Charts</div><div>Acciones</div></div>`;
+  let html = storageBar + `<div class="queue"><div class="queue-row header"><div>Canción</div><div>BPM</div><div>Duración</div><div>Charts</div><div>Acciones</div></div>`;
   for (const s of songs) {
     html += `<div class="queue-row">
       <div class="name"><div style="font-weight:600">${escapeHtml(s.title)}</div><div style="color:#888;font-size:0.78em">${escapeHtml(s.artist)}</div></div>
@@ -33,6 +51,82 @@ async function deleteSong(id) {
   await dbDelete(id);
   refreshLibrary();
 }
+
+// ----- Recursive SM pack import ---------------------------------------------
+// Uses <input webkitdirectory>: each File carries webkitRelativePath (e.g.
+// "Pack/Song1/song.ssc"). Group files by their immediate parent folder, then
+// pair each .sm/.ssc with the largest audio file in the same folder
+// (heuristic that avoids confusing banner.mp3 with the actual song).
+document.getElementById('importPackInput').addEventListener('change', async e => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  const status = document.getElementById('backupStatus');
+  status.textContent = `Analizando ${files.length} archivos...`;
+
+  // Group by parent folder
+  const folders = new Map(); // folder path -> { sscs: [], audios: [] }
+  for (const f of files) {
+    const path = f.webkitRelativePath || f.name;
+    const lastSlash = path.lastIndexOf('/');
+    const folder = lastSlash >= 0 ? path.slice(0, lastSlash) : '';
+    const lower = f.name.toLowerCase();
+    if (!folders.has(folder)) folders.set(folder, { sscs: [], audios: [] });
+    const bucket = folders.get(folder);
+    if (lower.endsWith('.ssc') || lower.endsWith('.sm')) bucket.sscs.push(f);
+    else if (f.type.startsWith('audio/') || /\.(mp3|ogg|wav|flac|m4a)$/i.test(lower)) bucket.audios.push(f);
+  }
+
+  // Prefer .ssc over .sm when both exist for the same song.
+  let imported = 0, skipped = 0;
+  const toProcess = [];
+  for (const [folder, b] of folders) {
+    if (!b.sscs.length || !b.audios.length) { skipped += b.sscs.length; continue; }
+    const ssc = b.sscs.find(f => f.name.toLowerCase().endsWith('.ssc')) || b.sscs[0];
+    // Largest audio in this folder is almost certainly the song (banners are tiny)
+    const audio = b.audios.slice().sort((x,y) => y.size - x.size)[0];
+    toProcess.push({ ssc, audio, folder });
+  }
+
+  for (const { ssc, audio, folder } of toProcess) {
+    try {
+      const sscText = await ssc.text();
+      const parsed = parseSscOrSm(sscText);
+      const baseName = ssc.name.replace(/\.[^.]+$/, '');
+      const bpm = parseFloat((parsed.header.BPMS || '0=120').split('=')[1]) || 120;
+      const offsetSec = -parseFloat(parsed.header.OFFSET || '0');
+      const sampleStart = parseFloat(parsed.header.SAMPLESTART || '30');
+      const ctx2 = ensureAudioCtx();
+      const arrayBuf = await audio.arrayBuffer();
+      const decoded = await ctx2.decodeAudioData(arrayBuf.slice(0));
+      await dbAdd({
+        title: parsed.header.TITLE || baseName,
+        artist: parsed.header.ARTIST || folder.split('/').pop() || 'Unknown',
+        audioBlob: audio,
+        audioName: audio.name,
+        sscText,
+        bpm, offsetSec,
+        duration: decoded.duration,
+        sampleStart,
+        charts: parsed.charts.map(c => ({
+          name: c.DIFFICULTY || 'Edit',
+          key: (c.DIFFICULTY || 'edit').toLowerCase(),
+          rating: parseInt(c.METER || '1') || 1,
+          count: (c.NOTES || '').split('\n').filter(r => r.length === 4 && r !== '0000').length
+        })),
+        tags: [],
+        addedAt: Date.now()
+      });
+      imported++;
+      status.textContent = `Importando ${imported}/${toProcess.length}...`;
+    } catch (err) {
+      skipped++;
+    }
+  }
+
+  status.innerHTML = `<span style="color:var(--color-success)">✓ ${imported} canciones importadas${skipped ? ` · ${skipped} omitidas (sin audio o error de parseo)` : ''}</span>`;
+  refreshLibrary();
+  e.target.value = '';
+});
 
 document.getElementById('importInput').addEventListener('change', async e => {
   const files = [...e.target.files];

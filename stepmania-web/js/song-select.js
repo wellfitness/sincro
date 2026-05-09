@@ -17,6 +17,16 @@ async function refreshSongs() {
     const scores = await dbScoresForSong(s.id);
     s._bestGrade = scores.length ? scores.sort((a,b) => (b.score||0) - (a.score||0))[0] : null;
   }
+  // Repopulate tag filter dropdown with the union of all tags
+  const sel = document.getElementById('songFilterTag');
+  if (sel) {
+    const allTags = new Set();
+    for (const s of songs) for (const t of (s.tags || [])) allTags.add(t);
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Todos los tags</option>' +
+      [...allTags].sort().map(t => `<option value="${escapeHtml(t)}">🏷 ${escapeHtml(t)}</option>`).join('');
+    if ([...allTags].includes(current)) sel.value = current;
+  }
   renderSongList();
 }
 
@@ -28,7 +38,31 @@ function renderSongList() {
   }
   const q = (document.getElementById('songSearch')?.value || '').toLowerCase().trim();
   const sort = document.getElementById('songSort')?.value || 'addedAt-desc';
+  const ratingFilter = document.getElementById('songFilterRating')?.value || '';
+  const gradeFilter = document.getElementById('songFilterGrade')?.value || '';
+  const tagFilter = document.getElementById('songFilterTag')?.value || '';
+
   let songs = _allSongsCache.filter(s => !q || s.title.toLowerCase().includes(q) || (s.artist||'').toLowerCase().includes(q));
+
+  if (tagFilter) songs = songs.filter(s => (s.tags || []).includes(tagFilter));
+
+  // Rating filter: keep songs whose set has at least one chart in the range
+  if (ratingFilter) {
+    const [lo, hi] = ratingFilter.split('-').map(Number);
+    songs = songs.filter(s => (s.charts || []).some(ch => ch.rating >= lo && ch.rating <= hi));
+  }
+
+  // Grade filter: based on _bestGrade attached in refreshSongs()
+  if (gradeFilter) {
+    const order = { AAA: 5, AA: 4, A: 3, B: 2, C: 1, D: 0 };
+    if (gradeFilter === 'any')   songs = songs.filter(s => !!s._bestGrade);
+    else if (gradeFilter === 'none') songs = songs.filter(s => !s._bestGrade);
+    else {
+      const min = order[gradeFilter];
+      songs = songs.filter(s => s._bestGrade && (order[s._bestGrade.grade] ?? -1) >= min);
+    }
+  }
+
   const [field, dir] = sort.split('-');
   const mul = dir === 'desc' ? -1 : 1;
   songs.sort((a,b) => {
@@ -39,9 +73,12 @@ function renderSongList() {
   let html = `<div class="queue"><div class="queue-row header" style="grid-template-columns:1fr 90px 80px 80px 60px"><div>Canción</div><div>BPM</div><div>Duración</div><div>Best</div><div></div></div>`;
   for (const s of songs) {
     const grade = s._bestGrade ? `<span class="grade-pill grade-${s._bestGrade.grade}">${s._bestGrade.grade}</span>` : '<span style="color:#444">—</span>';
-    html += `<div class="queue-row" style="cursor:pointer;grid-template-columns:1fr 90px 80px 80px 60px" onclick="selectSong(${s.id})">
+    html += `<div class="queue-row" style="cursor:pointer;grid-template-columns:1fr 90px 80px 80px 60px"
+      onclick="selectSong(${s.id})"
+      onmouseenter="scheduleSongPreview(${s.id})"
+      onmouseleave="cancelSongPreview()">
       <div><div style="font-weight:700">${escapeHtml(s.title)}</div>
-        <div style="color:#aaa;font-size:0.82em">${escapeHtml(s.artist||'—')} · ${s.charts.length} dif.</div></div>
+        <div style="color:var(--gris-400);font-size:0.82em">${escapeHtml(s.artist||'—')} · ${s.charts.length} dif.</div></div>
       <div>${s.bpm.toFixed(0)}</div>
       <div>${formatTime(s.duration)}</div>
       <div>${grade}</div>
@@ -67,6 +104,7 @@ async function renderDiffScreen() {
   if (!selectedSong) { goto('songs'); return; }
   document.getElementById('diffTitle').textContent = selectedSong.title;
   document.getElementById('diffSubtitle').textContent = (selectedSong.artist||'—') + ' · BPM ' + selectedSong.bpm.toFixed(0);
+  renderTagChips();
   const c = document.getElementById('diffsContainer');
   c.innerHTML = '';
   const scores = await dbScoresForSong(selectedSong.id);
@@ -75,13 +113,17 @@ async function renderDiffScreen() {
     const el = document.createElement('div');
     el.className = 'queue-row';
     el.style.cursor = 'pointer';
-    el.style.gridTemplateColumns = '1fr 60px 80px 70px';
+    el.style.gridTemplateColumns = '1fr 60px 80px 70px 36px';
     const sc = scoreMap[chart.key];
     const gradeCell = sc ? `<span class="grade-pill grade-${sc.grade}">${sc.grade}</span>` : '<span style="color:#444">—</span>';
+    const deleteBtn = sc
+      ? `<button class="icon-btn danger" title="Eliminar high score" onclick="event.stopPropagation();deleteChartScore('${chart.key}')">×</button>`
+      : '<span></span>';
     el.innerHTML = `<div><strong>${chart.name}</strong></div>
-      <div style="color:#ffbe0b">★ ${chart.rating}</div>
+      <div style="color:var(--tulip-tree-500)">★ ${chart.rating}</div>
       <div>${chart.count} pasos</div>
-      <div>${gradeCell}</div>`;
+      <div>${gradeCell}</div>
+      ${deleteBtn}`;
     el.addEventListener('click', () => { selectedChart = chart; goto('play'); });
     c.appendChild(el);
   }
@@ -115,13 +157,149 @@ async function renderDiffScreen() {
   };
 }
 
-// Bind search/sort listeners once.
+async function deleteChartScore(chartKey) {
+  if (!selectedSong) return;
+  if (!confirm('¿Borrar el high score de esta dificultad?')) return;
+  await dbScoreDelete(selectedSong.id, chartKey);
+  renderDiffScreen();
+}
+
+// ----- Manual BPM/offset edit (per song) -----------------------------------
+// Modifies #BPMS first segment and #OFFSET in the stored sscText, plus
+// `bpm` and `offsetSec` cached on the song row. Multi-segment BPMS get a
+// warning since editing only the first segment desynchronizes later sections.
+function openBpmEdit() {
+  if (!selectedSong) return;
+  const bpmsRaw = (selectedSong.sscText.match(/#BPMS:([^;]*);/) || [,''])[1].trim();
+  const segments = bpmsRaw.split(',').filter(Boolean);
+  const warnEl = document.getElementById('bpmEditWarn');
+  if (segments.length > 1) {
+    warnEl.innerHTML = `<div style="padding:10px 14px;background:rgba(245,158,11,0.12);border-left:3px solid var(--color-warning);border-radius:6px;color:var(--color-warning-dark);font-size:0.85em">⚠ Esta canción tiene <strong>${segments.length} cambios de BPM</strong>. Editar aquí solo modifica el primero — el resto se desincronizará. Usa con cuidado.</div>`;
+  } else {
+    warnEl.innerHTML = '';
+  }
+  document.getElementById('bpmEditInput').value = selectedSong.bpm.toFixed(2);
+  document.getElementById('bpmEditVal').textContent = selectedSong.bpm.toFixed(1);
+  document.getElementById('offsetEditInput').value = (-selectedSong.offsetSec).toFixed(3);
+  document.getElementById('offsetEditVal').textContent = (-selectedSong.offsetSec).toFixed(3);
+  document.getElementById('bpmEditModal').classList.add('show');
+  // Live preview of the displayed value next to the label
+  document.getElementById('bpmEditInput').oninput = e => {
+    document.getElementById('bpmEditVal').textContent = parseFloat(e.target.value || '0').toFixed(1);
+  };
+  document.getElementById('offsetEditInput').oninput = e => {
+    document.getElementById('offsetEditVal').textContent = parseFloat(e.target.value || '0').toFixed(3);
+  };
+}
+function closeBpmEdit() {
+  document.getElementById('bpmEditModal').classList.remove('show');
+}
+async function saveBpmEdit() {
+  if (!selectedSong) return;
+  const newBpm = parseFloat(document.getElementById('bpmEditInput').value);
+  const newOffsetPositive = parseFloat(document.getElementById('offsetEditInput').value);
+  if (!isFinite(newBpm) || newBpm < 40 || newBpm > 300) { alert('BPM debe estar entre 40 y 300.'); return; }
+  if (!isFinite(newOffsetPositive)) { alert('Offset inválido.'); return; }
+  // SSC convention: #OFFSET stored is positive (audio starts after second 0).
+  // Internal offsetSec is negated (audioTime(beat 0) = -offset).
+  const newOffsetSec = -newOffsetPositive;
+  // Rewrite #BPMS first segment AND #OFFSET in sscText
+  let ssc = selectedSong.sscText;
+  ssc = ssc.replace(/#BPMS:([^;]*);/, (_m, body) => {
+    const segs = body.trim().split(',').filter(Boolean);
+    if (segs.length === 0) return `#BPMS:0.000=${newBpm.toFixed(3)};`;
+    const [firstBeat] = segs[0].split('=');
+    segs[0] = `${(parseFloat(firstBeat)||0).toFixed(3)}=${newBpm.toFixed(3)}`;
+    return `#BPMS:${segs.join(',')};`;
+  });
+  ssc = ssc.replace(/#OFFSET:[^;]*;/, `#OFFSET:${newOffsetPositive.toFixed(3)};`);
+  if (!/#OFFSET:/.test(ssc)) ssc = `#OFFSET:${newOffsetPositive.toFixed(3)};\n` + ssc;
+  // Persist
+  selectedSong.sscText = ssc;
+  selectedSong.bpm = newBpm;
+  selectedSong.offsetSec = newOffsetSec;
+  await dbPut(selectedSong);
+  closeBpmEdit();
+  renderDiffScreen(); // refresh subtitle showing new BPM
+}
+
+// Bind search/sort/filters listeners once.
 (function bindSongFilters() {
   const s = document.getElementById('songSearch');
   if (!s) return;
   s.addEventListener('input', renderSongList);
   document.getElementById('songSort').addEventListener('change', renderSongList);
+  document.getElementById('songFilterRating')?.addEventListener('change', renderSongList);
+  document.getElementById('songFilterGrade')?.addEventListener('change', renderSongList);
+  document.getElementById('songFilterTag')?.addEventListener('change', renderSongList);
 })();
+
+// ----- Audio preview on hover (debounced + cached) --------------------------
+// Plays ~12s starting from sampleStart with linear fade in/out. Hover delay
+// (250ms) avoids preview while just scrolling through the list.
+const _previewCache = new Map(); // songId -> AudioBuffer
+let _previewSrc = null;
+let _previewGain = null;
+let _previewTimer = null;
+let _previewCurrentId = null;
+
+async function startSongPreview(songId) {
+  const song = _allSongsCache.find(s => s.id === songId);
+  if (!song || !song.audioBlob) return;
+  stopSongPreview();
+  _previewCurrentId = songId;
+  ensureAudioCtx();
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+  let buffer = _previewCache.get(songId);
+  if (!buffer) {
+    try {
+      const arr = await song.audioBlob.arrayBuffer();
+      buffer = await audioCtx.decodeAudioData(arr.slice(0));
+      _previewCache.set(songId, buffer);
+    } catch (e) { return; }
+  }
+  if (_previewCurrentId !== songId) return; // user moved on while decoding
+  const src = audioCtx.createBufferSource();
+  const gain = audioCtx.createGain();
+  src.buffer = buffer;
+  src.connect(gain).connect(audioCtx.destination);
+  const start = Math.min(buffer.duration - 1, song.sampleStart || Math.min(30, buffer.duration * 0.3));
+  const previewLen = Math.min(12, buffer.duration - start);
+  const t0 = audioCtx.currentTime;
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(0.55, t0 + 0.5);
+  gain.gain.setValueAtTime(0.55, t0 + previewLen - 0.5);
+  gain.gain.linearRampToValueAtTime(0, t0 + previewLen);
+  src.start(t0, start);
+  src.stop(t0 + previewLen + 0.05);
+  _previewSrc = src; _previewGain = gain;
+  src.onended = () => { if (_previewSrc === src) { _previewSrc = null; _previewGain = null; } };
+}
+
+function stopSongPreview() {
+  _previewCurrentId = null;
+  if (_previewTimer) { clearTimeout(_previewTimer); _previewTimer = null; }
+  if (_previewSrc && _previewGain) {
+    try {
+      const t = audioCtx.currentTime;
+      _previewGain.gain.cancelScheduledValues(t);
+      _previewGain.gain.setValueAtTime(_previewGain.gain.value, t);
+      _previewGain.gain.linearRampToValueAtTime(0, t + 0.15);
+      _previewSrc.stop(t + 0.16);
+    } catch (e) {}
+    _previewSrc = null; _previewGain = null;
+  }
+}
+
+function scheduleSongPreview(songId) {
+  if (_previewTimer) clearTimeout(_previewTimer);
+  _previewTimer = setTimeout(() => startSongPreview(songId), 250);
+}
+
+function cancelSongPreview() {
+  if (_previewTimer) { clearTimeout(_previewTimer); _previewTimer = null; }
+  stopSongPreview();
+}
 
 let _shufflePerm = [0,1,2,3];
 function applyModsToLane(lane) {
@@ -135,4 +313,50 @@ function rerollShuffle() {
   const a = [0,1,2,3];
   for (let i = a.length-1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
   _shufflePerm = a;
+}
+
+// ----- Tags ------------------------------------------------------------------
+// Tags live on the song row (`tags: string[]`). Old songs without the field
+// fall back to `[]`. Filter dropdown in song-select reads the union of all tags
+// after every refresh; adding a tag here also triggers a refresh on next visit.
+function renderTagChips() {
+  const el = document.getElementById('tagChips');
+  if (!el || !selectedSong) return;
+  const tags = selectedSong.tags || [];
+  el.innerHTML = tags.length === 0
+    ? '<span style="color:var(--gris-500);font-size:0.85em;font-style:italic">sin tags</span>'
+    : tags.map(t => `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:rgba(0,190,200,0.18);color:var(--turquesa-400);border-radius:10px;font-size:0.8em">${escapeHtml(t)} <button onclick="removeSongTag('${t.replace(/'/g, "\\'")}')" style="background:none;border:none;color:var(--rosa-500);cursor:pointer;font-weight:700;padding:0 0 0 2px;font-size:1em" title="Quitar tag">×</button></span>`).join('');
+  const input = document.getElementById('tagInput');
+  if (input && !input._tagBound) {
+    input._tagBound = true;
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const v = input.value.trim().toLowerCase();
+        if (v) addSongTag(v);
+        input.value = '';
+      }
+    });
+  }
+}
+
+async function addSongTag(tag) {
+  if (!selectedSong) return;
+  selectedSong.tags = selectedSong.tags || [];
+  if (selectedSong.tags.includes(tag)) return;
+  selectedSong.tags.push(tag);
+  await dbPut(selectedSong);
+  renderTagChips();
+  // Update cached row in _allSongsCache so filter reflects it without a full refetch
+  const cached = _allSongsCache.find(s => s.id === selectedSong.id);
+  if (cached) cached.tags = selectedSong.tags;
+}
+
+async function removeSongTag(tag) {
+  if (!selectedSong) return;
+  selectedSong.tags = (selectedSong.tags || []).filter(t => t !== tag);
+  await dbPut(selectedSong);
+  renderTagChips();
+  const cached = _allSongsCache.find(s => s.id === selectedSong.id);
+  if (cached) cached.tags = selectedSong.tags;
 }
