@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>AutoStepper Web — Generador de charts StepMania</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #1a0033 0%, #000814 100%);
+    color: #fff; min-height: 100vh; padding: 20px;
+  }
+  h1 {
+    text-align: center;
+    background: linear-gradient(90deg, #ff006e, #8338ec, #3a86ff);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent; font-size: 2.2em; margin-bottom: 4px;
+  }
+  .subtitle { color: #aaa; text-align: center; margin-bottom: 24px; font-size: 0.9em; }
+
+  .container {
+    max-width: 1100px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+
+  .card {
+    background: rgba(0,0,0,0.4); border-radius: 14px;
+    padding: 20px 24px; border: 1px solid rgba(131,56,236,0.25);
+  }
+  .card h2 {
+    color: #8338ec; font-size: 1.05em; margin-bottom: 14px;
+    border-bottom: 1px solid rgba(131,56,236,0.3); padding-bottom: 8px;
+  }
+
+  .drop-zone {
+    border: 2px dashed rgba(131,56,236,0.5); border-radius: 12px;
+    padding: 30px; text-align: center; cursor: pointer;
+    transition: all 0.2s; background: rgba(131,56,236,0.05);
+    display: block;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: #ff006e; background: rgba(255,0,110,0.1);
+  }
+  .drop-zone .big-icon { font-size: 3em; margin-bottom: 8px; }
+  .drop-zone p { color: #aaa; }
+  input[type="file"] { display: none; }
+
+  /* Queue table */
+  .queue {
+    margin-top: 14px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.3);
+  }
+  .queue-row {
+    display: grid;
+    grid-template-columns: 1fr 80px 90px 110px 120px 120px;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.88em;
+  }
+  .queue-row.header {
+    background: rgba(131,56,236,0.15); color: #aaa;
+    font-weight: 600; font-size: 0.78em; text-transform: uppercase;
+  }
+  .queue-row .name { color: #fff; word-break: break-word; }
+  .queue-row .status .badge {
+    display: inline-block; padding: 3px 8px; border-radius: 6px;
+    font-size: 0.78em; font-weight: 600;
+  }
+  .badge.pending  { background: rgba(255,255,255,0.08); color: #aaa; }
+  .badge.working  { background: rgba(255,190,11,0.2); color: #ffbe0b; }
+  .badge.done     { background: rgba(0,255,100,0.2); color: #00ff64; }
+  .badge.error    { background: rgba(255,51,102,0.2); color: #ff3366; }
+  .queue-row .bpm input {
+    width: 70px; background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(131,56,236,0.4); color: #fff;
+    padding: 4px 6px; border-radius: 6px; font-family: monospace;
+  }
+  .queue-row .actions { display: flex; gap: 4px; }
+  .queue-row .icon-btn {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    color: #fff; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+    font-size: 0.8em; transition: all 0.15s;
+  }
+  .queue-row .icon-btn:hover { background: rgba(131,56,236,0.3); }
+  .queue-row .icon-btn.danger:hover { background: rgba(255,51,102,0.4); }
+  .queue-row.selected { background: rgba(131,56,236,0.12); }
+
+  .form-row {
+    display: flex; gap: 12px; align-items: center;
+    margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .form-row label { color: #aaa; min-width: 110px; font-size: 0.9em; }
+  .form-row input[type="text"], .form-row input[type="number"], .form-row select {
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(131,56,236,0.4);
+    color: #fff; padding: 6px 10px; border-radius: 6px; font-family: inherit;
+    flex: 1; min-width: 100px;
+  }
+  .form-row input[type="range"] { flex: 1; min-width: 180px; }
+
+  button.action-btn {
+    padding: 10px 22px;
+    background: linear-gradient(90deg, #ff006e, #8338ec);
+    border: none; color: white; border-radius: 8px;
+    cursor: pointer; font-weight: 600; font-size: 0.95em;
+    transition: opacity 0.2s;
+  }
+  button.action-btn:hover { opacity: 0.85; }
+  button.action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.action-btn.secondary {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  button.action-btn.danger {
+    background: linear-gradient(90deg, #ff3366, #ff006e);
+  }
+
+  .progress-bar {
+    height: 10px; background: rgba(255,255,255,0.08);
+    border-radius: 5px; overflow: hidden; margin: 10px 0;
+  }
+  .progress-bar .fill {
+    height: 100%; background: linear-gradient(90deg, #00ff64, #ffbe0b, #ff006e);
+    transition: width 0.15s; width: 0%;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px; margin-top: 10px;
+  }
+  .stat {
+    background: rgba(0,0,0,0.4); padding: 12px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.08); text-align: center;
+  }
+  .stat .label { color: #aaa; font-size: 0.78em; }
+  .stat .value { color: #00ff64; font-size: 1.4em; font-weight: 700; margin-top: 4px; }
+
+  canvas#waveform {
+    width: 100%; height: 130px;
+    background: rgba(0,0,0,0.6); border-radius: 8px;
+    margin-top: 10px; display: block;
+  }
+
+  .help { color: #888; font-size: 0.85em; line-height: 1.5; margin-top: 6px; }
+
+  .difficulty-card {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; background: rgba(255,255,255,0.04);
+    border-radius: 8px; margin-bottom: 8px;
+  }
+  .difficulty-card .info { display: flex; flex-direction: column; }
+  .difficulty-card .name { color: #fff; font-weight: 600; }
+  .difficulty-card .meta { color: #aaa; font-size: 0.8em; margin-top: 2px; }
+
+  .log {
+    background: #000; border: 1px solid rgba(131,56,236,0.4);
+    padding: 10px; border-radius: 6px; font-family: 'Consolas', monospace;
+    font-size: 0.8em; max-height: 200px; overflow-y: auto; white-space: pre-wrap;
+    margin-top: 10px;
+  }
+  .log .ok { color: #00ff64; }
+  .log .warn { color: #ffaa00; }
+  .log .bad { color: #ff3366; }
+  .log .info { color: #3a86ff; }
+
+  .audio-controls {
+    display: flex; gap: 10px; align-items: center; margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .audio-controls .time { color: #aaa; font-family: monospace; font-size: 0.85em; }
+
+  .switch { position: relative; display: inline-block; width: 44px; height: 22px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: rgba(255,255,255,0.1); border-radius: 22px; transition: 0.2s;
+  }
+  .switch .slider::before {
+    content: ""; position: absolute; height: 16px; width: 16px;
+    left: 3px; top: 3px; background: white; border-radius: 50%; transition: 0.2s;
+  }
+  .switch input:checked + .slider { background: linear-gradient(90deg, #ff006e, #8338ec); }
+  .switch input:checked + .slider::before { transform: translateX(22px); }
+
+  details summary { cursor: pointer; color: #aaa; padding: 6px 0; }
+  details summary:hover { color: #fff; }
+
+  /* PRESETS */
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+  }
+  .preset {
+    padding: 14px 16px; border-radius: 12px;
+    background: rgba(255,255,255,0.03);
+    border: 2px solid rgba(255,255,255,0.08);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .preset:hover { border-color: rgba(131,56,236,0.5); background: rgba(131,56,236,0.08); }
+  .preset.selected {
+    border-color: #ff006e;
+    background: linear-gradient(135deg, rgba(255,0,110,0.12), rgba(131,56,236,0.12));
+    box-shadow: 0 0 16px rgba(255,0,110,0.25);
+  }
+  .preset-name { font-size: 1em; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .preset-desc { color: #aaa; font-size: 0.82em; line-height: 1.4; }
+
+  /* PARAMS (custom) */
+  .param {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 12px;
+  }
+  .param-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px;
+  }
+  .param-label { color: #fff; font-weight: 600; font-size: 0.95em; }
+  .param-value {
+    background: rgba(255,0,110,0.18);
+    color: #ffbe0b; font-family: monospace; font-weight: 700;
+    padding: 3px 10px; border-radius: 6px; font-size: 0.88em;
+  }
+  .param input[type="range"] { width: 100%; margin: 4px 0; }
+  .param select {
+    width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(131,56,236,0.4);
+    color: #fff; padding: 6px 10px; border-radius: 6px; font-family: inherit;
+  }
+  .param-scale {
+    display: flex; justify-content: space-between;
+    color: #888; font-size: 0.75em; margin-top: 2px;
+  }
+  .param-help {
+    color: #aaa; font-size: 0.82em; line-height: 1.5; margin-top: 8px;
+    padding-left: 10px; border-left: 2px solid rgba(58,134,255,0.4);
+  }
+  .param-help strong { color: #fff; }
+
+  .hidden { display: none !important; }
+
+  .tap-modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; padding: 20px;
+  }
+  .tap-content {
+    background: linear-gradient(135deg, #1a0033 0%, #001428 100%);
+    border: 2px solid #8338ec; border-radius: 14px; padding: 26px;
+    max-width: 560px; width: 100%; box-shadow: 0 0 40px rgba(131,56,236,0.4);
+  }
+  .tap-content h2 { color: #fff; font-size: 1.25em; margin-bottom: 6px; }
+  .tap-content p { color: #aaa; font-size: 0.92em; margin-bottom: 14px; }
+  .tap-content kbd {
+    background: #222; border: 1px solid #555; border-radius: 4px;
+    padding: 2px 6px; font-family: monospace; font-size: 0.88em;
+  }
+  .tap-stats {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0;
+  }
+  .tap-stats .stat {
+    background: rgba(131,56,236,0.15); border-radius: 8px; padding: 14px; text-align: center;
+  }
+  .tap-stats .stat .label { color: #aaa; font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.05em; }
+  .tap-stats .stat .value { color: #ff006e; font-size: 2em; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .tap-btn {
+    width: 100%; height: 80px; font-size: 1.4em; font-weight: 700;
+    background: linear-gradient(90deg, #ff006e, #8338ec);
+    border: none; color: white; border-radius: 10px; cursor: pointer;
+    transition: transform 0.05s ease;
+  }
+  .tap-btn:active { transform: scale(0.97); }
+
+  @media (max-width: 720px) {
+    .queue-row {
+      grid-template-columns: 1fr 70px;
+      gap: 4px;
+    }
+    .queue-row .bpm, .queue-row .duration, .queue-row .charts { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<h1>AutoStepper Web</h1>
+<p class="subtitle">Genera charts StepMania 5 (.ssc + .sm) desde MP3/WAV — 5 dificultades, holds, rolls, jumps, hands, RADARVALUES reales. Procesado en el navegador, sin subir nada.</p>
+
+<div class="container">
+
+  <!-- 1. CARGA -->
+  <div class="card">
+    <h2>1. Cargar audio (puedes seleccionar varios)</h2>
+    <label class="drop-zone" id="dropZone">
+      <div class="big-icon">🎵</div>
+      <p>Arrastra uno o varios MP3 / WAV / OGG aquí, o haz click para elegir</p>
+      <input type="file" id="fileInput" accept="audio/*" multiple>
+    </label>
+    <div id="queueContainer"></div>
+  </div>
+
+  <!-- 2. ESTILO + ANALIZAR -->
+  <div class="card" id="optionsCard" style="display:none">
+    <h2>2. Estilo de los charts</h2>
+
+    <div class="preset-grid">
+      <div class="preset" data-preset="suave">
+        <div class="preset-name">🌿 Suave</div>
+        <div class="preset-desc">Pocos pasos, sin saltos, holds raros. Ideal para empezar o canciones tranquilas.</div>
+      </div>
+      <div class="preset selected" data-preset="normal">
+        <div class="preset-name">⚡ Normal</div>
+        <div class="preset-desc">Balance. Pasos en cada corchea, algunos holds, pocos saltos. <strong>Recomendado</strong>.</div>
+      </div>
+      <div class="preset" data-preset="intenso">
+        <div class="preset-name">🔥 Intenso</div>
+        <div class="preset-desc">Densidad alta, muchos holds, saltos frecuentes en Hard. Para canciones rápidas.</div>
+      </div>
+      <div class="preset" data-preset="custom">
+        <div class="preset-name">⚙️ Personalizado</div>
+        <div class="preset-desc">Ajusta cada parámetro a mano (avanzado).</div>
+      </div>
+    </div>
+
+    <div id="customParams" style="display:none; margin-top:18px">
+
+      <div class="param">
+        <div class="param-header">
+          <span class="param-label">🎯 Sensibilidad de detección</span>
+          <span class="param-value" id="sensValue">1.7</span>
+        </div>
+        <input type="range" id="sensitivity" min="1.0" max="3.5" step="0.1" value="1.7">
+        <div class="param-scale"><span>más pasos ←</span><span>→ menos pasos</span></div>
+        <div class="param-help">
+          Cuántos golpes del audio se convierten en pasos. <strong>Bajo (1.0):</strong> detecta hi-hats, charles, percusiones suaves → muchos pasos.
+          <strong>Alto (3.0):</strong> solo bombo y caja → menos pasos pero más limpios.
+        </div>
+      </div>
+
+      <div class="param">
+        <div class="param-header">
+          <span class="param-label">📏 Resolución rítmica</span>
+          <span class="param-value" id="subdivValue">corcheas (1/8)</span>
+        </div>
+        <select id="subdivSelect">
+          <option value="4">Negras (1/4) — solo en cada beat</option>
+          <option value="8" selected>Corcheas (1/8) — recomendado</option>
+          <option value="16">Semicorcheas (1/16) — máximo detalle</option>
+        </select>
+        <div class="param-help">
+          Resolución de la rejilla a la que se "encajan" los pasos. <strong>Negras:</strong> solo cae paso en cada tiempo principal (lento, fácil).
+          <strong>Corcheas:</strong> permite pasos a mitad de beat. <strong>Semicorcheas:</strong> permite redobles rápidos (canciones técnicas).
+        </div>
+      </div>
+
+      <div class="param">
+        <div class="param-header">
+          <span class="param-label">⏸️ Densidad de holds</span>
+          <span class="param-value" id="holdVal">25%</span>
+        </div>
+        <input type="range" id="holdDensity" min="0" max="1" step="0.05" value="0.25">
+        <div class="param-scale"><span>solo taps ←</span><span>→ muchos holds</span></div>
+        <div class="param-help">
+          Cuándo se convierte un tap en hold (flecha mantenida). Solo aplica cuando hay un hueco grande antes del siguiente paso.
+          <strong>0%:</strong> solo flechas individuales. <strong>50%:</strong> 1 de cada 2 huecos largos = hold. <strong>100%:</strong> casi todos los huecos = hold. En Hard, un 5% de los holds se convierten en rolls (sensor que vibra).
+        </div>
+      </div>
+
+      <div class="param">
+        <div class="param-header">
+          <span class="param-label">↔️ Probabilidad de salto (Hard)</span>
+          <span class="param-value" id="jumpVal">7%</span>
+        </div>
+        <input type="range" id="jumpProb" min="0" max="0.25" step="0.01" value="0.07">
+        <div class="param-scale"><span>sin saltos ←</span><span>→ muchos saltos</span></div>
+        <div class="param-help">
+          Cuántos pasos en Hard se convierten en jumps (dos flechas a la vez, requiere pisar dos paneles simultáneamente).
+          <strong>0%:</strong> nunca. <strong>7%:</strong> ~1 de cada 14 pasos. <strong>25%:</strong> 1 de cada 4 pasos = salto. Easy/Medium siempre tienen menos saltos que Hard.
+        </div>
+      </div>
+
+    </div>
+
+    <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button class="action-btn" id="analyzeBtn" onclick="analyzeAll()">▶ Analizar todo</button>
+      <button class="action-btn secondary" id="cancelBtn" onclick="cancelAnalysis()" disabled>Cancelar</button>
+      <button class="action-btn secondary" onclick="clearQueue()">Vaciar cola</button>
+    </div>
+
+    <div class="progress-bar"><div class="fill" id="analyzeProgress"></div></div>
+    <div class="log" id="analyzeLog"></div>
+  </div>
+
+  <!-- 3. PREVIEW (single song selected) -->
+  <div class="card hidden" id="previewCard">
+    <h2>3. Preview de canción seleccionada — <span id="previewTitle"></span></h2>
+    <div class="stats-grid">
+      <div class="stat"><div class="label">BPM</div><div class="value" id="resBpm">--</div></div>
+      <div class="stat"><div class="label">Offset</div><div class="value" id="resOffset">--</div></div>
+      <div class="stat"><div class="label">Duración</div><div class="value" id="resDuration">--</div></div>
+      <div class="stat"><div class="label">Onsets</div><div class="value" id="resOnsets">--</div></div>
+    </div>
+
+    <canvas id="waveform" width="1000" height="130"></canvas>
+    <div class="audio-controls">
+      <button class="action-btn" id="playBtn" onclick="togglePlay()">▶ Reproducir</button>
+      <span class="time"><span id="curTime">0:00</span> / <span id="totalTime">0:00</span></span>
+      <label style="color:#aaa">Click en cada beat:</label>
+      <label class="switch"><input type="checkbox" id="clickToggle" checked><span class="slider"></span></label>
+    </div>
+
+    <h2 style="margin-top:16px">Charts generados</h2>
+    <div id="difficultiesContainer"></div>
+
+    <details style="margin-top:14px">
+      <summary>Ver contenido del .sm</summary>
+      <pre id="smPreview" style="background:#000;padding:10px;border-radius:6px;font-size:0.75em;max-height:300px;overflow:auto;color:#0f6"></pre>
+    </details>
+  </div>
+
+  <!-- 4. EXPORTAR -->
+  <div class="card hidden" id="exportCard">
+    <h2>4. Exportar</h2>
+    <p class="help">
+      Cada canción se empaqueta como carpeta con <strong>.ssc</strong> (formato nativo SM5),
+      <strong>.sm</strong> (compatibilidad universal) y el audio. Descomprime el ZIP dentro de
+      <code>C:\Games\StepMania 5\Songs\AutoStepper\</code>.
+    </p>
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="action-btn" onclick="downloadAllZip()">Descargar todo (ZIP)</button>
+      <button class="action-btn secondary" onclick="downloadCurrentSsc()">Descargar .ssc actual</button>
+      <button class="action-btn secondary" onclick="downloadCurrentSm()">Descargar .sm actual</button>
+    </div>
+    <div id="exportStatus" style="margin-top:10px;color:#aaa;font-size:0.9em"></div>
+  </div>
+
+</div>
+
+<!-- Tap Sync Modal -->
+<div id="tapModal" class="tap-modal hidden">
+  <div class="tap-content">
+    <h2>Tap Sync — <span id="tapSongTitle"></span></h2>
+    <p>Pulsa <kbd>ESPACIO</kbd> o el botón <strong>TAP</strong> a tiempo con la música. Después de 8+ taps tendrás un BPM estable.</p>
+    <div class="tap-stats">
+      <div class="stat"><div class="label">Taps</div><div class="value" id="tapCount">0</div></div>
+      <div class="stat"><div class="label">BPM estimado</div><div class="value" id="tapBpm">--</div></div>
+    </div>
+    <button id="tapBtn" class="tap-btn" onclick="recordTap()">TAP</button>
+    <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="action-btn" onclick="applyTapBpm()">✓ Aplicar BPM</button>
+      <button class="action-btn secondary" onclick="resetTapSync()">↺ Reiniciar</button>
+      <button class="action-btn secondary" onclick="closeTapSync()">✕ Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//                  GLOBAL STATE
+// ============================================================
+// Queue: array of { id, file, title, artist, status, bpmOverride, result, audioBuffer (transient) }
+const queue = [];
+let queueIdCounter = 0;
+
+let audioCtx = null;
+let analyzing = false;
+let cancelRequested = false;
+
+// Currently selected (for preview)
+let selectedId = null;
+let previewBuffer = null; // decoded audio buffer for preview
+let playSource = null;
+let playStartTime = 0;
+let playStartOffset = 0;
+let isPlaying = false;
+let scheduledClicks = [];
+
+// ============================================================
+//                  LOG
+// ============================================================
+function log(msg, cls='') {
+  const el = document.getElementById('analyzeLog');
+  el.innerHTML += `<span class="${cls}">${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ============================================================
+//                  FILE LOADING
+// ============================================================
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) addFiles(e.target.files);
+  e.target.value = ''; // allow re-selecting same file
+});
+
+function addFiles(files) {
+  for (const file of files) {
+    if (!file.type.startsWith('audio/')) continue;
+    const nameNoExt = file.name.replace(/\.[^.]+$/, '');
+    const m = nameNoExt.match(/^(.+?)\s*-\s*(.+)$/);
+    let artist = '', title = nameNoExt;
+    if (m) { artist = m[1].trim(); title = m[2].trim(); }
+    queue.push({
+      id: ++queueIdCounter,
+      file,
+      title,
+      artist,
+      status: 'pending',
+      bpmOverride: '',
+      result: null,
+      error: null
+    });
+  }
+  renderQueue();
+  document.getElementById('optionsCard').style.display = queue.length ? '' : 'none';
+}
+
+function clearQueue() {
+  if (analyzing) { log('No se puede vaciar durante un análisis.', 'warn'); return; }
+  queue.length = 0;
+  selectedId = null;
+  renderQueue();
+  document.getElementById('optionsCard').style.display = 'none';
+  document.getElementById('previewCard').classList.add('hidden');
+  document.getElementById('exportCard').classList.add('hidden');
+  document.getElementById('analyzeLog').innerHTML = '';
+  document.getElementById('analyzeProgress').style.width = '0%';
+}
+
+function removeFromQueue(id) {
+  if (analyzing) return;
+  const i = queue.findIndex(q => q.id === id);
+  if (i >= 0) queue.splice(i, 1);
+  if (selectedId === id) {
+    selectedId = null;
+    document.getElementById('previewCard').classList.add('hidden');
+  }
+  renderQueue();
+  if (queue.length === 0) {
+    document.getElementById('optionsCard').style.display = 'none';
+    document.getElementById('exportCard').classList.add('hidden');
+  }
+}
+
+function renderQueue() {
+  const c = document.getElementById('queueContainer');
+  if (queue.length === 0) { c.innerHTML = ''; return; }
+  let html = `<div class="queue">
+    <div class="queue-row header">
+      <div>Archivo / Título</div>
+      <div>Estado</div>
+      <div>BPM</div>
+      <div>Duración</div>
+      <div>Pasos</div>
+      <div>Acciones</div>
+    </div>`;
+  for (const q of queue) {
+    const sel = q.id === selectedId ? ' selected' : '';
+    const dur = q.result ? formatTime(q.result.duration) : '--';
+    const steps = q.result ? q.result.charts.reduce((s, c) => s + c.count, 0) : '--';
+    const bpmDisplay = q.result ? q.result.bpm.toFixed(1) : '--';
+    html += `<div class="queue-row${sel}">
+      <div class="name">
+        <div style="font-weight:600">${escapeHtml(q.title || q.file.name)}</div>
+        <div style="color:#888;font-size:0.78em">${escapeHtml(q.artist || '')} · ${(q.file.size/1024/1024).toFixed(2)} MB</div>
+      </div>
+      <div class="status"><span class="badge ${q.status}">${statusLabel(q.status)}</span></div>
+      <div class="bpm">
+        ${q.result ? `<span style="color:#00ff64">${bpmDisplay}</span>` : ''}
+        <input type="number" placeholder="${bpmDisplay}" min="40" max="240" step="0.1" value="${q.bpmOverride}" oninput="setBpmOverride(${q.id}, this.value)" title="Forzar BPM">
+        <button class="icon-btn" onclick="openTapSync(${q.id})" title="Calcular BPM tocando al ritmo">Tap</button>
+      </div>
+      <div class="duration">${dur}</div>
+      <div class="charts">${steps} pasos</div>
+      <div class="actions">
+        ${q.result ? `<button class="icon-btn" onclick="selectSong(${q.id})">Ver</button>` : ''}
+        ${q.result ? `<button class="icon-btn" onclick="downloadOne(${q.id})">.sm</button>` : ''}
+        <button class="icon-btn danger" onclick="removeFromQueue(${q.id})" ${analyzing?'disabled':''}>×</button>
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+  c.innerHTML = html;
+}
+
+function statusLabel(s) {
+  return { pending: 'pendiente', working: 'analizando…', done: 'listo', error: 'error' }[s] || s;
+}
+function escapeHtml(s) { return String(s).replace(/[<>&"']/g, c => ({ '<':'&lt;', '>':'&gt;', '&':'&amp;', '"':'&quot;', "'":'&#39;' }[c])); }
+function setBpmOverride(id, v) {
+  const q = queue.find(x => x.id === id);
+  if (q) q.bpmOverride = v;
+}
+
+// ============================================================
+//                  TAP SYNC (manual BPM)
+// ============================================================
+let tapState = { id: null, taps: [], keyHandler: null };
+
+function openTapSync(id) {
+  const q = queue.find(x => x.id === id);
+  if (!q) return;
+  tapState = { id, taps: [], keyHandler: null };
+  document.getElementById('tapSongTitle').textContent = q.title || q.file.name;
+  document.getElementById('tapCount').textContent = '0';
+  document.getElementById('tapBpm').textContent = '--';
+  document.getElementById('tapModal').classList.remove('hidden');
+  tapState.keyHandler = (e) => {
+    if (e.code === 'Space' || e.key === ' ') {
+      e.preventDefault();
+      recordTap();
+    } else if (e.key === 'Escape') {
+      closeTapSync();
+    }
+  };
+  document.addEventListener('keydown', tapState.keyHandler);
+}
+
+function recordTap() {
+  const now = performance.now();
+  // If user paused for more than 3 seconds, treat as a fresh restart
+  if (tapState.taps.length > 0 && now - tapState.taps[tapState.taps.length - 1] > 3000) {
+    tapState.taps = [];
+  }
+  tapState.taps.push(now);
+  document.getElementById('tapCount').textContent = tapState.taps.length;
+  if (tapState.taps.length >= 4) {
+    const ints = [];
+    for (let i = 1; i < tapState.taps.length; i++) {
+      ints.push(tapState.taps[i] - tapState.taps[i - 1]);
+    }
+    ints.sort((a, b) => a - b);
+    const median = ints[Math.floor(ints.length / 2)];
+    let bpm = 60000 / median;
+    while (bpm < 90) bpm *= 2;
+    while (bpm > 180) bpm /= 2;
+    document.getElementById('tapBpm').textContent = bpm.toFixed(1);
+  }
+}
+
+function resetTapSync() {
+  tapState.taps = [];
+  document.getElementById('tapCount').textContent = '0';
+  document.getElementById('tapBpm').textContent = '--';
+}
+
+function applyTapBpm() {
+  if (tapState.taps.length < 4) {
+    alert('Necesitas al menos 4 taps para calcular el BPM.');
+    return;
+  }
+  const bpmStr = document.getElementById('tapBpm').textContent;
+  if (bpmStr === '--') return;
+  const q = queue.find(x => x.id === tapState.id);
+  if (q) {
+    q.bpmOverride = bpmStr;
+    renderQueue();
+  }
+  closeTapSync();
+}
+
+function closeTapSync() {
+  document.getElementById('tapModal').classList.add('hidden');
+  if (tapState.keyHandler) {
+    document.removeEventListener('keydown', tapState.keyHandler);
+    tapState.keyHandler = null;
+  }
+  tapState.id = null;
+}
+
+// ============================================================
+//                  AUDIO PROCESSING
+// ============================================================
+function ensureAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+async function decodeFile(file) {
+  ensureAudioCtx();
+  const buf = await file.arrayBuffer();
+  return await audioCtx.decodeAudioData(buf.slice(0));
+}
+
+function toMono(buffer) {
+  const ch0 = buffer.getChannelData(0);
+  if (buffer.numberOfChannels === 1) return ch0;
+  const ch1 = buffer.getChannelData(1);
+  const out = new Float32Array(ch0.length);
+  for (let i = 0; i < ch0.length; i++) out[i] = (ch0[i] + ch1[i]) * 0.5;
+  return out;
+}
+
+function computeEnergyEnvelope(samples, sr) {
+  const winMs = 23, hopMs = 5;
+  const winSize = Math.floor(sr * winMs / 1000);
+  const hopSize = Math.floor(sr * hopMs / 1000);
+  const numFrames = Math.max(0, Math.floor((samples.length - winSize) / hopSize));
+  const env = new Float32Array(numFrames);
+  for (let f = 0; f < numFrames; f++) {
+    let sum = 0;
+    const start = f * hopSize;
+    for (let i = 0; i < winSize; i++) { const s = samples[start + i]; sum += s*s; }
+    env[f] = Math.sqrt(sum / winSize);
+  }
+  return { env, hopSize, framesPerSec: sr / hopSize };
+}
+
+function computeODF(env) {
+  const odf = new Float32Array(env.length);
+  for (let i = 1; i < env.length; i++) {
+    const a = env[i] + 1e-6;
+    const b = env[i-1] + 1e-6;
+    const d = Math.log(a) - Math.log(b);
+    odf[i] = d > 0 ? d : 0;
+  }
+  let max = 0;
+  for (let i = 0; i < odf.length; i++) if (odf[i] > max) max = odf[i];
+  if (max > 0) for (let i = 0; i < odf.length; i++) odf[i] /= max;
+  return odf;
+}
+
+function pickPeaks(odf, framesPerSec, sensitivity) {
+  const peaks = [];
+  const halfWin = Math.floor(framesPerSec * 0.075);
+  const minSpacing = Math.floor(framesPerSec * 0.05);
+
+  const meanArr = new Float32Array(odf.length);
+  let sum = 0;
+  const winLen = Math.min(2*halfWin + 1, odf.length);
+  for (let i = 0; i < winLen; i++) sum += odf[i];
+  for (let i = 0; i < odf.length; i++) {
+    const lo = i - halfWin - 1;
+    const hi = i + halfWin;
+    if (lo >= 0 && hi < odf.length) sum += odf[hi] - odf[lo];
+    meanArr[i] = sum / Math.max(1, winLen);
+  }
+
+  for (let i = 1; i < odf.length - 1; i++) {
+    const thresh = Math.max(0.02, meanArr[i] * sensitivity);
+    if (odf[i] > thresh && odf[i] > odf[i-1] && odf[i] >= odf[i+1]) {
+      if (peaks.length === 0 || i - peaks[peaks.length-1] >= minSpacing) {
+        peaks.push(i);
+      }
+    }
+  }
+  return peaks;
+}
+
+// BPM range tuned for danceable genres:
+//   pop/rock ~90-130, house ~120-130, techno ~125-145, DnB ~165-180.
+// Narrower range than general-purpose detection → fewer octave errors.
+function detectBPM(odf, framesPerSec) {
+  const minLag = Math.floor(framesPerSec * 60 / 180);
+  const maxLag = Math.floor(framesPerSec * 60 / 90);
+  let best = { lag: 0, score: 0 };
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let s = 0;
+    const N = odf.length - lag;
+    for (let i = 0; i < N; i++) s += odf[i] * odf[i + lag];
+    if (s > best.score) best = { lag, score: s };
+  }
+  let bpm = 60 * framesPerSec / best.lag;
+  while (bpm < 90) bpm *= 2;
+  while (bpm > 180) bpm /= 2;
+  return bpm;
+}
+
+function detectOffset(odf, framesPerSec, bpm) {
+  const beatFrames = framesPerSec * 60 / bpm;
+  const numBeats = Math.floor(odf.length / beatFrames);
+  let best = { phase: 0, score: 0 };
+  const step = Math.max(1, Math.floor(beatFrames / 100));
+  for (let phase = 0; phase < beatFrames; phase += step) {
+    let s = 0;
+    for (let b = 0; b < numBeats; b++) {
+      const idx = Math.round(phase + b * beatFrames);
+      if (idx < odf.length) s += odf[idx];
+    }
+    if (s > best.score) best = { phase, score: s };
+  }
+  return best.phase / framesPerSec;
+}
+
+// Bass-emphasis pre-filter — cascaded 2-pole IIR low-pass at ~200 Hz.
+// Isolates kick drum and bassline so the envelope is dominated by the
+// downbeat in danceable genres (techno, dance, pop, rock). Removes
+// vocals, hi-hats, distorted guitars, cymbals — anything that would
+// add noise to BPM detection.
+function bassEmphasize(samples, sr) {
+  const fc = 200;
+  const alpha = Math.exp(-2 * Math.PI * fc / sr);
+  const oneMinus = 1 - alpha;
+  const out = new Float32Array(samples.length);
+  let y = 0;
+  for (let i = 0; i < samples.length; i++) {
+    y = alpha * y + oneMinus * samples[i];
+    out[i] = y;
+  }
+  // Second cascaded pass for steeper rolloff (~12 dB/octave)
+  y = 0;
+  for (let i = 0; i < out.length; i++) {
+    y = alpha * y + oneMinus * out[i];
+    out[i] = y;
+  }
+  return out;
+}
+
+// ============================================================
+//                  CHART GENERATION (192nd-note internal grid)
+// ============================================================
+// All positions are in 192nd-note units:
+//   1 measure = 192 units, 1 beat = 48 units
+//   spacings: quarter=48, eighth=24, triplet=16, sixteenth=12, etc.
+const VALID_SUBDIVISIONS = [4, 8, 12, 16, 24, 32, 48, 64, 96, 192];
+const RES_SPACING = { '4': 48, '8': 24, '12': 16, '16': 12, '32': 6 };
+
+function quantizeOnsetsTo192(onsetTimesSec, bpm, offsetSec) {
+  const beatPerSec = bpm / 60;
+  const positions = onsetTimesSec.map(t => {
+    const beat = (t - offsetSec) * beatPerSec;
+    return Math.round(beat * 48); // 48 units per beat
+  }).filter(p => p >= 0);
+  return [...new Set(positions)].sort((a,b) => a-b);
+}
+
+// Snap raw positions to the user's chosen rhythmic resolution
+// resolution: '4' (quarter), '8' (eighth), '12' (triplet), '16' (sixteenth), '32' (thirtysecond)
+function snapToResolution(positions, resolution) {
+  const spacing = RES_SPACING[resolution] || 12;
+  return [...new Set(positions.map(p => Math.round(p / spacing) * spacing))].sort((a,b) => a-b);
+}
+
+// Generates note objects with cols as integers (0=empty, 1=tap)
+// difficulty filters by spacing: beginner=quarters, easy=eighths, medium=sixteenths, hard=all, challenge=all+denser
+function generateBaseNotes(positions, difficulty, jumpProb, handsProb) {
+  let filtered;
+  if (difficulty === 'beginner') {
+    filtered = positions.filter(p => p % 48 === 0);   // quarters only
+    filtered = filtered.filter((p, i) => i % 2 === 0); // every other quarter
+  } else if (difficulty === 'easy') {
+    filtered = positions.filter(p => p % 24 === 0);   // eighths
+    if (filtered.length > 80) filtered = filtered.filter((p,i) => i % 2 === 0);
+  } else if (difficulty === 'medium') {
+    filtered = positions.filter(p => p % 12 === 0);   // sixteenths
+  } else {
+    filtered = positions.slice();                      // all (hard, challenge)
+  }
+
+  const ARROWS = 4;
+  const notes = [];
+  let last = -1, lastLast = -1;
+  const realJumpProb =
+    difficulty === 'challenge' ? jumpProb * 1.4 :
+    difficulty === 'hard'      ? jumpProb :
+    difficulty === 'medium'    ? jumpProb * 0.3 : 0;
+  const realHandsProb = difficulty === 'challenge' ? handsProb : 0;
+
+  for (let i = 0; i < filtered.length; i++) {
+    const pos = filtered[i];
+    const cols = [0, 0, 0, 0];
+
+    // Primary arrow, avoid repeating last 2
+    let arr, tries = 0;
+    do {
+      arr = Math.floor(Math.random() * ARROWS);
+      tries++;
+    } while ((arr === last || arr === lastLast) && tries < 8);
+    cols[arr] = 1;
+
+    // Jumps (2 arrows simultaneous)
+    if (Math.random() < realJumpProb) {
+      let jumpArr;
+      do { jumpArr = Math.floor(Math.random() * ARROWS); } while (jumpArr === arr);
+      cols[jumpArr] = 1;
+
+      // Hands (3 simultaneous), only on challenge
+      if (Math.random() < realHandsProb) {
+        let third;
+        do { third = Math.floor(Math.random() * ARROWS); } while (cols[third] === 1);
+        cols[third] = 1;
+      }
+    }
+
+    notes.push({ pos, cols });
+    lastLast = last; last = arr;
+  }
+  return notes;
+}
+
+// Adds holds and rolls in-place using 192nd-note positions
+function addHoldsAndRolls(notes, difficulty, holdDensity) {
+  if (difficulty === 'beginner') return notes;
+
+  let holdProb, rollProb;
+  if (difficulty === 'easy')           { holdProb = holdDensity * 0.6; rollProb = 0; }
+  else if (difficulty === 'medium')    { holdProb = holdDensity * 0.9; rollProb = 0; }
+  else if (difficulty === 'hard')      { holdProb = holdDensity;       rollProb = 0.05; }
+  else /* challenge */                 { holdProb = holdDensity * 1.1; rollProb = 0.10; }
+
+  const minHoldUnits = 24;   // 1/2 beat
+  const maxHoldUnits = 96;   // 2 beats
+  const minGap       = 24;   // gap to next note must be ≥ this
+
+  const byPos = new Map();
+  for (const n of notes) byPos.set(n.pos, n);
+
+  const sorted = [...notes].sort((a,b) => a.pos - b.pos);
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const cur  = sorted[i];
+    const next = sorted[i+1];
+    const gap  = next.pos - cur.pos;
+    if (gap < minGap) continue;
+    if (Math.random() > holdProb) continue;
+
+    const taps = [];
+    for (let c = 0; c < 4; c++) if (cur.cols[c] === 1) taps.push(c);
+    if (taps.length === 0) continue;
+    const col = taps[Math.floor(Math.random() * taps.length)];
+
+    const maxLen = Math.min(maxHoldUnits, gap - 1);
+    if (maxLen < minHoldUnits) continue;
+    // Snap hold length to a clean subdivision (multiples of 12 = sixteenths)
+    let holdLen = minHoldUnits + Math.floor(Math.random() * (maxLen - minHoldUnits + 1));
+    holdLen = Math.max(minHoldUnits, Math.round(holdLen / 12) * 12);
+    if (holdLen > maxLen) holdLen = maxLen - (maxLen % 12);
+    if (holdLen < minHoldUnits) continue;
+    const endPos = cur.pos + holdLen;
+
+    let endNote = byPos.get(endPos);
+    if (!endNote) {
+      endNote = { pos: endPos, cols: [0,0,0,0] };
+      byPos.set(endPos, endNote);
+      notes.push(endNote);
+    }
+    if (endNote.cols[col] !== 0) continue;
+
+    const isRoll = Math.random() < rollProb;
+    cur.cols[col]     = isRoll ? 4 : 2;
+    endNote.cols[col] = 3;
+  }
+
+  notes.sort((a,b) => a.pos - b.pos);
+  return notes;
+}
+
+// Find smallest valid SM subdivision for a given measure.
+// positionsInMeasure: array of positions 0..191 (relative to measure start)
+function pickMeasureSubdivision(positionsInMeasure) {
+  if (positionsInMeasure.length === 0) return 4;
+  for (const sub of VALID_SUBDIVISIONS) {
+    const spacing = 192 / sub;
+    if (positionsInMeasure.every(p => p % spacing === 0)) return sub;
+  }
+  return 192;
+}
+
+// Render notes to SM-format rows with VARIABLE per-measure subdivision (canonical SM format)
+function notesToRows(notes, totalUnits) {
+  const totalMeasures = Math.max(1, Math.ceil(totalUnits / 192));
+  const noteMap = new Map();
+  for (const n of notes) noteMap.set(n.pos, n.cols);
+
+  // Precompute notes-by-measure
+  const byMeasure = Array.from({ length: totalMeasures }, () => []);
+  for (const n of notes) {
+    const m = Math.floor(n.pos / 192);
+    if (m >= 0 && m < totalMeasures) byMeasure[m].push(n.pos - m * 192);
+  }
+
+  let out = '';
+  for (let m = 0; m < totalMeasures; m++) {
+    if (m > 0) out += ',\n';
+    const sub = pickMeasureSubdivision(byMeasure[m]);
+    const spacing = 192 / sub;
+    for (let r = 0; r < sub; r++) {
+      const pos = m * 192 + r * spacing;
+      const cols = noteMap.get(pos);
+      if (cols) out += cols.map(c => String(c)).join('') + '\n';
+      else      out += '0000\n';
+    }
+  }
+  return out.trimEnd();
+}
+
+// ============================================================
+//                  RADAR VALUES (12 SM5 values)
+// ============================================================
+function calculateRadarValues(notes, totalMeasures, durationSec) {
+  let taps = 0, holdHeads = 0, rollHeads = 0, jumps = 0, hands = 0;
+  // Density windows: count notes per 1-second window for Voltage
+  const secWindows = new Float32Array(Math.max(1, Math.ceil(durationSec)));
+
+  for (const n of notes) {
+    let pressed = 0;
+    for (const c of n.cols) {
+      if (c === 1) { taps++; pressed++; }
+      else if (c === 2) { holdHeads++; pressed++; }
+      else if (c === 4) { rollHeads++; pressed++; }
+    }
+    if (pressed >= 2) jumps++;
+    if (pressed >= 3) hands++;
+  }
+
+  const totalNotes = taps + holdHeads + rollHeads;
+
+  // Approx normalizations (SM uses elaborate formulas; these are reasonable):
+  // Stream: density of notes (note rows per measure / 16)
+  const stream = Math.min(1, totalNotes / Math.max(1, totalMeasures * 16));
+  // Voltage: peak per-second density / 8 (8 notes/sec ≈ 1.0)
+  const voltage = Math.min(1, totalNotes / Math.max(1, durationSec * 8));
+  // Air: jumps frequency
+  const air = totalNotes > 0 ? Math.min(1, (jumps * 4) / totalNotes) : 0;
+  // Freeze: holds + rolls
+  const freeze = totalNotes > 0 ? Math.min(1, ((holdHeads + rollHeads) * 4) / totalNotes) : 0;
+  // Chaos: variation between consecutive intervals (rough)
+  let chaos = 0;
+  if (notes.length > 2) {
+    const intervals = [];
+    for (let i = 1; i < notes.length; i++) intervals.push(notes[i].pos - notes[i-1].pos);
+    const mean = intervals.reduce((a,b)=>a+b,0)/intervals.length;
+    const variance = intervals.reduce((s,v)=>s+(v-mean)**2,0)/intervals.length;
+    chaos = Math.min(1, Math.sqrt(variance) / 48);
+  }
+
+  const fmt = v => v.toFixed(6);
+  // 12-value SM5 radar: stream, voltage, air, freeze, chaos, notes, jumps, holds, mines, hands, rolls, lifts
+  return [
+    fmt(stream), fmt(voltage), fmt(air), fmt(freeze), fmt(chaos),
+    String(totalNotes), String(jumps), String(holdHeads), '0', String(hands), String(rollHeads), '0'
+  ].join(',');
+}
+
+// Estimate difficulty rating from chart contents
+function estimateMeter(notes, durationSec, difficulty) {
+  const totalNotes = notes.reduce((s,n) => s + n.cols.filter(c => c===1||c===2||c===4).length, 0);
+  const npm = totalNotes / Math.max(1, durationSec/60);
+  let r = Math.round(npm / 70);
+  // Difficulty floor
+  const floor = { beginner: 1, easy: 2, medium: 4, hard: 6, challenge: 9 }[difficulty] || 1;
+  r = Math.max(floor, Math.min(15, r));
+  return r;
+}
+
+// Auto-pick a SAMPLESTART time aligned to a beat with high local density
+function pickSampleStart(beatsList, onsetTimesSec, duration) {
+  // try several windows of 15s, pick one with most onsets, prefer ~ 1/3 into song
+  if (duration < 30) return Math.max(0, duration * 0.25);
+  let best = duration * 0.33, bestScore = -1;
+  const windowLen = 15;
+  for (let start = 10; start < duration - windowLen; start += 5) {
+    const count = onsetTimesSec.filter(t => t >= start && t < start + windowLen).length;
+    // prefer middle third
+    const middleBias = 1 - Math.abs((start + windowLen/2) / duration - 0.5) * 0.5;
+    const score = count * middleBias;
+    if (score > bestScore) { bestScore = score; best = start; }
+  }
+  // snap to nearest beat
+  let snapped = best;
+  for (const t of beatsList) {
+    if (Math.abs(t - best) < Math.abs(snapped - best)) snapped = t;
+    if (t > best + 1) break;
+  }
+  return Math.max(0, snapped);
+}
+
+// ============================================================
+//                  SM / SSC FILE BUILDERS
+// ============================================================
+function buildHeaderCommon(meta, audioFilename, bpm, offsetSec, sampleStart) {
+  const smOffset = (-offsetSec).toFixed(3);
+  let h = '';
+  h += `#TITLE:${meta.title};\n`;
+  h += `#SUBTITLE:;\n`;
+  h += `#ARTIST:${meta.artist};\n`;
+  h += `#TITLETRANSLIT:;\n#SUBTITLETRANSLIT:;\n#ARTISTTRANSLIT:;\n`;
+  h += `#GENRE:;\n#ORIGIN:;\n#CREDIT:AutoStepper Web;\n`;
+  h += `#MUSIC:${audioFilename};\n`;
+  h += `#BANNER:;\n#BACKGROUND:;\n#CDTITLE:;\n`;
+  h += `#SAMPLESTART:${sampleStart.toFixed(3)};\n`;
+  h += `#SAMPLELENGTH:15.000;\n`;
+  h += `#SELECTABLE:YES;\n`;
+  h += `#OFFSET:${smOffset};\n`;
+  h += `#BPMS:0.000=${bpm.toFixed(3)};\n`;
+  h += `#STOPS:;\n`;
+  h += `#DISPLAYBPM:${Math.round(bpm)};\n`;
+  return h;
+}
+
+// Legacy .sm file (compatible with all versions of StepMania)
+function buildSmFile(meta, audioFilename, bpm, offsetSec, sampleStart, charts) {
+  let sm = `// Generated by AutoStepper Web\n`;
+  sm += buildHeaderCommon(meta, audioFilename, bpm, offsetSec, sampleStart) + '\n';
+
+  for (const c of charts) {
+    // For .sm we use the first 5 radar values (the normalized 0-1 ones)
+    const radar5 = c.radar.split(',').slice(0, 5).join(',');
+    sm += `//---------------dance-single - ${c.name}----------------\n`;
+    sm += `#NOTES:\n`;
+    sm += `     dance-single:\n`;
+    sm += `     AutoStepper:\n`;
+    sm += `     ${c.name}:\n`;
+    sm += `     ${c.rating}:\n`;
+    sm += `     ${radar5}:\n`;
+    sm += c.notes;
+    sm += `\n;\n\n`;
+  }
+  return sm;
+}
+
+// Native SM5 .ssc file (preferred by StepMania 5)
+// Uses NOTEDATA structure, full RADARVALUES (12), per-chart metadata
+function buildSscFile(meta, audioFilename, bpm, offsetSec, sampleStart, charts) {
+  let s = `// Generated by AutoStepper Web — SSC for StepMania 5\n`;
+  s += `#VERSION:0.83;\n`;
+  s += buildHeaderCommon(meta, audioFilename, bpm, offsetSec, sampleStart);
+  s += `#DELAYS:;\n`;
+  s += `#WARPS:;\n`;
+  s += `#TIMESIGNATURES:0.000=4=4;\n`;
+  s += `#TICKCOUNTS:0.000=4;\n`;
+  s += `#COMBOS:0.000=1;\n`;
+  s += `#SPEEDS:0.000=1.000=0.000=0;\n`;
+  s += `#SCROLLS:0.000=1.000;\n`;
+  s += `#FAKES:;\n`;
+  s += `#LABELS:0.000=Song Start;\n`;
+  s += `#BGCHANGES:;\n`;
+  s += `#KEYSOUNDS:;\n`;
+  s += `#ATTACKS:;\n\n`;
+
+  for (const c of charts) {
+    s += `//---------------dance-single - ${c.name}----------------\n`;
+    s += `#NOTEDATA:;\n`;
+    s += `#CHARTNAME:${c.name};\n`;
+    s += `#STEPSTYPE:dance-single;\n`;
+    s += `#DESCRIPTION:AutoStepper Web — ${c.name};\n`;
+    s += `#CHARTSTYLE:Pad;\n`;
+    s += `#DIFFICULTY:${c.name};\n`;
+    s += `#METER:${c.rating};\n`;
+    s += `#RADARVALUES:${c.radar};\n`;
+    s += `#CREDIT:AutoStepper Web;\n`;
+    s += `#NOTES:\n`;
+    s += c.notes;
+    s += `\n;\n\n`;
+  }
+  return s;
+}
+
+// ============================================================
+//                  PIPELINE: ANALYZE ONE
+// ============================================================
+async function analyzeOne(q) {
+  q.status = 'working'; renderQueue();
+  log(`▶ Analizando: ${q.file.name}`, 'info');
+
+  let buffer;
+  try {
+    buffer = await decodeFile(q.file);
+  } catch (e) {
+    q.status = 'error'; q.error = 'No se pudo decodificar';
+    log(`  ✗ ${e.message}`, 'bad');
+    renderQueue();
+    return;
+  }
+  await yieldUI();
+
+  const sr = buffer.sampleRate;
+  const monoData = toMono(buffer);
+  const bassData = bassEmphasize(monoData, sr);
+  await yieldUI();
+  const { env, framesPerSec } = computeEnergyEnvelope(bassData, sr);
+  await yieldUI();
+  const odf = computeODF(env);
+  await yieldUI();
+
+  const sensitivity = parseFloat(document.getElementById('sensitivity').value);
+  const peakFrames = pickPeaks(odf, framesPerSec, sensitivity);
+  const onsetTimesSec = peakFrames.map(f => f / framesPerSec);
+
+  let bpm;
+  const overrideVal = parseFloat(q.bpmOverride);
+  if (!isNaN(overrideVal) && overrideVal > 0) {
+    bpm = overrideVal;
+    log(`  BPM forzado: ${bpm}`, 'warn');
+  } else {
+    await yieldUI();
+    bpm = detectBPM(odf, framesPerSec);
+  }
+  await yieldUI();
+  const offsetSec = detectOffset(odf, framesPerSec, bpm);
+
+  // Beats list
+  const beatPerSec = bpm / 60;
+  const beatsList = [];
+  for (let t = offsetSec; t < buffer.duration; t += 1/beatPerSec) beatsList.push(t);
+
+  // Chart generation — internal grid is always 192nds for SM5 compatibility
+  const resolution  = document.getElementById('subdivSelect').value;   // '4' | '8' | '16'
+  const holdDensity = parseFloat(document.getElementById('holdDensity').value);
+  const jumpProb    = parseFloat(document.getElementById('jumpProb').value);
+  const handsProb   = 0.15; // for Challenge
+
+  const rawPositions = quantizeOnsetsTo192(onsetTimesSec, bpm, offsetSec);
+  const positions    = snapToResolution(rawPositions, resolution);
+  const totalBeats   = (buffer.duration - offsetSec) * beatPerSec;
+  const totalUnits   = Math.ceil(totalBeats * 48);   // 48 = 192/4
+
+  const sampleStart = pickSampleStart(beatsList, onsetTimesSec, buffer.duration);
+
+  const difficulties = [
+    { key: 'beginner',  name: 'Beginner'  },
+    { key: 'easy',      name: 'Easy'      },
+    { key: 'medium',    name: 'Medium'    },
+    { key: 'hard',      name: 'Hard'      },
+    { key: 'challenge', name: 'Challenge' },
+  ];
+
+  const totalMeasures = Math.ceil(totalUnits / 192);
+  const charts = [];
+  for (const d of difficulties) {
+    const baseNotes  = generateBaseNotes(positions, d.key, jumpProb, handsProb);
+    const finalNotes = addHoldsAndRolls(baseNotes, d.key, holdDensity);
+    const rows       = notesToRows(finalNotes, totalUnits);
+    const count      = finalNotes.reduce((s, n) => s + n.cols.filter(c => c===1||c===2||c===4).length, 0);
+    const rating     = estimateMeter(finalNotes, buffer.duration, d.key);
+    const radar      = calculateRadarValues(finalNotes, totalMeasures, buffer.duration);
+    charts.push({ name: d.name, key: d.key, rating, notes: rows, count, radar });
+  }
+
+  q.result = {
+    bpm, offsetSec,
+    duration: buffer.duration,
+    onsetTimesSec, beatsList,
+    charts, sampleStart,
+    sampleRate: sr,
+  };
+  q.status = 'done';
+  log(`  ✓ ${q.file.name}: BPM ${bpm.toFixed(1)}, ${charts.reduce((s,c)=>s+c.count,0)} pasos totales`, 'ok');
+  renderQueue();
+}
+
+// ============================================================
+//                  PIPELINE: ANALYZE ALL
+// ============================================================
+async function analyzeAll() {
+  if (analyzing) return;
+  if (queue.length === 0) { log('No hay archivos en la cola.', 'warn'); return; }
+
+  analyzing = true; cancelRequested = false;
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('cancelBtn').disabled = false;
+  document.getElementById('analyzeLog').innerHTML = '';
+  document.getElementById('analyzeProgress').style.width = '0%';
+
+  // reset pending statuses (re-analyze even if already done)
+  for (const q of queue) {
+    if (q.status !== 'working') { q.status = 'pending'; q.result = null; }
+  }
+  renderQueue();
+
+  let i = 0;
+  for (const q of queue) {
+    if (cancelRequested) { log('Análisis cancelado.', 'warn'); break; }
+    await analyzeOne(q);
+    i++;
+    document.getElementById('analyzeProgress').style.width = (100*i/queue.length) + '%';
+  }
+
+  analyzing = false;
+  document.getElementById('analyzeBtn').disabled = false;
+  document.getElementById('cancelBtn').disabled = true;
+  log(`▶ Listo. ${queue.filter(q=>q.status==='done').length}/${queue.length} canciones procesadas.`, 'ok');
+
+  // Auto-select first done song for preview
+  const firstDone = queue.find(q => q.status === 'done');
+  if (firstDone) selectSong(firstDone.id);
+
+  // Show export card if at least one is done
+  if (queue.some(q => q.status === 'done')) {
+    document.getElementById('exportCard').classList.remove('hidden');
+  }
+}
+
+function cancelAnalysis() {
+  cancelRequested = true;
+  log('Cancelando tras el análisis actual...', 'warn');
+}
+
+function yieldUI() { return new Promise(r => setTimeout(r, 0)); }
+
+// ============================================================
+//                  PREVIEW (single song)
+// ============================================================
+async function selectSong(id) {
+  const q = queue.find(x => x.id === id);
+  if (!q || !q.result) return;
+  selectedId = id;
+  renderQueue();
+  stopPlay();
+
+  // Decode the audio for waveform + playback (on demand)
+  try {
+    previewBuffer = await decodeFile(q.file);
+  } catch (e) {
+    log('No se pudo cargar el preview: ' + e.message, 'bad');
+    return;
+  }
+
+  document.getElementById('previewCard').classList.remove('hidden');
+  document.getElementById('previewTitle').textContent = q.title;
+  const r = q.result;
+  document.getElementById('resBpm').textContent = r.bpm.toFixed(1);
+  document.getElementById('resOffset').textContent = r.offsetSec.toFixed(3) + 's';
+  document.getElementById('resDuration').textContent = formatTime(r.duration);
+  document.getElementById('resOnsets').textContent = r.onsetTimesSec.length;
+  document.getElementById('totalTime').textContent = formatTime(r.duration);
+
+  drawWaveform();
+  renderDifficulties();
+
+  const sm = buildSmForSong(q);
+  document.getElementById('smPreview').textContent = sm.slice(0, 4000) + (sm.length > 4000 ? '\n... (truncado)' : '');
+}
+
+function renderDifficulties() {
+  const q = queue.find(x => x.id === selectedId);
+  if (!q) return;
+  const c = document.getElementById('difficultiesContainer');
+  c.innerHTML = '';
+  for (const ch of q.result.charts) {
+    const taps   = countByType(ch.notes, '1');
+    const heads  = countByType(ch.notes, '2') + countByType(ch.notes, '4');
+    const rolls  = countByType(ch.notes, '4');
+    const jumps  = countJumps(ch.notes);
+
+    const el = document.createElement('div');
+    el.className = 'difficulty-card';
+    el.innerHTML = `
+      <div class="info">
+        <span class="name">${ch.name} <span style="color:#ffbe0b">★ ${ch.rating}</span></span>
+        <span class="meta">${ch.count} pasos · ${heads} holds${rolls?` (${rolls} rolls)`:''} · ${jumps} jumps</span>
+      </div>
+    `;
+    c.appendChild(el);
+  }
+}
+
+function countByType(smNotes, ch) {
+  let n = 0;
+  for (let i = 0; i < smNotes.length; i++) if (smNotes[i] === ch) n++;
+  return n;
+}
+function countJumps(smNotes) {
+  let n = 0;
+  const lines = smNotes.split('\n');
+  for (const line of lines) {
+    if (line.length === 4) {
+      let pressed = 0;
+      for (const c of line) if (c === '1' || c === '2' || c === '4') pressed++;
+      if (pressed >= 2) n++;
+    }
+  }
+  return n;
+}
+
+function drawWaveform() {
+  const q = queue.find(x => x.id === selectedId);
+  if (!q || !previewBuffer) return;
+  const canvas = document.getElementById('waveform');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  const samples = toMono(previewBuffer);
+  const samplesPerBin = Math.max(1, Math.floor(samples.length / W));
+  ctx.strokeStyle = 'rgba(131,56,236,0.6)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 0; x < W; x++) {
+    let max = 0;
+    const start = x * samplesPerBin;
+    for (let i = 0; i < samplesPerBin; i++) {
+      const v = Math.abs(samples[start + i] || 0);
+      if (v > max) max = v;
+    }
+    ctx.moveTo(x + 0.5, H/2 - max*H/2);
+    ctx.lineTo(x + 0.5, H/2 + max*H/2);
+  }
+  ctx.stroke();
+
+  const dur = q.result.duration;
+  ctx.strokeStyle = 'rgba(0,255,100,0.4)';
+  for (const t of q.result.beatsList) {
+    const x = (t / dur) * W;
+    ctx.beginPath();
+    ctx.moveTo(x, 0); ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = 'rgba(255,0,110,0.7)';
+  for (const t of q.result.onsetTimesSec) {
+    const x = (t / dur) * W;
+    ctx.fillRect(x - 1, 0, 2, 6);
+  }
+}
+
+function formatTime(s) {
+  const m = Math.floor(s/60);
+  const sec = Math.floor(s%60);
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+// ============================================================
+//                  PLAYBACK
+// ============================================================
+function togglePlay() { if (isPlaying) stopPlay(); else startPlay(); }
+
+function startPlay() {
+  if (!previewBuffer) return;
+  ensureAudioCtx();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  const q = queue.find(x => x.id === selectedId);
+  if (!q) return;
+
+  playSource = audioCtx.createBufferSource();
+  playSource.buffer = previewBuffer;
+  playSource.connect(audioCtx.destination);
+  playSource.onended = () => { if (isPlaying) stopPlay(); };
+  playSource.start(0, playStartOffset);
+  playStartTime = audioCtx.currentTime - playStartOffset;
+  isPlaying = true;
+  document.getElementById('playBtn').textContent = '⏸ Pausar';
+
+  if (document.getElementById('clickToggle').checked) scheduleClicks(q.result.beatsList);
+  updatePlayTime();
+}
+
+function scheduleClicks(beats) {
+  for (const t of beats) {
+    if (t < playStartOffset) continue;
+    const when = playStartTime + t;
+    if (when < audioCtx.currentTime) continue;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.frequency.value = 1500;
+    g.gain.setValueAtTime(0.15, when);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + 0.04);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(when); osc.stop(when + 0.05);
+    scheduledClicks.push(osc);
+  }
+}
+
+function stopPlay() {
+  if (playSource) { try { playSource.stop(); } catch(e) {} playSource = null; }
+  scheduledClicks.forEach(o => { try { o.stop(); } catch(e) {} });
+  scheduledClicks = [];
+  isPlaying = false;
+  playStartOffset = 0;
+  document.getElementById('playBtn').textContent = '▶ Reproducir';
+  document.getElementById('curTime').textContent = '0:00';
+}
+
+function updatePlayTime() {
+  if (!isPlaying) return;
+  const q = queue.find(x => x.id === selectedId);
+  if (!q) return;
+  const t = audioCtx.currentTime - playStartTime;
+  document.getElementById('curTime').textContent = formatTime(t);
+  drawPlayhead(t);
+  if (t < q.result.duration) requestAnimationFrame(updatePlayTime);
+  else stopPlay();
+}
+
+function drawPlayhead(t) {
+  const q = queue.find(x => x.id === selectedId);
+  if (!q) return;
+  drawWaveform();
+  const canvas = document.getElementById('waveform');
+  const ctx = canvas.getContext('2d');
+  const x = (t / q.result.duration) * canvas.width;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height);
+  ctx.stroke();
+}
+
+// ============================================================
+//                  EXPORT (.sm + ZIP)
+// ============================================================
+function safeFilename(s) {
+  return String(s).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim() || 'song';
+}
+function getExt(name) { const m = name.match(/\.[^.]+$/); return m ? m[0] : '.mp3'; }
+
+function buildSmForSong(q) {
+  const audioName = safeFilename(q.title) + getExt(q.file.name);
+  return buildSmFile(
+    { title: q.title, artist: q.artist },
+    audioName,
+    q.result.bpm,
+    q.result.offsetSec,
+    q.result.sampleStart,
+    q.result.charts
+  );
+}
+
+function buildSscForSong(q) {
+  const audioName = safeFilename(q.title) + getExt(q.file.name);
+  return buildSscFile(
+    { title: q.title, artist: q.artist },
+    audioName,
+    q.result.bpm,
+    q.result.offsetSec,
+    q.result.sampleStart,
+    q.result.charts
+  );
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadCurrentSm() {
+  if (!selectedId) return;
+  downloadOne(selectedId);
+}
+function downloadCurrentSsc() {
+  if (!selectedId) return;
+  const q = queue.find(x => x.id === selectedId);
+  if (!q || !q.result) return;
+  const ssc = buildSscForSong(q);
+  const fn = safeFilename(q.title) + '.ssc';
+  downloadBlob(new Blob([ssc], { type: 'text/plain' }), fn);
+}
+
+function downloadOne(id) {
+  const q = queue.find(x => x.id === id);
+  if (!q || !q.result) return;
+  const sm = buildSmForSong(q);
+  const fn = safeFilename(q.title) + '.sm';
+  downloadBlob(new Blob([sm], { type: 'text/plain' }), fn);
+}
+
+async function downloadAllZip() {
+  const done = queue.filter(q => q.status === 'done');
+  if (done.length === 0) return;
+  const status = document.getElementById('exportStatus');
+  status.textContent = 'Construyendo ZIP...';
+
+  const enc = new TextEncoder();
+  const files = [];
+  for (const q of done) {
+    const folder = safeFilename(q.title);
+    const audioName = folder + getExt(q.file.name);
+    // .ssc (SM5 native, preferred)
+    const ssc = buildSscForSong(q);
+    files.push({ name: `${folder}/${folder}.ssc`, data: enc.encode(ssc) });
+    // .sm (legacy, for compatibility with older forks: ITG2, Etterna, 3.9)
+    const sm = buildSmForSong(q);
+    files.push({ name: `${folder}/${folder}.sm`, data: enc.encode(sm) });
+    // audio
+    const audioBytes = new Uint8Array(await q.file.arrayBuffer());
+    files.push({ name: `${folder}/${audioName}`, data: audioBytes });
+    status.textContent = `Empaquetando: ${folder}...`;
+    await yieldUI();
+  }
+
+  status.textContent = 'Comprimiendo...';
+  await yieldUI();
+  const zipBytes = makeZip(files);
+  const blob = new Blob([zipBytes], { type: 'application/zip' });
+  const fn = `AutoStepper_${done.length}_songs.zip`;
+  downloadBlob(blob, fn);
+  status.innerHTML = `<span style="color:#00ff64">✓ ZIP descargado: ${fn} (${(blob.size/1024/1024).toFixed(1)} MB)</span>`;
+}
+
+// ============================================================
+//                  ZIP ENCODER (store-only, no compression)
+// ============================================================
+let CRC_TABLE = null;
+function makeCrcTable() {
+  CRC_TABLE = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    CRC_TABLE[n] = c;
+  }
+}
+function crc32(data) {
+  if (!CRC_TABLE) makeCrcTable();
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) {
+    crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ data[i]) & 0xFF];
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function makeZip(files) {
+  // files: [{ name: string, data: Uint8Array }]
+  const enc = new TextEncoder();
+  const local = [];
+  const central = [];
+  let offset = 0;
+
+  for (const f of files) {
+    const nameBytes = enc.encode(f.name);
+    const data = f.data instanceof Uint8Array ? f.data : new Uint8Array(f.data);
+    const crc = crc32(data);
+    const size = data.length;
+
+    // Local file header (30 + name + data)
+    const lh = new Uint8Array(30 + nameBytes.length);
+    const lhv = new DataView(lh.buffer);
+    lhv.setUint32(0, 0x04034b50, true);
+    lhv.setUint16(4, 20, true);
+    lhv.setUint16(6, 0, true);
+    lhv.setUint16(8, 0, true);   // method = store
+    lhv.setUint16(10, 0, true);  // mod time
+    lhv.setUint16(12, 0x0021, true); // mod date 1980-01-01 (set valid date to avoid warnings)
+    lhv.setUint32(14, crc, true);
+    lhv.setUint32(18, size, true);
+    lhv.setUint32(22, size, true);
+    lhv.setUint16(26, nameBytes.length, true);
+    lhv.setUint16(28, 0, true);
+    lh.set(nameBytes, 30);
+    local.push(lh, data);
+
+    // Central directory entry
+    const ch = new Uint8Array(46 + nameBytes.length);
+    const chv = new DataView(ch.buffer);
+    chv.setUint32(0, 0x02014b50, true);
+    chv.setUint16(4, 20, true);
+    chv.setUint16(6, 20, true);
+    chv.setUint16(8, 0, true);
+    chv.setUint16(10, 0, true);
+    chv.setUint16(12, 0, true);
+    chv.setUint16(14, 0x0021, true);
+    chv.setUint32(16, crc, true);
+    chv.setUint32(20, size, true);
+    chv.setUint32(24, size, true);
+    chv.setUint16(28, nameBytes.length, true);
+    chv.setUint16(30, 0, true);
+    chv.setUint16(32, 0, true);
+    chv.setUint16(34, 0, true);
+    chv.setUint16(36, 0, true);
+    chv.setUint32(38, 0, true);
+    chv.setUint32(42, offset, true);
+    ch.set(nameBytes, 46);
+    central.push(ch);
+
+    offset += lh.length + data.length;
+  }
+
+  const centralOffset = offset;
+  let centralSize = 0;
+  for (const c of central) centralSize += c.length;
+
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, centralSize, true);
+  ev.setUint32(16, centralOffset, true);
+  ev.setUint16(20, 0, true);
+
+  let total = 0;
+  for (const p of local) total += p.length;
+  total += centralSize + 22;
+
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const p of local) { out.set(p, pos); pos += p.length; }
+  for (const c of central) { out.set(c, pos); pos += c.length; }
+  out.set(eocd, pos);
+  return out;
+}
+
+// ============================================================
+//                  EVENT LISTENERS
+// ============================================================
+document.getElementById('sensitivity').addEventListener('input', e => {
+  document.getElementById('sensValue').textContent = parseFloat(e.target.value).toFixed(1);
+});
+document.getElementById('holdDensity').addEventListener('input', e => {
+  document.getElementById('holdVal').textContent = Math.round(parseFloat(e.target.value)*100) + '%';
+});
+document.getElementById('jumpProb').addEventListener('input', e => {
+  document.getElementById('jumpVal').textContent = Math.round(parseFloat(e.target.value)*100) + '%';
+});
+document.getElementById('subdivSelect').addEventListener('change', e => {
+  const labels = { '4': 'negras (1/4)', '8': 'corcheas (1/8)', '16': 'semicorcheas (1/16)' };
+  document.getElementById('subdivValue').textContent = labels[e.target.value] || e.target.value;
+});
+
+// ============================================================
+//                  PRESETS
+// ============================================================
+const PRESETS = {
+  suave:   { sensitivity: 2.4, subdivision: '4',  holdDensity: 0.10, jumpProb: 0.00 },
+  normal:  { sensitivity: 1.7, subdivision: '8',  holdDensity: 0.25, jumpProb: 0.07 },
+  intenso: { sensitivity: 1.3, subdivision: '16', holdDensity: 0.50, jumpProb: 0.18 },
+};
+
+function applyPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  document.getElementById('sensitivity').value = p.sensitivity;
+  document.getElementById('sensValue').textContent = p.sensitivity.toFixed(1);
+  document.getElementById('subdivSelect').value = p.subdivision;
+  const labels = { '4': 'negras (1/4)', '8': 'corcheas (1/8)', '16': 'semicorcheas (1/16)' };
+  document.getElementById('subdivValue').textContent = labels[p.subdivision];
+  document.getElementById('holdDensity').value = p.holdDensity;
+  document.getElementById('holdVal').textContent = Math.round(p.holdDensity*100) + '%';
+  document.getElementById('jumpProb').value = p.jumpProb;
+  document.getElementById('jumpVal').textContent = Math.round(p.jumpProb*100) + '%';
+}
+
+document.querySelectorAll('.preset').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.preset').forEach(p => p.classList.remove('selected'));
+    el.classList.add('selected');
+    const name = el.dataset.preset;
+    if (name === 'custom') {
+      document.getElementById('customParams').style.display = '';
+    } else {
+      document.getElementById('customParams').style.display = 'none';
+      applyPreset(name);
+    }
+  });
+});
+</script>
+</body>
+</html>

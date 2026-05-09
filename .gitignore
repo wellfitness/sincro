@@ -1,0 +1,20 @@
+# Source de StepMania (clon del repo oficial, no se duplica aquí)
+stepmania/
+stepmania-5_1-new/
+
+# Configuración local de Claude Code y agentes
+.claude/
+.agent/
+
+# Husky (hook roto: llama pnpm en proyecto sin package.json)
+.husky/
+
+# Variables de entorno y credenciales (NUNCA commitear)
+.env
+.env.*
+!.env.example
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store

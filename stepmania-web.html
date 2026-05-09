@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>StepMania Web</title>
+<link rel="stylesheet" href="stepmania-web/css/styles.css">
+</head>
+<body>
+
+<nav id="topbar">
+  <div class="logo" onclick="goto('menu')">🎮 StepMania Web</div>
+  <div class="crumb" id="crumb"></div>
+  <div class="spacer"></div>
+  <div class="pill off" id="padPill">alfombra: no detectada</div>
+  <button class="icon-btn" onclick="openSettings()" id="settingsBtn" style="margin-left:10px" title="Ajustes">⚙</button>
+  <button class="icon-btn" onclick="goto('menu')" id="homeBtn" style="margin-left:6px">⌂ Menú</button>
+</nav>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettings()">
+  <div class="modal">
+    <h2>⚙ Ajustes</h2>
+    <div class="param">
+      <div class="param-header">
+        <span class="param-label">🎵 Global Offset</span>
+        <span class="param-value" id="globalOffsetVal">0 ms</span>
+      </div>
+      <input type="range" id="globalOffset" min="-200" max="200" step="1" value="0">
+      <div class="param-help">Si pisas <em>antes</em> del beat real → resta. Si pisas <em>después</em> → suma. Test de sync en pestaña "Test alfombra".</div>
+    </div>
+    <div class="param">
+      <div class="param-header">
+        <span class="param-label">⚡ Velocidad de scroll</span>
+        <span class="param-value" id="scrollSpeedVal">1.0x</span>
+      </div>
+      <input type="range" id="scrollSpeed" min="0.5" max="3.0" step="0.1" value="1.0">
+      <div class="param-help">Multiplicador. 1.0 = 600 px/s. Más alto = flechas más separadas y rápidas (más fácil de leer).</div>
+    </div>
+    <div class="param">
+      <div class="param-header">
+        <span class="param-label">🎯 Timing window</span>
+        <span class="param-value" id="timingWinVal">J5 (SM5)</span>
+      </div>
+      <select id="timingWindow" style="width:100%;background:rgba(0,0,0,0.4);border:1px solid rgba(131,56,236,0.3);color:#fff;padding:6px 10px;border-radius:6px">
+        <option value="j4">J4 — Más generoso</option>
+        <option value="j5" selected>J5 — SM5 estándar</option>
+        <option value="j6">J6 — Más estricto</option>
+        <option value="j7">J7 — ITG profesional</option>
+      </select>
+      <div class="param-help">Define el ancho de las ventanas Marvelous/Perfect/Great/etc.</div>
+    </div>
+    <div class="close-row">
+      <button class="action-btn secondary" onclick="closeSettings()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN MENU -->
+<div class="screen" id="menu-screen">
+  <div class="container">
+    <h1>StepMania Web</h1>
+    <p class="subtitle">Genera, prueba y juega charts de StepMania directamente en el navegador</p>
+    <div class="menu-grid">
+      <div class="menu-card" onclick="goto('songs')">
+        <div class="icon">🎮</div>
+        <div class="title">Jugar</div>
+        <div class="desc">Selecciona una canción de tu librería y juégala con la alfombra o teclado.</div>
+      </div>
+      <div class="menu-card" onclick="goto('create')">
+        <div class="icon">🎵</div>
+        <div class="title">Crear charts</div>
+        <div class="desc">AutoStepper: convierte cualquier MP3 en un chart con 5 dificultades.</div>
+      </div>
+      <div class="menu-card" onclick="goto('pad')">
+        <div class="icon">🦶</div>
+        <div class="title">Probar alfombra</div>
+        <div class="desc">Diagnóstico del pad: latencia, saltos, ghost inputs, sync de audio.</div>
+      </div>
+      <div class="menu-card" onclick="goto('library')">
+        <div class="icon">📚</div>
+        <div class="title">Mis canciones</div>
+        <div class="desc">Gestiona la librería: añade .ssc/.sm + audio o ZIPs del autostepper.</div>
+      </div>
+    </div>
+    <p class="help" style="text-align:center;margin-top:30px">
+      Mapping de teclado para juego: ←  ↓  ↑  →. La alfombra (USB) se detecta automáticamente.
+    </p>
+  </div>
+</div>
+
+<!-- PAD TEST SCREEN -->
+<div class="screen hidden" id="pad-screen">
+  <div class="container">
+    <h1>Test de Alfombra</h1>
+    <p class="subtitle">Diagnóstico del dance pad (Gamepad API)</p>
+
+    <div class="card">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="visual">Visual</button>
+        <button class="tab-btn" data-tab="latency">Latencia</button>
+        <button class="tab-btn" data-tab="ghost">Ghost inputs</button>
+        <button class="tab-btn" data-tab="raw">Crudo / LEDs</button>
+      </div>
+
+      <div class="tab-content active" id="ptab-visual">
+        <div class="pad-grid" id="padGrid">
+          <div class="pad-cell empty"></div>
+          <div class="pad-cell arrow" data-button="2" id="cell-up"><span class="count">0</span><span class="arrow-icon">↑</span><span class="label">ARRIBA</span></div>
+          <div class="pad-cell empty"></div>
+          <div class="pad-cell arrow" data-button="0" id="cell-left"><span class="count">0</span><span class="arrow-icon">←</span><span class="label">IZQUIERDA</span></div>
+          <div class="pad-cell center"><div>START: B9</div><div>BACK: B10</div></div>
+          <div class="pad-cell arrow" data-button="3" id="cell-right"><span class="count">0</span><span class="arrow-icon">→</span><span class="label">DERECHA</span></div>
+          <div class="pad-cell empty"></div>
+          <div class="pad-cell arrow" data-button="1" id="cell-down"><span class="count">0</span><span class="arrow-icon">↓</span><span class="label">ABAJO</span></div>
+          <div class="pad-cell empty"></div>
+        </div>
+        <p class="help" style="text-align:center">
+          Pisa cualquier panel para activar la detección. El contador sube en cada pisada.
+        </p>
+        <div style="text-align:center;margin-top:10px">
+          <button class="action-btn secondary" onclick="resetPadCounts()">Resetear contadores</button>
+        </div>
+      </div>
+
+      <div class="tab-content" id="ptab-latency">
+        <p class="help">Reaccionar lo más rápido posible al panel iluminado en azul. Mide tu tiempo en ms (humano normal: 200-300 ms).</p>
+        <div style="text-align:center;margin:20px 0">
+          <button class="action-btn" id="latencyBtn" onclick="startLatency()">Iniciar test (8 rondas)</button>
+        </div>
+        <div style="text-align:center;font-size:3em;font-weight:800;color:#ffbe0b" id="latencyDisplay">--</div>
+        <div style="text-align:center;color:#aaa" id="latencyStatus">Pulsa "Iniciar"</div>
+        <div class="log" id="latencyLog"></div>
+      </div>
+
+      <div class="tab-content" id="ptab-ghost">
+        <p class="help"><strong>NO PISES la alfombra.</strong> Si aparece algún input es un sensor con problema.</p>
+        <div style="text-align:center;margin:20px 0">
+          <button class="action-btn" id="ghostBtn" onclick="startGhost()">Monitorear 60s</button>
+        </div>
+        <div style="text-align:center;font-size:3em;font-weight:800;color:#ff3366" id="ghostCount">0</div>
+        <div style="text-align:center;color:#aaa" id="ghostStatus">eventos detectados</div>
+        <div class="log" id="ghostLog"></div>
+      </div>
+
+      <div class="tab-content" id="ptab-raw">
+        <h2 style="margin-top:0">Botones (16 LEDs)</h2>
+        <div class="button-grid" id="btnGrid"></div>
+        <p style="margin-top:10px;color:#aaa;font-size:0.85em">
+          Bitmask: <span id="i-bits" style="color:#00ff64;font-family:monospace">0</span> ·
+          Polling: <span id="i-poll" style="color:#00ff64;font-family:monospace">-- Hz</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE SCREEN (AutoStepper) -->
+<div class="screen hidden" id="create-screen">
+  <div class="container">
+    <h1>Crear charts</h1>
+    <p class="subtitle">AutoStepper Web — genera .ssc/.sm desde MP3/WAV</p>
+
+    <div class="card">
+      <h2>1. Cargar audio (uno o varios)</h2>
+      <label class="drop-zone" id="dropZone">
+        <div class="big-icon">🎵</div>
+        <p style="color:#aaa">Arrastra MP3/WAV/OGG aquí o haz click</p>
+        <input type="file" id="fileInput" accept="audio/*" multiple>
+      </label>
+      <div id="queueContainer" style="margin-top:14px"></div>
+    </div>
+
+    <div class="card" id="optionsCard" style="display:none">
+      <h2>2. Estilo</h2>
+      <div class="preset-grid">
+        <div class="preset" data-preset="suave"><div class="preset-name">🌿 Suave</div><div class="preset-desc">Pocos pasos, sin saltos</div></div>
+        <div class="preset selected" data-preset="normal"><div class="preset-name">⚡ Normal</div><div class="preset-desc">Balance, holds ocasionales (recomendado)</div></div>
+        <div class="preset" data-preset="intenso"><div class="preset-name">🔥 Intenso</div><div class="preset-desc">Mucha densidad, holds, saltos</div></div>
+        <div class="preset" data-preset="custom"><div class="preset-name">⚙️ Personalizado</div><div class="preset-desc">Ajusta cada parámetro</div></div>
+      </div>
+
+      <div id="customParams" style="display:none;margin-top:12px">
+        <div class="param">
+          <div class="param-header"><span class="param-label">🎯 Sensibilidad</span><span class="param-value" id="sensValue">1.7</span></div>
+          <input type="range" id="sensitivity" min="1.0" max="3.5" step="0.1" value="1.7">
+          <div class="param-help">Bajo = más pasos. Alto = solo golpes fuertes.</div>
+        </div>
+        <div class="param">
+          <div class="param-header"><span class="param-label">📏 Resolución</span><span class="param-value" id="subdivValue">corcheas (1/8)</span></div>
+          <select id="subdivSelect">
+            <option value="4">Negras (1/4)</option>
+            <option value="8" selected>Corcheas (1/8)</option>
+            <option value="16">Semicorcheas (1/16)</option>
+          </select>
+        </div>
+        <div class="param">
+          <div class="param-header"><span class="param-label">⏸️ Densidad de holds</span><span class="param-value" id="holdVal">25%</span></div>
+          <input type="range" id="holdDensity" min="0" max="1" step="0.05" value="0.25">
+        </div>
+        <div class="param">
+          <div class="param-header"><span class="param-label">↔️ Probabilidad de salto (Hard)</span><span class="param-value" id="jumpVal">7%</span></div>
+          <input type="range" id="jumpProb" min="0" max="0.25" step="0.01" value="0.07">
+        </div>
+      </div>
+
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="action-btn" id="analyzeBtn" onclick="analyzeAll()">▶ Analizar todo</button>
+        <button class="action-btn secondary" id="cancelBtn" onclick="cancelAnalysis()" disabled>Cancelar</button>
+        <button class="action-btn secondary" onclick="clearQueue()">Vaciar cola</button>
+      </div>
+      <div class="progress-bar"><div class="fill" id="analyzeProgress"></div></div>
+      <div class="log" id="analyzeLog"></div>
+    </div>
+
+    <div class="card hidden" id="exportCard">
+      <h2>3. Guardar / exportar</h2>
+      <p class="help">Las canciones procesadas se guardan en tu librería local (IndexedDB) y puedes jugarlas desde "Jugar".</p>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="action-btn" onclick="saveAllToLibrary()">💾 Guardar en mi librería</button>
+        <button class="action-btn secondary" onclick="downloadAllZip()">Descargar ZIP (.ssc + .sm + audio)</button>
+      </div>
+      <div id="exportStatus" style="margin-top:10px;color:#aaa;font-size:0.9em"></div>
+    </div>
+  </div>
+</div>
+
+<!-- LIBRARY -->
+<div class="screen hidden" id="library-screen">
+  <div class="container">
+    <h1>Mis canciones</h1>
+    <p class="subtitle">Librería local (almacenada en tu navegador)</p>
+
+    <div class="card">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="action-btn" onclick="goto('create')">🎵 Crear nueva</button>
+        <label class="action-btn secondary" style="cursor:pointer">
+          📥 Importar archivos
+          <input type="file" id="importInput" accept=".sm,.ssc,audio/*" multiple style="display:none">
+        </label>
+        <button class="action-btn secondary" onclick="refreshLibrary()">↻ Recargar</button>
+      </div>
+      <div id="libraryContainer">Cargando...</div>
+    </div>
+  </div>
+</div>
+
+<!-- SONGS (selector to play) -->
+<div class="screen hidden" id="songs-screen">
+  <div class="container">
+    <h1>Selecciona una canción</h1>
+    <p class="subtitle" id="songsSubtitle">Cargando...</p>
+    <div class="card">
+      <div class="toolbar">
+        <input type="text" id="songSearch" placeholder="🔍 Buscar por título o artista..." autocomplete="off">
+        <select id="songSort">
+          <option value="addedAt-desc">Recién añadidas</option>
+          <option value="title-asc">Título A→Z</option>
+          <option value="artist-asc">Artista A→Z</option>
+          <option value="bpm-asc">BPM ↑</option>
+          <option value="bpm-desc">BPM ↓</option>
+          <option value="duration-asc">Duración ↑</option>
+        </select>
+      </div>
+      <div id="songsContainer">Cargando...</div>
+    </div>
+  </div>
+</div>
+
+<!-- DIFFICULTY SELECT -->
+<div class="screen hidden" id="diff-screen">
+  <div class="container">
+    <h1 id="diffTitle">--</h1>
+    <p class="subtitle" id="diffSubtitle">--</p>
+    <div class="card">
+      <h2>Dificultad</h2>
+      <div id="diffsContainer"></div>
+    </div>
+    <div class="card">
+      <h2>Modifiers</h2>
+      <div class="mods-grid" id="modsContainer">
+        <div class="mod-toggle" data-mod="mirror">
+          <div class="mod-name">🪞 Mirror</div>
+          <div class="mod-help">Invierte izquierda↔derecha</div>
+        </div>
+        <div class="mod-toggle" data-mod="left">
+          <div class="mod-name">↺ Left</div>
+          <div class="mod-help">Rotación 90° antihoraria</div>
+        </div>
+        <div class="mod-toggle" data-mod="right">
+          <div class="mod-name">↻ Right</div>
+          <div class="mod-help">Rotación 90° horaria</div>
+        </div>
+        <div class="mod-toggle" data-mod="shuffle">
+          <div class="mod-name">🔀 Shuffle</div>
+          <div class="mod-help">Permuta carriles aleatoria</div>
+        </div>
+        <div class="mod-toggle" data-mod="hidden">
+          <div class="mod-name">👁 Hidden</div>
+          <div class="mod-help">Flechas desaparecen al acercarse</div>
+        </div>
+        <div class="mod-toggle" data-mod="sudden">
+          <div class="mod-name">💨 Sudden</div>
+          <div class="mod-help">Flechas aparecen tarde</div>
+        </div>
+      </div>
+      <div class="param" style="margin-top:14px">
+        <div class="param-header"><span class="param-label">⚡ Speed mod (chart)</span><span class="param-value" id="chartSpeedVal">1.0x</span></div>
+        <input type="range" id="chartSpeed" min="0.5" max="4.0" step="0.1" value="1.0">
+        <div class="param-help">Multiplicador local de scroll. Combina con el global de Ajustes.</div>
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <button class="action-btn secondary" onclick="goto('songs')">← Volver</button>
+    </div>
+  </div>
+</div>
+
+<!-- PLAY -->
+<div class="screen hidden" id="play-screen">
+  <canvas id="gameCanvas"></canvas>
+  <div class="gameHUD" id="gameHUD">
+    <div>Score: <span class="score" id="hudScore">0</span></div>
+    <div>Combo: <span class="combo" id="hudCombo">0</span></div>
+    <div style="margin-top:8px;color:#aaa" id="hudSongInfo"></div>
+    <div class="judgment" id="hudJudgment"></div>
+  </div>
+  <div id="countdown" class="hidden"></div>
+</div>
+
+<!-- RESULTS -->
+<div class="screen hidden" id="results-screen">
+  <div class="container">
+    <div class="results">
+      <h2 id="resultsTitle">Resultados</h2>
+      <div id="resultsContent"></div>
+      <div style="margin-top:18px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="action-btn" onclick="goto('diff')">↻ Reintentar</button>
+        <button class="action-btn secondary" onclick="goto('songs')">← Otra canción</button>
+        <button class="action-btn secondary" onclick="goto('menu')">⌂ Menú</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--
+  Module load order matters — classic <script> tags share global scope, so
+  later modules depend on earlier ones being fully evaluated:
+    core         → utils, audioCtx, gamepad, IndexedDB, settings
+    parser       → parseSscOrSm, buildTimingEngine, parseNotesToEvents
+    autostepper  → onset detection + chart generation + ZIP encoder
+    library      → list/import UI (uses dbAll, parseSscOrSm)
+    song-select  → song list, diff screen, mods (uses dbScoresForSong)
+    pad-test     → padTestLoop + latency/ghost (uses gamepadButtonState)
+    game         → player, render, scoring (uses everything above)
+    app          → goto(), settings bindings, kickoff
+-->
+<script src="stepmania-web/js/core.js"></script>
+<script src="stepmania-web/js/parser.js"></script>
+<script src="stepmania-web/js/autostepper.js"></script>
+<script src="stepmania-web/js/library.js"></script>
+<script src="stepmania-web/js/song-select.js"></script>
+<script src="stepmania-web/js/pad-test.js"></script>
+<script src="stepmania-web/js/game.js"></script>
+<script src="stepmania-web/js/app.js"></script>
+</body>
+</html>

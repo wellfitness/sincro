@@ -1,0 +1,223 @@
+{
+  "version": "1.0.0",
+  "description": "UI/UX Agent Configuration - HTML-first, CSS-second, JS-third, React-last",
+
+  "validation": {
+    "enabled": true,
+    "failOnErrors": true,
+    "failOnWarnings": false
+  },
+
+  "rules": {
+    "forbiddenDependencies": {
+      "enabled": true,
+      "severity": "error",
+      "patterns": [
+        "radix-ui", "@radix-ui",
+        "headless-ui", "@headlessui",
+        "chakra-ui", "@chakra-ui",
+        "material-ui", "@mui",
+        "antd",
+        "react-bootstrap",
+        "semantic-ui",
+        "grommet",
+        "mantine", "@mantine",
+        "evergreen-ui",
+        "rebass",
+        "theme-ui",
+        "styled-system",
+        "reakit", "@reakit",
+        "styled-components",
+        "emotion", "@emotion"
+      ]
+    },
+
+    "heavyDependencies": {
+      "enabled": true,
+      "severity": "warning",
+      "patterns": [
+        "lodash",
+        "moment",
+        "jquery",
+        "underscore",
+        "ramda"
+      ]
+    },
+
+    "designTokens": {
+      "enabled": true,
+      "severity": "warning",
+      "required": [
+        "--turquesa-600",
+        "--rosa-600",
+        "--tulip-tree-500",
+        "--font-family-headings",
+        "--font-family-body",
+        "--font-size-button",
+        "--spacing-",
+        "--color-primary"
+      ],
+      "minUsagePercentage": 30
+    },
+
+    "antiPatterns": {
+      "enabled": true,
+      "severity": "error",
+      "patterns": [
+        {
+          "pattern": "innerHTML\\s*=",
+          "message": "Avoid innerHTML for user content (XSS risk)"
+        },
+        {
+          "pattern": "document\\.write",
+          "message": "Avoid document.write (security risk)"
+        },
+        {
+          "pattern": "eval\\s*\\(",
+          "message": "Avoid eval() (security risk)"
+        },
+        {
+          "pattern": "dangerouslySetInnerHTML",
+          "message": "Avoid dangerouslySetInnerHTML without sanitization"
+        }
+      ]
+    },
+
+    "htmlFirstSuggestions": {
+      "enabled": true,
+      "severity": "info",
+      "alternatives": [
+        {
+          "pattern": "class.*accordion",
+          "suggestion": "Consider using <details><summary> for accordions"
+        },
+        {
+          "pattern": "class.*modal",
+          "suggestion": "Consider using <dialog> element for modals"
+        },
+        {
+          "pattern": "class.*dropdown",
+          "suggestion": "Consider CSS-only dropdown with checkbox pattern"
+        },
+        {
+          "pattern": "class.*tooltip",
+          "suggestion": "Consider CSS-only tooltip with ::after pseudo-element"
+        }
+      ]
+    },
+
+    "accessibility": {
+      "enabled": true,
+      "severity": "error",
+      "checks": [
+        "missingAltText",
+        "missingLabels",
+        "buttonAccessibleNames",
+        "formValidation",
+        "keyboardNavigation"
+      ]
+    }
+  },
+
+  "excludePaths": [
+    "node_modules/**",
+    ".git/**",
+    ".next/**",
+    "dist/**",
+    "build/**",
+    "coverage/**",
+    "**/*.min.*",
+    "vendor/**"
+  ],
+
+  "includePaths": [
+    "src/**",
+    "components/**",
+    "pages/**",
+    "app/**",
+    "styles/**",
+    "public/**/*.html"
+  ],
+
+  "fileExtensions": [
+    ".js", ".jsx", ".ts", ".tsx",
+    ".css", ".scss", ".sass",
+    ".html", ".htm"
+  ],
+
+  "integrations": {
+    "git": {
+      "preCommitHook": true,
+      "preCommitValidation": ["dependencies", "antiPatterns", "accessibility"]
+    },
+    "npm": {
+      "scripts": {
+        "validate:deps": "node scripts/validate-dependencies.js",
+        "validate:uiux": "node scripts/validate-uiux-rules.js",
+        "setup:hooks": "node scripts/setup-git-hooks.js"
+      }
+    }
+  },
+
+  "reporting": {
+    "format": "console",
+    "verbose": true,
+    "showSuggestions": true,
+    "exitOnError": true
+  },
+
+  "contexts": {
+    "interactive-app": {
+      "description": "Core application functionality - strict UI/UX rules",
+      "paths": ["src/app/", "src/components/", "pages/", "components/"],
+      "strictMode": true,
+      "allowedUILibraries": [],
+      "riskLevel": "high",
+      "philosophy": "HTML-first, zero UI dependencies"
+    },
+    "landing-pages": {
+      "description": "Marketing/landing pages - more flexible for design needs",
+      "paths": ["src/landing/", "landing/", "marketing/", "public/landing/"],
+      "strictMode": false,
+      "allowedUILibraries": [
+        "@mui/material",
+        "@mui/icons-material",
+        "shadcn-ui",
+        "@radix-ui/react-*"
+      ],
+      "riskLevel": "medium",
+      "philosophy": "Design flexibility for marketing needs"
+    },
+    "prototyping": {
+      "description": "Rapid prototyping and experimentation",
+      "paths": ["prototype/", "experiments/", "demo/"],
+      "strictMode": false,
+      "allowedUILibraries": ["*"],
+      "riskLevel": "low",
+      "philosophy": "Speed over purity for prototypes"
+    }
+  },
+
+  "installationPolicy": {
+    "interceptInstalls": true,
+    "requireConfirmation": true,
+    "showRiskAssessment": true,
+    "allowOverride": true,
+    "logDecisions": true
+  },
+
+  "projectSpecific": {
+    "framework": "Next.js",
+    "designSystem": "design-system/docs/DESIGN-SYSTEM.md",
+    "allowedTechnologies": [
+      "HTML5 semantic elements",
+      "CSS3 with variables",
+      "Vanilla JavaScript ES6+",
+      "React (project requirement)",
+      "TypeScript",
+      "Tailwind CSS"
+    ],
+    "philosophy": "Progressive Enhancement: HTML → CSS → JS → React",
+    "defaultContext": "interactive-app"
+  }
+}

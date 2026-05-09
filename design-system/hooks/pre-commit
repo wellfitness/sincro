@@ -1,0 +1,58 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# UI/UX Agent - Dependency Validation Pre-commit Hook
+echo "🔍 Running UI/UX Agent dependency validation..."
+
+# Check if package.json was modified
+if git diff --cached --name-only | grep -q "package.json"; then
+  echo "📦 package.json modified, checking for forbidden dependencies..."
+
+  # Run the validation script
+  if command -v node >/dev/null 2>&1; then
+    node design-system/scripts/validate-dependencies.js
+    if [ $? -ne 0 ]; then
+      echo ""
+      echo "❌ Commit blocked: Forbidden UI library dependencies detected!"
+      echo "📖 See UI-UX-DESIGNER-AGENT.md for approved alternatives"
+      echo ""
+      exit 1
+    fi
+  else
+    echo "⚠️  Node.js not found, skipping dependency validation"
+  fi
+fi
+
+# Check for direct violations in staged files
+echo "🔧 Checking staged files for UI/UX Agent violations..."
+
+# Get list of staged files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|jsx|ts|tsx|css|scss)$')
+
+if [ ! -z "$STAGED_FILES" ]; then
+  # Check for forbidden import patterns
+  for file in $STAGED_FILES; do
+    if [ -f "$file" ]; then
+      # Check for forbidden UI library imports
+      if grep -q "import.*from.*['\"]@mui\|import.*from.*['\"]@chakra-ui\|import.*from.*['\"]antd\|import.*from.*['\"]react-bootstrap" "$file"; then
+        echo "❌ Forbidden UI library import found in: $file"
+        echo "   Use native HTML/CSS components instead"
+        exit 1
+      fi
+
+      # Check for innerHTML usage (potential XSS)
+      if grep -q "innerHTML\s*=" "$file"; then
+        echo "⚠️  innerHTML usage detected in: $file"
+        echo "   Consider using textContent or safe DOM manipulation"
+      fi
+
+      # Check for hardcoded design values
+      if grep -qE "#[0-9a-fA-F]{6}|padding:\s*\d+px|margin:\s*\d+px" "$file" && ! grep -q "var(--" "$file"; then
+        echo "🎨 Hardcoded design values in: $file"
+        echo "   Consider using design system tokens (--turquesa-600, --spacing-4, etc.)"
+      fi
+    fi
+  done
+fi
+
+echo "✅ UI/UX Agent validation passed!"
