@@ -128,6 +128,16 @@ Algoritmo (optimizado para música bailable: techno, dance, pop, rock):
 
 Implementa encoder ZIP propio (modo "store", sin compresión) — sin dependencias externas.
 
+### `stepmania-web/js/gh-db.js`
+Módulo de IndexedDB para la **biblioteca de charts Guitar Hero**. Comparte la misma DB `StepManiaWebDB` que la suite SM (DB_VERSION 3, upgrade-safe — añade el store `gh-songs` sin tocar `songs`/`scores` existentes). Expone `window.GHLibrary` con: `open()`, `add(entry)`, `all()`, `get(id)`, `delete(id)`, `extractMeta(chartText)`.
+
+Schema de un entry en `gh-songs`:
+```
+{ id, title, artist, bpm, duration, chartText, audioBlob, audioName, diffs:[], totalNotes, addedAt, genre, charter }
+```
+
+Lo cargan tanto `gh-autostepper.html` (para el botón "Guardar en biblioteca") como `gh-play.html` (para la sección "Tu biblioteca" en setup screen). `core.js` también está sincronizado a DB_VERSION 3 con creación del store `gh-songs` en `onupgradeneeded` para que play.html y los archivos GH coexistan sin conflictos de versión.
+
 ### `gh-play.html`
 **Simulador Guitar Hero** en el navegador. Carga charts `.chart` (formato Feedback / Clone Hero) bien sea como ZIP del autostepper o como `notes.chart` + audio sueltos. Lee el `guitarMapping` calibrado desde `localStorage` (key `guitar-mapping`, generado por `test-pad.html`) — cero re-calibración. También soporta teclado fallback (1-5 frets, Espacio strum) para testing sin guitarra.
 

@@ -292,9 +292,15 @@
     <div id="calibStatus"></div>
   </div>
 
+  <div class="card" id="libraryCard">
+    <h2>2 · Tu biblioteca <span id="libraryCount" style="font-size:0.55em;color:var(--gris-500);font-weight:400;font-family:var(--font-sans)"></span></h2>
+    <p style="margin-bottom:10px">Charts guardados en este navegador. Cárgalos sin tener que volver a importar archivos.</p>
+    <div id="libraryList"></div>
+  </div>
+
   <div class="card">
-    <h2>2 · Cargar canción</h2>
-    <p>Sube el ZIP que generó <a href="gh-autostepper.html" style="color:var(--gh-accent)">gh-autostepper</a>, o un <code>.chart</code> + audio por separado.</p>
+    <h2>3 · Cargar nueva canción</h2>
+    <p>O sube el ZIP que generó <a href="gh-autostepper.html" style="color:var(--gh-accent)">gh-autostepper</a>, o un <code>.chart</code> + audio por separado.</p>
 
     <div class="files-grid" style="margin-top:14px">
       <label class="drop-zone" id="zipDrop">
@@ -325,7 +331,7 @@
   </div>
 
   <div class="card">
-    <h2>3 · Ajustes</h2>
+    <h2>4 · Ajustes</h2>
     <div class="form-row">
       <label>Dificultad:</label>
       <select id="difficulty">
@@ -397,6 +403,7 @@
 </div>
 
 <script src="stepmania-web/js/audio-pipeline.js"></script>
+<script src="stepmania-web/js/gh-db.js"></script>
 <script>
 // ============================================================================
 //                          GH PLAY — Simulador Guitar Hero
@@ -466,6 +473,67 @@ function refreshCalibStatus() {
   el.innerHTML = `<div class="calib-banner ${cls}">${verdict}</div>`;
 }
 refreshCalibStatus();
+
+// ---- Biblioteca: listar charts guardados ----
+async function refreshLibraryList() {
+  const el = document.getElementById('libraryList');
+  const countEl = document.getElementById('libraryCount');
+  if (!window.GHLibrary) {
+    el.innerHTML = '<p style="color:var(--gris-500)">Biblioteca no disponible.</p>';
+    return;
+  }
+  const entries = await window.GHLibrary.all();
+  countEl.textContent = entries.length ? `(${entries.length})` : '';
+  if (!entries.length) {
+    el.innerHTML = '<p style="color:var(--gris-500)">Tu biblioteca está vacía. Genera charts en <a href="gh-autostepper.html" style="color:var(--gh-accent)">gh-autostepper</a> y guárdalos aquí, o usa el cargador de abajo para importar un ZIP/chart suelto.</p>';
+    return;
+  }
+  // Sort: más recientes primero
+  entries.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+  let html = '<div class="info-grid" style="grid-template-columns:1fr">';
+  for (const e of entries) {
+    const dur = e.duration ? `${Math.floor(e.duration/60)}:${('0'+Math.floor(e.duration%60)).slice(-2)}` : '?';
+    html += `<div class="info-item" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div style="flex:1;min-width:0">
+        <div style="color:#fff;font-weight:600">${escHtml(e.title || 'Sin título')}</div>
+        <div style="color:var(--gris-400);font-size:0.85em">${escHtml(e.artist || 'Unknown')} · ${e.bpm ? e.bpm.toFixed(1) + ' BPM' : ''} · ${dur} · ${e.totalNotes || 0} notas</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="action-btn" style="padding:8px 16px;font-size:0.95em" onclick="loadFromLibrary(${e.id})">▶ Tocar</button>
+        <button class="action-btn secondary" style="padding:8px 12px;font-size:0.95em" onclick="deleteFromLibrary(${e.id})" title="Eliminar de biblioteca">🗑</button>
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+async function loadFromLibrary(id) {
+  if (!window.GHLibrary) return;
+  const entry = await window.GHLibrary.get(id);
+  if (!entry) { alert('Chart no encontrado en biblioteca'); return; }
+  try {
+    const audioBytes = new Uint8Array(await entry.audioBlob.arrayBuffer());
+    await loadSong(entry.chartText, audioBytes, entry.audioName || 'song.mp3');
+    // Reset drop zone visual feedback
+    document.getElementById('zipDrop').classList.remove('loaded');
+    document.getElementById('chartDrop').classList.remove('loaded');
+    document.getElementById('audioDrop').classList.remove('loaded');
+    document.getElementById('zipName').textContent = '';
+    document.getElementById('chartName').textContent = '';
+    document.getElementById('audioName').textContent = '';
+    // Scroll a settings
+    document.querySelector('#setup-screen .card:nth-of-type(4)').scrollIntoView({ behavior: 'smooth' });
+  } catch (err) {
+    alert('Error cargando de biblioteca: ' + err.message);
+  }
+}
+async function deleteFromLibrary(id) {
+  if (!confirm('¿Eliminar este chart de la biblioteca? El ZIP descargado no se ve afectado.')) return;
+  await window.GHLibrary.delete(id);
+  refreshLibraryList();
+}
+// Carga inicial
+refreshLibraryList();
 
 // ============================================================================
 //                          .CHART PARSER

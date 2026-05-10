@@ -388,9 +388,13 @@
   <!-- 4. DOWNLOADS -->
   <div class="card" id="downloadsCard" style="display:none">
     <h2>4 · Descargar</h2>
-    <p class="help">Cada ZIP contiene <code>notes.chart</code> + <code>song.ini</code> + el audio. Para Clone Hero: extraer cada ZIP en una carpeta dentro de <code>/Songs/</code>.</p>
+    <p class="help">Cada ZIP contiene <code>notes.chart</code> + <code>song.ini</code> + el audio. Para Clone Hero: extraer cada ZIP en una carpeta dentro de <code>/Songs/</code>. Para tocar en Sincro, guarda en biblioteca y abre desde <a href="gh-play.html" style="color:var(--gh-accent)">GH Play</a>.</p>
     <div id="downloads" style="margin-top:10px"></div>
-    <button class="action-btn" id="downloadAllBtn" onclick="downloadAllZip()" style="margin-top:14px">⬇ Descargar TODO (un ZIP)</button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+      <button class="action-btn" id="downloadAllBtn" onclick="downloadAllZip()">⬇ Descargar TODO (un ZIP)</button>
+      <button class="action-btn secondary" id="saveLibraryBtn" onclick="saveAllToLibrary()">💾 Guardar TODO en biblioteca Sincro</button>
+    </div>
+    <div id="librarySaveStatus" style="margin-top:10px;font-size:0.9em"></div>
   </div>
 
 </div>
@@ -401,6 +405,7 @@
 </div>
 
 <script src="stepmania-web/js/audio-pipeline.js"></script>
+<script src="stepmania-web/js/gh-db.js"></script>
 <script>
 // ============================================================================
 //  GH AutoStepper — generador de charts Guitar Hero (.chart Clone Hero format)
@@ -901,12 +906,16 @@ function renderDownloads() {
     const div = document.createElement('div');
     div.className = 'difficulty-card';
     const totalNotes = q.result.charts.reduce((s, c) => s + c.notes.length, 0);
+    const savedTag = q.savedToLibrary ? ' · <span style="color:var(--color-success)">✓ guardado</span>' : '';
     div.innerHTML = `
       <div>
         <div class="name">${escHtml(q.title)}${q.artist ? ' — ' + escHtml(q.artist) : ''}</div>
-        <div class="meta">${q.result.bpm.toFixed(1)} BPM · ${totalNotes} notas (4 dificultades)</div>
+        <div class="meta">${q.result.bpm.toFixed(1)} BPM · ${totalNotes} notas (4 dificultades)${savedTag}</div>
       </div>
-      <button class="action-btn" onclick="downloadOne(${q.id})">⬇ ZIP</button>
+      <div style="display:flex;gap:6px">
+        <button class="action-btn secondary" onclick="saveOneToLibrary(${q.id})" title="Guardar en biblioteca Sincro">💾</button>
+        <button class="action-btn" onclick="downloadOne(${q.id})" title="Descargar ZIP">⬇</button>
+      </div>
     `;
     el.appendChild(div);
   }
@@ -920,6 +929,62 @@ window.downloadOne = function(id) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 };
+
+// ---- Guardar en biblioteca GH (IndexedDB compartida) ----
+async function saveOneToLibrary(id) {
+  const q = queue.find(x => x.id === id);
+  if (!q || !q.result) return;
+  const status = document.getElementById('librarySaveStatus');
+  try {
+    const audioExt = (q.file.name.match(/\.([^.]+)$/) || ['', 'mp3'])[1].toLowerCase();
+    const audioFilename = `song.${audioExt}`;
+    const charterName = document.getElementById('charter').value || 'Sincro';
+    const genre = document.getElementById('genre').value || '';
+    const meta = {
+      name: q.title || 'Untitled',
+      artist: q.artist || 'Unknown',
+      charter: charterName,
+      bpm: q.result.bpm,
+      duration: q.result.duration,
+      audioFilename, genre, diffGuitar: 4
+    };
+    const chartText = buildChartFile(meta, q.result.charts);
+    const audioBlob = new Blob([await q.file.arrayBuffer()], { type: q.file.type || 'audio/mpeg' });
+    const totalNotes = q.result.charts.reduce((s, c) => s + c.notes.length, 0);
+    const dbId = await window.GHLibrary.add({
+      title: meta.name,
+      artist: meta.artist,
+      bpm: meta.bpm,
+      duration: meta.duration,
+      chartText,
+      audioBlob,
+      audioName: audioFilename,
+      diffs: q.result.charts.map(c => c.section || c.name + 'Single'),
+      totalNotes,
+      genre, charter: charterName
+    });
+    q.savedToLibrary = true;
+    q.dbId = dbId;
+    status.innerHTML = `<span style="color:var(--color-success)">✓ "${escHtml(meta.name)}" guardado en biblioteca (id ${dbId})</span>`;
+    renderDownloads();
+  } catch (err) {
+    status.innerHTML = `<span style="color:var(--color-error)">✗ Error guardando: ${escHtml(err.message || String(err))}</span>`;
+    console.error(err);
+  }
+}
+async function saveAllToLibrary() {
+  const status = document.getElementById('librarySaveStatus');
+  let saved = 0, errors = 0;
+  for (const q of queue) {
+    if (!q.result || q.savedToLibrary) continue;
+    try {
+      await saveOneToLibrary(q.id);
+      saved++;
+    } catch (e) { errors++; }
+  }
+  status.innerHTML = `<span style="color:var(--color-success)">✓ ${saved} canciones guardadas en biblioteca${errors ? ` · ${errors} errores` : ''}.</span> ` +
+    `<a href="gh-play.html" style="color:var(--gh-accent)">→ Tocar ahora</a>`;
+}
 async function downloadAllZip() {
   // Empaqueta TODOS los charts en un único ZIP de ZIPs (mejor: en uno plano con
   // subcarpetas por canción).

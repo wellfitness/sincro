@@ -52,9 +52,11 @@ function pollGamepad() {
   requestAnimationFrame(pollGamepad);
 }
 
-// ----- IndexedDB: songs + scores --------------------------------------------
+// ----- IndexedDB: songs + scores + gh-songs (compartida con GH suite) -------
+// Schema v3 añade `gh-songs` para la biblioteca de Guitar Hero. La suite GH
+// usa stepmania-web/js/gh-db.js para esta misma DB con sus propias funciones.
 const DB_NAME = 'StepManiaWebDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 let dbPromise = null;
 
 function openDB() {
@@ -69,6 +71,9 @@ function openDB() {
       if (!db.objectStoreNames.contains('scores')) {
         const ss = db.createObjectStore('scores', { keyPath: 'key' });
         ss.createIndex('songId', 'songId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('gh-songs')) {
+        db.createObjectStore('gh-songs', { keyPath: 'id', autoIncrement: true });
       }
     };
     req.onsuccess = e => resolve(e.target.result);
