@@ -24,11 +24,26 @@ Funcionalidad end-to-end:
 - Parser `.ssc/.sm` con BPMs/STOPS/DELAYS/WARPS, OFFSET, NOTES.
 - Motor de timing real (J4–J7) con quantización a 192nds, mines, holds/rolls (HOLD_LIFE 300ms), lifts, fakes, hands.
 - 6 modifiers: mirror, left, right, shuffle, hidden, sudden + chartSpeed local (0.5–4x) y scrollSpeed global (0.5–3x).
-- Librería en IndexedDB con import individual (.ssc/.sm + audio), import packs SM (carpetas), backup ZIP completo (canciones + scores + ajustes), restore.
+- Librería en IndexedDB con import individual (.ssc/.sm + audio), import packs SM (carpetas), backup ZIP completo (canciones + scores + ajustes), restore. Los handlers de import en `library.js:90-220` distinguen `QuotaExceededError` del resto: cuando IndexedDB se queda sin cuota (Safari iOS ~50MB hard cap, Android con storage bajo), se PARA el bucle de import (los siguientes también fallarán), se consulta `navigator.storage.estimate()` y se muestra mensaje accionable con el `usedMB` real ("Almacenamiento lleno tras importar X canciones. Tu navegador limita la librería a Y MB. Elimina canciones antiguas o haz un backup ZIP antes de seguir.").
 - **Política unificada de carriles:** todos los charts nuevos generados por el autostepper (tanto el integrado como el standalone) son `dance-double` (8 carriles, master único). El motor decide en runtime cómo jugarlos vía `getActiveLaneConfig` en `game.js`: **default = 4 carriles (clásico)**, mod Solo = 6, mod Full = 8. El bloque de redistribución (`game.js:279-303`) hace el remap simétrico (8→4, 8→6, o el caso legacy 4→6/4→8 sobre charts antiguos). Los charts antiguos en biblioteca con `dance-single` o `dance-solo` siguen funcionando — su `nativeLanes` original se respeta como punto de partida del remap. Mods Solo y Full mutuamente excluyentes (`song-select.js:237-238`).
-- Input: alfombra USB (con calibración por roles vía `mat-mapping` en localStorage) y teclado (← ↓ ↑ →). El soporte de guitarra Guitar Hero vive en `gh-play.html` aparte (no se mezcla aquí — game style fundamentalmente distinto, requiere strum + chord + HOPO).
+- Input: alfombra USB (con calibración por roles vía `mat-mapping` en localStorage), teclado (← ↓ ↑ →) y **overlay táctil de 4 zonas en móvil** (`game.js:459-558`). El overlay aparece solo cuando el dispositivo expone touch (`'ontouchstart' in window || maxTouchPoints > 0`) y el chart se juega en modo default 4-lane. Mods Solo/Full no tienen mapeo táctil natural; en esos casos se loggea aviso en consola y el usuario debe usar teclado/alfombra. Implementado con Pointer Events (`pointerdown`/`pointerup`/`pointercancel`/`pointerleave`) + `touch-action:none` para evitar que el navegador robe gestos como scroll/zoom. El soporte de guitarra Guitar Hero vive en `gh-play.html` aparte (no se mezcla aquí — game style fundamentalmente distinto, requiere strum + chord + HOPO).
 - Settings persistentes (localStorage): globalOffset, scrollSpeed, timingWindow, NoteSkin PNG personalizado, fondo procedural por título.
 - Calibración: pantalla con metrónomo + tap para medir offset real con sugerencia automática.
+- **Robustez de ciclo de vida (`game.js:269-417`):** `startGame()` captura `currentNavToken()` al inicio y verifica `isCurrentNav(myToken)` después de cada `await` (resume audio, arrayBuffer, decodeAudioData, runCountdown). Si el usuario navega fuera durante esos ~3s, la promesa se aborta limpiamente sin crear `gameState` huérfano. Toda la cadena async va envuelta en `try/catch` que muestra `alert()` específico para `EncodingError` (audio no decodificable — típico de OGG en iOS Safari) y devuelve a la pantalla `diff`. `stopGame()` anula `src.onended = null` antes de `src.stop()` para evitar que el `setTimeout(endGame)` huérfano se dispare 500ms después con `gameState` ya nulo.
+
+### `stepmania-web/js/core.js`
+Módulo base compartido entre todas las pantallas SPA del motor SM. Carga primero (orden de scripts en `play.html`). Expone en scope global:
+
+- **`escapeHtml`, `formatTime`, `safeFn`, `getExt`, `yieldUI`** — helpers triviales.
+- **`ensureAudioCtx()`** — crea/devuelve un `AudioContext` singleton. Síncrono, NO hace `resume()`. Para callers que solo necesitan `decodeAudioData` (funciona en estado `'suspended'`).
+- **`ensureAudioCtxRunning()` async** — variante que SÍ hace `resume()` y se debe usar en cualquier call-site que vaya a reproducir audio audible. Centralizar el resume aquí evita el pitfall de iOS Safari + Chrome Android (autoplay policy crea el contexto en `'suspended'` hasta el primer gesto, y `start()` en suspended falla en silencio).
+- **`pollGamepad()` (loop rAF eterno)** — polling de `navigator.getGamepads()` a 60 fps, ACTUALIZA `gamepadButtonState[20]` y `gamepadJustPressed[20]` (consumidos por `game.js`, `pad-test.js`, `gh-play.html`). Mejoras críticas (`core.js:25-90`):
+  - **Pausa automática en `visibilitychange === 'hidden'`** para no quemar batería en background. Se rearranca solo al volver a `visible`.
+  - **Cachéo lazy de `#padPill`** con sentinel `false` (vs `null` que ya significa "no inicializado"). Si la página no tiene `#padPill` (futuras páginas satellite), el polling sigue funcionando con optional chaining.
+  - **`try/catch` envolviendo todo el cuerpo** para que una excepción transitoria (DOM no listo, gamepad desconectado mid-frame) NO mate el loop entero — antes una sola excepción dejaba al usuario sin input para el resto de la sesión.
+- **`openDB`, `dbAdd`, `dbAll`, `dbGet`, `dbDelete`, `dbPut`, `dbScore*`** — wrappers Promise sobre IndexedDB (DB `StepManiaWebDB` v3 con stores `songs`, `scores`, `gh-songs`).
+- **`settings` + `saveSettings` + `openSettings`** — config persistente en localStorage (`globalOffset`, `scrollSpeed`, `timingWindow`).
+- **`bumpNavToken`, `isCurrentNav`, `currentNavToken`** — token de navegación incremental para cancelación de promesas en vuelo. Cada `goto()` en `app.js` bumpea; las funciones async largas (`startGame`, futuras `loadSongPreview`…) capturan el token al inicio en una const local y verifican que sigue siendo el actual después de cada `await`. Si no, abortan limpiamente. Patrón equivalente a `AbortController` pero sin la ceremonia de pasar señales por toda la cadena de funciones — basta con que cada función larga consulte el global. Sin esto, `goto('diff')` durante un `decodeAudioData` de 3s dejaba el motor creando `gameState` sobre la pantalla equivocada.
 
 ### `test-pad.html`
 Diagnóstico de hardware en el navegador (Gamepad API). Selector inicial **Alfombra | Guitarra**.
@@ -312,6 +327,8 @@ Punto de entrada para jugar sin shell (debug, link directo, lo que la PWA no usa
 
 Para los Python: `python test_pad.py` desde PowerShell. Requiere Python 3.x estándar (sin paquetes adicionales).
 
+Para tests automatizados: `pnpm install` (instala Vitest, una sola dep) → `pnpm test` (corre suite, ~430ms). Ver sección "Tests" más abajo.
+
 ### `app.html` — shell SPA
 
 Topbar persistente con marca Sincro + nav de 6 rutas (DDR · GH · Crear DDR · Crear GH · Equipo · Sincro/landing). Un único `<iframe name="sincro-shell-frame">` carga la vista activa. El router escucha `hashchange` y solo cambia `iframe.src` cuando cambia la ruta — no recarga la página activa al hacer click sobre la ruta ya activa.
@@ -327,12 +344,12 @@ Botón "Instalar app" en el shell: aparece cuando el navegador captura `beforein
 - **`manifest.webmanifest`** — `start_url: /app.html#/play`, `id: /app.html`, `display: standalone` con `display_override: window-controls-overlay`, `theme_color: #00bec8`, `background_color: #0f172a`, 4 shortcuts (Jugar / GH / AutoStepper / Test pad) cada uno apuntando a su ruta del shell.
 - **`sw.js`** (raíz, scope `/`) — estrategia mixta:
   - `install`: precache del shell estático (HTMLs + CSS + JS modules + iconos + manifest). El listado vive en `PRECACHE_URLS` al inicio del fichero.
-  - `fetch HTML navigation`: network-first con fallback a precache. Un deploy nuevo se nota sin "vaciar caché".
+  - `fetch HTML navigation`: network-first con fallback a precache. Un deploy nuevo se nota sin "vaciar caché". Si offline y nada cacheado, el fallback es **inteligente por ruta** (`sw.js:106-128`): rutas del shell SPA (`/`, `/app*`, `/play*`, `/gh-*`, `/autostepper*`, `/test-pad*`) caen a `/app.html` para no perder el contexto de la PWA; cualquier otra URL navegacional cae a `/index.html` (la landing pública).
   - `fetch CSS/JS/iconos same-origin`: cache-first con runtime fallback. Shell offline-ready.
   - `fetch Google Fonts`: stale-while-revalidate.
   - **Range requests passthrough** (`req.headers.has('range')`): el motor de audio carga segmentos, cachear esto los rompería.
   - **Cross-origin no same-origin passthrough**: no cacheamos blobs de audio ad-hoc; viven en IndexedDB de todas formas.
-  - `CACHE_VERSION = 'sincro-v1'`. **Bumpear a `v2`, `v3`… cada vez que cambien archivos del precache** para que los clientes detecten la nueva versión y purguen la antigua en `activate`.
+  - `CACHE_VERSION = 'sincro-v3'` (al 2026-05-10). **Bumpear cada vez que cambien archivos del precache** para que los clientes detecten la nueva versión y purguen la antigua en `activate`. Sin bump, los clientes con SW antiguo siguen sirviendo desde caché y los fixes nunca llegan al usuario.
 - **`stepmania-web/js/pwa-bootstrap.js`** — registra el SW (solo https/localhost; file:// no soporta SW), expone `window.SincroPWA.{inShell, isInstalled, canInstall, promptInstall}`, captura `beforeinstallprompt` y dispara eventos custom `sincro-pwa-installable` / `sincro-pwa-installed` / `sincro-pwa-update-available`.
 - **`icons/icon.svg` + `icons/icon-maskable.svg`** — flechas DDR sobre gradiente turquesa→dorado de la marca. Maskable lleva 10% de padding interno (safe-zone) para que Android no recorte al aplicar el shape. Chrome moderno y iOS 16+ aceptan SVG en manifest.
 
@@ -357,6 +374,38 @@ Cada HTML clásico (`index.html`, `play.html`, `gh-play.html`, `autostepper.html
   - `manifest.webmanifest`: `Content-Type: application/manifest+json`.
   - `*.html`: `Cache-Control: no-cache` o ETags (la estrategia network-first del SW se encarga de servir actualizaciones, pero el primer request previo al SW también debe ser fresco).
   - `*.svg`, `*.css`, `*.js`: cache largo (1 año) si los versiona el SW; el `CACHE_VERSION` interno del SW controla la invalidación de clientes ya conectados.
+
+## Tests
+
+Suite de tests con **Vitest** que cubre los algoritmos puros del proyecto. Filosofía pragmática: testeamos lo que es matemáticamente verificable sin navegador, y validamos lo demás (render, Web Audio, Gamepad, IndexedDB, DOM) jugando manualmente. Pretender 100% de cobertura en este tipo de proyecto es trampa — la confianza real viene de jugar, no del coverage report.
+
+### Setup
+- **`package.json`** — scripts `pnpm test` (run-once), `pnpm test:watch`, `pnpm test:ui`. Stub de `typecheck`/`lint` (no-op) para que el husky pre-commit, si existe localmente, no falle. Una sola devDependency: `vitest`.
+- **`vitest.config.mjs`** — environment `node` (no jsdom), busca `tests/**/*.test.mjs` y `tests/**/*.test.js`. Si en el futuro necesitas tests con DOM (overlay táctil, settings modal, IndexedDB), cambia environment a `'jsdom'` e instala `vitest-environment-jsdom`.
+- **`tests/`** — un archivo por módulo. Tests son `.mjs` con `import` (Vitest 2.x es ESM-only y rechaza `require`).
+
+### Doble export CJS en archivos source
+Para que Vitest pueda `import` los módulos del navegador sin migrar todo a ESM, los archivos puros tienen un **guard CJS al final**:
+
+- **`stepmania-web/js/parser.js:275-289`** — `if (typeof module !== 'undefined' && module.exports) module.exports = { parseSscOrSm, parseSscPairs, buildTimingEngine, parseAttacks, lanesFromStepType, parseNotesToEvents, quantColorFor };`. Cero impacto en navegador (donde `module` es undefined). Si añades una función pública nueva al parser, agrégala a este map.
+- **`stepmania-web/js/difficulty-tiers.js:259-274`** — el IIFE termina con `if (typeof window !== 'undefined') window.DifficultyTiers = api; if (typeof module !== 'undefined' && module.exports) module.exports = api;`. Soporta ambos entornos sin condicionales repetidos.
+
+Desde un test, el patrón de import es: `import pkg from '../stepmania-web/js/parser.js'; const { parseSscOrSm } = pkg;` (ESM importa CJS exclusivamente como default).
+
+### Cobertura actual (al 2026-05-10)
+- **`tests/parser.test.mjs`** — 23 tests: parseo .ssc/.sm (incluye formato legacy 6-partes), múltiples charts, comentarios //, parseSscPairs (orden, NaN, espacios), buildTimingEngine (BPMs constantes/cambiantes/STOPS — verifica la convención clave de `parser.js:112` "el stop solo se aplica a beats POSTERIORES con `s.beat < beat` estricto"), lanesFromStepType, parseAttacks (TIME=...:LEN=...:MODS=...), quantColorFor.
+- **`tests/difficulty-tiers.test.mjs`** — 23 tests: TIER_CONFIG (5 tiers SM, 4 tiers GH, monotonía de NPS y minGap), rhythmPriority (downbeat=5, mid-measure=4, beat=3, offbeat=2, semicorchea=1), filterByDifficulty con invariantes (NPS cap, gap mínimo, retención esperada por tier), filterPositions48 round-trip, filterTicks GH, PRESET_MULTIPLIER.
+
+**Total: 46 tests, ~430ms en CI.**
+
+### Lo que NO se testea (decisión consciente)
+- Render del canvas en `game.js` (visual regression manual).
+- Service Worker `sw.js` (Workbox tiene su propia suite; nuestra lógica son 30 líneas de routing).
+- Wrappers de IndexedDB en `core.js` (testearlos = testear IndexedDB del navegador).
+- Gamepad polling, Web Audio playback, touch overlay, DOM transitions.
+
+### Cómo extender
+Cuando arregles un bug en algoritmo puro, primero añade el test que lo reproduce. Sin disciplina TDD — solo "el bug existió una vez, no debe volver". Para añadir cobertura a `audio-pipeline.js` o `autostepper.js` necesitarás mockear `AudioBuffer` (Vitest soporta `vi.fn` y stubbing global). El siguiente candidato natural es `autostepper.js` — algoritmo determinista con seed fija, ideal para tests de snapshot del output `.ssc`.
 
 ## Pendiente / ideas futuras
 
