@@ -5,24 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#00bec8">
 
-<title>StepMania Web — Baila, juega, entrena tu cerebro</title>
-<meta name="description" content="Suite de StepMania en navegador con base científica. Juega, genera charts desde MP3 y diagnostica tu alfombra. Cardio, música y cognición en una sola actividad — avalado por la mayor revisión sistemática de ejercicio y cognición publicada hasta la fecha.">
+<title>Sincro — Pisa, toca, entrena tu cerebro</title>
+<meta name="description" content="Sincro: la suite rítmica de Movimiento Funcional. Juega con alfombra de baile o guitarra Guitar Hero, genera charts desde cualquier MP3 y diagnostica tu hardware. Cardio, música y cognición — avalado por la mayor revisión sistemática de ejercicio y cognición publicada hasta la fecha.">
 <meta name="author" content="Movimiento Funcional">
-<meta name="keywords" content="StepMania, exergaming, dance dance revolution, cardio cognitivo, neurociencia ejercicio, ritmo coordinación, movimiento funcional">
+<meta name="keywords" content="Sincro, sincronización auditivo-motora, exergaming, dance dance revolution, guitar hero, cardio cognitivo, neurociencia ejercicio, ritmo coordinación, movimiento funcional">
 
-<link rel="canonical" href="https://stepmania.movimientofuncional.app/">
+<link rel="canonical" href="https://play.movimientofuncional.app/">
 
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='86'%3E%F0%9F%8E%AE%3C/text%3E%3C/svg%3E">
 
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://stepmania.movimientofuncional.app/">
-<meta property="og:title" content="StepMania Web — Baila, juega, entrena tu cerebro">
-<meta property="og:description" content="Cardio, música y cognición en una sola actividad. Suite de StepMania en navegador con base científica revisada por pares.">
+<meta property="og:url" content="https://play.movimientofuncional.app/">
+<meta property="og:title" content="Sincro — Pisa, toca, entrena tu cerebro">
+<meta property="og:description" content="Cardio, música y cognición en una sola actividad. La suite rítmica de Movimiento Funcional con base científica revisada por pares.">
 <meta property="og:locale" content="es_ES">
-<meta property="og:site_name" content="StepMania Web">
+<meta property="og:site_name" content="Sincro">
 
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="StepMania Web — Baila, juega, entrena tu cerebro">
+<meta name="twitter:title" content="Sincro — Pisa, toca, entrena tu cerebro">
 <meta name="twitter:description" content="Cardio, música y cognición en una sola actividad. Avalado por la mayor revisión sistemática de ejercicio y cognición.">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -33,11 +33,11 @@
 {
   "@context": "https://schema.org",
   "@type": "WebApplication",
-  "name": "StepMania Web",
+  "name": "Sincro",
   "applicationCategory": "GameApplication",
   "operatingSystem": "Any (browser-based)",
-  "url": "https://stepmania.movimientofuncional.app/",
-  "description": "Suite de StepMania en navegador: motor de juego, generador automático de charts (AutoStepper) y diagnóstico de alfombra de baile. Funciona sin instalación.",
+  "url": "https://play.movimientofuncional.app/",
+  "description": "Sincro: suite rítmica en navegador de Movimiento Funcional. Motor de juego, generador automático de charts (AutoStepper) y diagnóstico de alfombra y guitarra. Funciona sin instalación. Compatible con el formato .ssc/.sm de StepMania.",
   "browserRequirements": "Requires JavaScript. HTML5 Web Audio + Canvas + Gamepad API.",
   "inLanguage": "es",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
@@ -417,6 +417,77 @@ section { padding: 80px 24px; position: relative; }
   font-family: var(--font-mono); text-align: center;
 }
 
+/* GUITAR (bonus section) */
+.guitar-section {
+  background: linear-gradient(180deg, #000 0%, #100618 100%);
+  position: relative; overflow: hidden;
+}
+.guitar-section::before {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 80% 20%, rgba(225,29,72,0.10), transparent 45%),
+    radial-gradient(circle at 20% 80%, rgba(167,139,250,0.10), transparent 45%);
+  pointer-events: none;
+}
+.guitar-section .container { position: relative; z-index: 1; }
+.guitar-header {
+  display: flex; align-items: center; gap: 24px;
+  margin-bottom: 24px; flex-wrap: wrap;
+}
+.guitar-header .icon-big {
+  font-size: 4em;
+  filter: drop-shadow(0 0 18px rgba(225,29,72,0.35));
+  animation: guitarRock 3s ease-in-out infinite;
+}
+@keyframes guitarRock {
+  0%,100% { transform: rotate(-3deg); }
+  50%     { transform: rotate(3deg); }
+}
+.guitar-disclaimer {
+  background: rgba(225,29,72,0.06);
+  border-left: 3px solid var(--rosa-500);
+  padding: 14px 18px; border-radius: 0 8px 8px 0;
+  margin-bottom: 32px;
+  color: var(--gris-300); font-size: 0.95em;
+}
+.guitar-disclaimer strong { color: var(--rosa-500); }
+.guitar-pillars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+.guitar-mini-pillar {
+  background: rgba(167,139,250,0.04);
+  border: 1px solid rgba(167,139,250,0.2);
+  border-radius: 12px;
+  padding: 22px;
+  transition: transform .25s ease, border-color .25s ease;
+}
+.guitar-mini-pillar:hover {
+  transform: translateY(-3px);
+  border-color: rgba(167,139,250,0.5);
+}
+.guitar-mini-pillar .gp-icon { font-size: 1.8em; margin-bottom: 10px; }
+.guitar-mini-pillar h4 {
+  font-family: var(--font-display);
+  color: #c4b5fd;
+  font-size: 1.15em; margin-bottom: 10px;
+}
+.guitar-mini-pillar p {
+  color: var(--gris-300); font-size: 0.93em; margin-bottom: 12px;
+}
+.guitar-mini-pillar .gp-ref {
+  font-size: 0.78em; color: var(--gris-500);
+  font-family: var(--font-mono);
+  border-top: 1px dashed rgba(255,255,255,0.08);
+  padding-top: 10px; line-height: 1.5;
+}
+.guitar-mini-pillar .gp-ref a { color: #a78bfa; word-break: break-all; }
+
+@media (prefers-reduced-motion: reduce) {
+  .guitar-header .icon-big { animation: none; }
+}
+
 /* COMPARE */
 .compare-section { background: #050a14; }
 .compare-table-wrap {
@@ -528,13 +599,14 @@ section { padding: 80px 24px; position: relative; }
 <a class="skip-link" href="#contenido">Saltar al contenido principal</a>
 
 <header class="topbar" role="banner">
-  <a href="#hero" class="brand" aria-label="StepMania Web — inicio de la página">🎮 StepMania Web</a>
+  <a href="#hero" class="brand" aria-label="Sincro — inicio de la página">⚡ Sincro</a>
   <nav class="primary-nav" aria-label="Navegación principal">
     <ul>
       <li><a href="#beneficios">Beneficios</a></li>
       <li><a href="#cerebro">Tu cerebro</a></li>
+      <li><a href="#guitarra">Guitarra</a></li>
       <li><a href="#herramientas">Herramientas</a></li>
-      <li><a href="stepmania-web.html" class="cta-mini" aria-label="Ir al juego">▶ Jugar</a></li>
+      <li><a href="play.html" class="cta-mini" aria-label="Ir al juego">▶ Jugar</a></li>
     </ul>
   </nav>
 </header>
@@ -554,12 +626,13 @@ section { padding: 80px 24px; position: relative; }
       <p class="hero-badge">⚡ Cardio · Música · Cognición · en una sola actividad</p>
       <h1 id="hero-title">Pisa el ritmo,<br>entrena <span class="pulse">3 cerebros</span> a la vez</h1>
       <p class="tagline">
-        Suite completa de <strong>StepMania</strong> en navegador. Genera charts desde cualquier MP3,
-        diagnostica tu alfombra y juega — todo sin instalar nada. Avalado por
-        la mayor revisión sistemática de ejercicio y cognición publicada hasta la fecha.
+        <strong>Sincro</strong> es la suite rítmica de Movimiento Funcional. Juega con tu alfombra
+        de baile o tu guitarra, genera charts desde cualquier MP3 y diagnostica tu hardware
+        — todo sin instalar nada. Avalado por la mayor revisión sistemática de ejercicio y
+        cognición publicada hasta la fecha.
       </p>
       <div class="cta-row" role="group" aria-label="Acciones principales">
-        <a href="stepmania-web.html" class="btn primary">▶ Jugar ahora</a>
+        <a href="play.html" class="btn primary">▶ Jugar ahora</a>
         <a href="autostepper.html" class="btn gold">🎵 Crear un chart</a>
         <a href="test-pad.html" class="btn secondary">🦶 Probar hardware</a>
       </div>
@@ -767,6 +840,90 @@ section { padding: 80px 24px; position: relative; }
     </div>
   </section>
 
+  <section id="guitarra" class="guitar-section" aria-labelledby="guitarra-title">
+    <div class="container">
+      <div class="guitar-header">
+        <div class="icon-big" aria-hidden="true">🎸</div>
+        <div>
+          <p class="eyebrow">Bonus track</p>
+          <h2 id="guitarra-title" class="section-title">Y también con guitarra</h2>
+        </div>
+      </div>
+
+      <p class="section-lede">
+        Conecta una guitarra de Guitar Hero (PS2 + receptor o Xbox) y juega los mismos charts.
+        Para los días que quieres ritmo sin sudar — o para complementar la rutina con un trabajo
+        cognitivo de coordinación fina que la alfombra no cubre.
+      </p>
+
+      <p class="guitar-disclaimer">
+        <strong>Honestidad primero:</strong> la guitarra no es cardio. Los beneficios de equilibrio,
+        prevención de caídas y gasto calórico que ves arriba se quedan en la alfombra.
+        Lo que la guitarra entrena es lo otro: música, coordinación bimanual fina y función ejecutiva.
+      </p>
+
+      <div class="guitar-pillars">
+
+        <article class="guitar-mini-pillar">
+          <p class="gp-icon" aria-hidden="true">🎼</p>
+          <h4>Percepción musical</h4>
+          <p>
+            Jugadores frecuentes de music video games <strong>superan a no‑músicos</strong>
+            en una batería de tests de percepción musical. Es entrenamiento musical real,
+            accesible para quien no puede invertir tiempo o dinero en clases de instrumento.
+          </p>
+          <p class="gp-ref">
+            Pasinski, Hannon &amp; Snyder 2016 · Psychon Bull Rev<br>
+            <a href="https://doi.org/10.3758/s13423-015-0998-x" target="_blank" rel="noopener noreferrer">doi.org/10.3758/s13423-015-0998-x</a>
+          </p>
+        </article>
+
+        <article class="guitar-mini-pillar">
+          <p class="gp-icon" aria-hidden="true">✋✋</p>
+          <h4>Coordinación bimanual</h4>
+          <p>
+            La práctica musical induce <strong>cambios estructurales y funcionales</strong>
+            en redes que coordinan ambas manos. Fretting con la izquierda + strum con la derecha
+            entrena el cuerpo calloso a alta resolución temporal.
+          </p>
+          <p class="gp-ref">
+            Zaatar et al. 2023 · Brain Behav Immun Health · revisión<br>
+            <a href="https://doi.org/10.1016/j.bbih.2023.100716" target="_blank" rel="noopener noreferrer">doi.org/10.1016/j.bbih.2023.100716</a>
+          </p>
+        </article>
+
+        <article class="guitar-mini-pillar">
+          <p class="gp-icon" aria-hidden="true">⚡</p>
+          <h4>Sincronización auditivo‑motora</h4>
+          <p>
+            Tocar guitarra <em>es</em> AMS. Las mismas redes neurales que viste arriba
+            (ganglios basales, cerebelo, SMA) se entrenan igual — solo cambia el efector.
+            La música recluta corteza motora incluso en escucha pasiva.
+          </p>
+          <p class="gp-ref">
+            Lavigne et al. 2025 · Brain and Behavior · fMRI<br>
+            <a href="https://doi.org/10.1002/brb3.70695" target="_blank" rel="noopener noreferrer">doi.org/10.1002/brb3.70695</a>
+          </p>
+        </article>
+
+        <article class="guitar-mini-pillar">
+          <p class="gp-icon" aria-hidden="true">🧠</p>
+          <h4>Función ejecutiva</h4>
+          <p>
+            Cambios rápidos de acordes, alternancia de strum y dual‑task entrenan
+            inhibición, switching y memoria de trabajo — los tres componentes centrales
+            del control ejecutivo. Los gamers de acción muestran mayor integración funcional.
+          </p>
+          <p class="gp-ref">
+            Gong et al. 2016 · Neural Plasticity<br>
+            <a href="https://doi.org/10.1155/2016/9803165" target="_blank" rel="noopener noreferrer">doi.org/10.1155/2016/9803165</a>
+          </p>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
   <section class="compare-section" aria-labelledby="compare-title">
     <div class="container">
       <p class="eyebrow">Cara a cara</p>
@@ -844,15 +1001,16 @@ section { padding: 80px 24px; position: relative; }
       <div class="tools-grid">
 
         <article class="tool-card featured" aria-labelledby="t-juego">
-          <p class="tool-icon" aria-hidden="true">🎮</p>
-          <h3 id="t-juego">StepMania Web</h3>
+          <p class="tool-icon" aria-hidden="true">⚡</p>
+          <h3 id="t-juego">Sincro</h3>
           <p class="tool-lede">play · songs · scores · mods</p>
           <p>
-            El juego completo. Motor de timing real (J4‑J7), 6 modifiers (mirror, shuffle, hidden…),
+            El motor de juego. Timing real (J4‑J7), 6 modifiers (mirror, shuffle, hidden…),
             librería local, sistema de scores con grades A→AAA, tutorial integrado.
-            Compatible con tu alfombra USB y con teclado.
+            Compatible con alfombra USB, guitarra Guitar Hero y teclado. Importa charts
+            en formato StepMania (.ssc/.sm).
           </p>
-          <a href="stepmania-web.html" class="btn primary">▶ Empezar a jugar</a>
+          <a href="play.html" class="btn primary">▶ Empezar a jugar</a>
         </article>
 
         <article class="tool-card" aria-labelledby="t-auto">
@@ -891,7 +1049,7 @@ section { padding: 80px 24px; position: relative; }
         Tu navegador, tu música, tu alfombra (o tu teclado).
       </p>
       <div class="cta-row" style="justify-content:center" role="group" aria-label="Acciones finales">
-        <a href="stepmania-web.html" class="btn primary">▶ Jugar ahora</a>
+        <a href="play.html" class="btn primary">▶ Jugar ahora</a>
         <a href="#beneficios" class="btn secondary">Releer los beneficios</a>
       </div>
     </div>
@@ -903,17 +1061,17 @@ section { padding: 80px 24px; position: relative; }
   <div class="container">
 
     <section aria-labelledby="footer-about">
-      <h2 id="footer-about">🎮 StepMania Web</h2>
+      <h2 id="footer-about">⚡ Sincro</h2>
       <p style="color:var(--gris-500);max-width:380px">
-        Suite de herramientas StepMania en navegador, basada en evidencia científica revisada por pares.
-        Código abierto, datos locales, sin tracking.
+        La suite rítmica de Movimiento Funcional, basada en evidencia científica revisada por pares.
+        Código abierto, datos locales, sin tracking. Compatible con el formato .ssc/.sm de StepMania.
       </p>
     </section>
 
     <nav aria-labelledby="footer-tools">
       <h2 id="footer-tools">Herramientas</h2>
       <ul>
-        <li><a href="stepmania-web.html">▶ Jugar</a></li>
+        <li><a href="play.html">▶ Jugar</a></li>
         <li><a href="autostepper.html">🎵 AutoStepper</a></li>
         <li><a href="test-pad.html">🦶 Test de hardware</a></li>
       </ul>
