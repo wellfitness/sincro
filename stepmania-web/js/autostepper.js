@@ -16,9 +16,14 @@ function log(msg, cls='') {
 }
 
 // ----- Drop zone + file input ------------------------------------------------
+// NOTA: NO añadimos un click handler manual al dropZone. El <input type="file">
+// vive dentro del <label class="drop-zone"> y el click del label ya dispara el
+// input nativamente. Si añadimos un listener que llame a fileInput.click(), el
+// dialog se abre dos veces y el usuario tiene que elegir las canciones dos
+// veces — el bug que el explorador "no funcionaba bien". Mismo patrón que
+// autostepper.html standalone.
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
-dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
 dropZone.addEventListener('drop', e => {
@@ -368,34 +373,49 @@ async function analyzeOne(q) {
   await yieldUI();
   const sensitivity = parseFloat(document.getElementById('sensitivity').value);
   const peakFrames = pickPeaks(odf, framesPerSec, sensitivity);
-  const onsetTimesSec = peakFrames.map(f => f / framesPerSec);
+  let onsetTimesSec = peakFrames.map(f => f / framesPerSec);
   const overrideVal = parseFloat(q.bpmOverride);
   const bpm = (!isNaN(overrideVal) && overrideVal > 0) ? overrideVal : detectBPM(odf, framesPerSec);
   await yieldUI();
   const offsetSec = detectOffset(odf, framesPerSec, bpm);
+  // Duration cap (Completa / 90s / 120s / 180s) — recorta tanto las notas como
+  // el audio exportado. La selección viene del botón .preset.selected dentro
+  // de #durationGrid (data-duration en segundos, "0" = completa).
+  const activeDurEl = document.querySelector('#durationGrid .preset.selected');
+  const maxDurationSec = activeDurEl ? (parseFloat(activeDurEl.dataset.duration) || 0) : 0;
+  const effectiveDuration = (maxDurationSec > 0 && buffer.duration > maxDurationSec)
+    ? maxDurationSec : buffer.duration;
+  // Filtra onsets más allá de la duración efectiva — evita que se sigan
+  // generando pasos en sección recortada.
+  if (effectiveDuration < buffer.duration) {
+    onsetTimesSec = onsetTimesSec.filter(t => t < effectiveDuration);
+  }
   const beatPerSec = bpm/60;
   const beatsList = [];
-  for (let t = offsetSec; t < buffer.duration; t += 1/beatPerSec) beatsList.push(t);
+  for (let t = offsetSec; t < effectiveDuration; t += 1/beatPerSec) beatsList.push(t);
   const resolution = document.getElementById('subdivSelect').value;
   const holdDensity = parseFloat(document.getElementById('holdDensity').value);
   const jumpProb = parseFloat(document.getElementById('jumpProb').value);
-  // Lane count comes from the AutoStepper UI selector (4/6/8). Defaults to 4.
-  const lanesSel = document.getElementById('lanesSelect');
-  const numLanes = lanesSel ? (parseInt(lanesSel.value) || 4) : 4;
+  // Charts are always authored at 8 lanes (dance-double). Single source of
+  // truth per song; runtime mods (Solo/Full) decide whether to play as 4/6/8
+  // by redistributing in game.js. No more 4-only or 6-only charts in lib.
+  const numLanes = 8;
   const stepType = stepTypeForLanes(numLanes);
   const rawPos = quantizeOnsetsTo192(onsetTimesSec, bpm, offsetSec);
   const positions = snapToResolution(rawPos, resolution);
-  const totalUnits = Math.ceil((buffer.duration - offsetSec) * beatPerSec * 48);
+  const totalUnits = Math.ceil((effectiveDuration - offsetSec) * beatPerSec * 48);
   const totalMeasures = Math.ceil(totalUnits/192);
-  const sampleStart = pickSampleStart(beatsList, onsetTimesSec, buffer.duration);
+  const sampleStart = pickSampleStart(beatsList, onsetTimesSec, effectiveDuration);
   const diffs = [
     { key: 'beginner', name: 'Beginner' }, { key: 'easy', name: 'Easy' },
     { key: 'medium', name: 'Medium' }, { key: 'hard', name: 'Hard' },
     { key: 'challenge', name: 'Challenge' }
   ];
   // Multiplicador del preset (suave/normal/intenso/custom). Modula minGap y
-  // NPS target del filtrado por dificultad de DifficultyTiers.
-  const activePresetEl = document.querySelector('.preset.selected');
+  // NPS target del filtrado por dificultad de DifficultyTiers. Selector
+  // explícito a [data-preset] para no capturar los botones de duración que
+  // comparten la clase .preset.
+  const activePresetEl = document.querySelector('.preset[data-preset].selected');
   const presetKey = (activePresetEl && activePresetEl.dataset.preset) || 'normal';
   const presetMul = (window.DifficultyTiers
     && window.DifficultyTiers.PRESET_MULTIPLIER[presetKey]) || 1.0;
@@ -406,13 +426,29 @@ async function analyzeOne(q) {
     const finalNotes = addHoldsAndRolls(baseNotes, d.key, holdDensity, numLanes);
     const rows = notesToRows(finalNotes, totalUnits, numLanes);
     const count = finalNotes.reduce((s,n) => s + n.cols.filter(c => c===1||c===2||c===4).length, 0);
-    const rating = estimateMeter(finalNotes, buffer.duration, d.key);
-    const radar = calculateRadar(finalNotes, totalMeasures, buffer.duration);
+    const rating = estimateMeter(finalNotes, effectiveDuration, d.key);
+    const radar = calculateRadar(finalNotes, totalMeasures, effectiveDuration);
     charts.push({ name: d.name, key: d.key, rating, notes: rows, count, radar, stepType, numLanes });
   }
-  q.result = { bpm, offsetSec, duration: buffer.duration, sampleStart, charts, sampleRate: sr, numLanes };
+  // Si hay cap de duración activo, recorta el audio + re-encoda a WAV con
+  // fade-out de 1.5s para evitar el click. El blob queda en q.croppedAudio
+  // y lo consumen saveAllToLibrary y downloadAllZip en lugar de q.file.
+  let croppedAudio = null;
+  let croppedAudioName = null;
+  if (effectiveDuration < buffer.duration && window.AudioPipeline?.audioBufferToWav) {
+    croppedAudio = window.AudioPipeline.audioBufferToWav(buffer, effectiveDuration, 1.5);
+    croppedAudioName = q.file.name.replace(/\.[^.]+$/, '') + '.wav';
+  }
+  q.result = {
+    bpm, offsetSec, duration: effectiveDuration, sampleStart, charts,
+    sampleRate: sr, numLanes, croppedAudio, croppedAudioName,
+    originalDuration: buffer.duration
+  };
   q.status = 'done';
-  log(`  ✓ BPM ${bpm.toFixed(1)}, ${charts.reduce((s,c) => s+c.count, 0)} pasos · ${numLanes} carriles`, 'ok');
+  const durMsg = (effectiveDuration < buffer.duration)
+    ? ` · recortado ${Math.round(buffer.duration)}s → ${Math.round(effectiveDuration)}s`
+    : '';
+  log(`  ✓ BPM ${bpm.toFixed(1)}, ${charts.reduce((s,c) => s+c.count, 0)} pasos · ${numLanes} carriles${durMsg}`, 'ok');
   renderQueue();
 }
 async function analyzeAll() {
@@ -453,9 +489,12 @@ function applyPreset(p) {
   document.getElementById('jumpProb').value = p.jumpProb;
   document.getElementById('jumpVal').textContent = Math.round(p.jumpProb*100) + '%';
 }
-document.querySelectorAll('.preset').forEach(el => {
+// Presets de estilo (suave/normal/intenso/custom) — selector restringido a
+// data-preset para no colisionar con los botones de duración (data-duration)
+// que comparten la misma clase visual .preset.
+document.querySelectorAll('.preset[data-preset]').forEach(el => {
   el.addEventListener('click', () => {
-    document.querySelectorAll('.preset').forEach(p => p.classList.remove('selected'));
+    document.querySelectorAll('.preset[data-preset]').forEach(p => p.classList.remove('selected'));
     el.classList.add('selected');
     if (el.dataset.preset === 'custom') {
       document.getElementById('customParams').style.display = '';
@@ -463,6 +502,13 @@ document.querySelectorAll('.preset').forEach(el => {
       document.getElementById('customParams').style.display = 'none';
       applyPreset(PRESETS[el.dataset.preset]);
     }
+  });
+});
+// Botones de duración máxima (#durationGrid .preset[data-duration]).
+document.querySelectorAll('#durationGrid .preset').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('#durationGrid .preset').forEach(p => p.classList.remove('selected'));
+    el.classList.add('selected');
   });
 });
 ['sensitivity','holdDensity','jumpProb'].forEach(id => {
@@ -478,8 +524,12 @@ document.getElementById('subdivSelect').addEventListener('change', e => {
 });
 
 function buildSscForSong(q) {
+  // El #MUSIC apunta al audio que terminará junto al .ssc — wav recortado si
+  // hubo cap, archivo original si no. Coherente con saveAllToLibrary y
+  // downloadAllZip que escogen la fuente con la misma lógica.
+  const audioExt = q.result.croppedAudio ? '.wav' : getExt(q.file.name);
   return buildSscFile({ title: q.title, artist: q.artist },
-    safeFn(q.title) + getExt(q.file.name),
+    safeFn(q.title) + audioExt,
     q.result.bpm, q.result.offsetSec, q.result.sampleStart, q.result.charts);
 }
 
@@ -489,11 +539,14 @@ async function saveAllToLibrary() {
   const status = document.getElementById('exportStatus');
   let saved = 0;
   for (const q of done) {
-    const audioBlob = q.file;
+    // Si hubo cap de duración, persistimos el WAV recortado (fade-out incluido).
+    // En caso contrario guardamos el archivo original sin re-codificar.
+    const audioBlob = q.result.croppedAudio || q.file;
+    const audioName = q.result.croppedAudioName || q.file.name;
     const sscText = buildSscForSong(q);
     await dbAdd({
       title: q.title, artist: q.artist,
-      audioBlob, audioName: q.file.name,
+      audioBlob, audioName,
       sscText,
       bpm: q.result.bpm, offsetSec: q.result.offsetSec,
       duration: q.result.duration, sampleStart: q.result.sampleStart,
@@ -515,9 +568,12 @@ async function downloadAllZip() {
   const files = [];
   for (const q of done) {
     const folder = safeFn(q.title);
-    const audioName = folder + getExt(q.file.name);
+    // Si hubo recorte, el ZIP lleva el WAV cropeado en lugar del archivo original.
+    const sourceBlob = q.result.croppedAudio || q.file;
+    const sourceExt = q.result.croppedAudio ? '.wav' : getExt(q.file.name);
+    const audioName = folder + sourceExt;
     files.push({ name: `${folder}/${folder}.ssc`, data: enc.encode(buildSscForSong(q)) });
-    const audioBytes = new Uint8Array(await q.file.arrayBuffer());
+    const audioBytes = new Uint8Array(await sourceBlob.arrayBuffer());
     files.push({ name: `${folder}/${audioName}`, data: audioBytes });
   }
   const zipBytes = makeZip(files);

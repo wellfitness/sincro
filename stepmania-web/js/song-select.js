@@ -47,6 +47,7 @@ async function refreshSongs() {
     if ([...allTags].includes(current)) sel.value = current;
   }
   renderSongList();
+  updateDiffDensityIndicator();
 }
 
 function renderSongList() {
@@ -255,12 +256,55 @@ function bindSongsScreenConfig() {
       csVal.textContent = activeMods.chartSpeed.toFixed(1) + 'x';
     };
   }
+
+  updateDiffDensityIndicator();
 }
 
 function onGlobalDiffChange() {
   const sel = document.getElementById('globalDiff');
   if (sel) _globalDiffKey = sel.value;
+  updateDiffDensityIndicator();
 }
+
+// Leyenda de densidad por dificultad. Combina:
+//   - Cadencia teórica (NPS objetivo) calibrada en difficulty-tiers.js,
+//     a su vez validada contra la fórmula PredictMeter de SM5.
+//   - Media de pasos real en la biblioteca para esa dificultad, si existe
+//     al menos una canción con ese tier (degrada con elegancia si no).
+const _DIFF_LEGEND = {
+  Beginner:  { rate: '~1 pisada/seg',     mood: 'ritmo lento, solo los tiempos fuertes' },
+  Easy:      { rate: '~2 pisadas/seg',    mood: 'ritmo cómodo, una pisada por beat' },
+  Medium:    { rate: '~3-4 pisadas/seg',  mood: 'ritmo medio, corcheas frecuentes' },
+  Hard:      { rate: '~5-6 pisadas/seg',  mood: 'ritmo rápido, casi semicorcheas' },
+  Challenge: { rate: 'hasta 9 pisadas/seg', mood: 'sin descanso, todo el detalle' }
+};
+
+function updateDiffDensityIndicator() {
+  const bars = document.getElementById('diffDensityBars');
+  const text = document.getElementById('diffDensityText');
+  if (!bars || !text) return;
+  const key = _globalDiffKey;
+  bars.querySelectorAll('.db-bar').forEach(b => {
+    b.classList.toggle('on', b.dataset.tier === key);
+  });
+  const info = _DIFF_LEGEND[key];
+  if (!info) { text.textContent = ''; return; }
+  // Media real desde la biblioteca: solo cuenta canciones que tienen un chart
+  // con ese nombre exacto. Sin matching aproximado (sería ruido para la media).
+  let avg = null;
+  if (Array.isArray(_allSongsCache) && _allSongsCache.length) {
+    const counts = [];
+    for (const s of _allSongsCache) {
+      const ch = (s.charts || []).find(c => c.name === key);
+      if (ch && typeof ch.count === 'number') counts.push(ch.count);
+    }
+    if (counts.length) avg = Math.round(counts.reduce((a,b) => a+b, 0) / counts.length);
+  }
+  const avgPart = avg !== null ? ` · ≈${avg} pasos por canción en tu biblioteca` : '';
+  text.textContent = `${info.rate} · ${info.mood}${avgPart}`;
+}
+
+window.updateDiffDensityIndicator = updateDiffDensityIndicator;
 
 // Exponer flag para que la inicialización en app.js pueda llamar al binder
 // tras cargar el DOM.

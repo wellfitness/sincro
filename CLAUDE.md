@@ -25,7 +25,7 @@ Funcionalidad end-to-end:
 - Motor de timing real (J4–J7) con quantización a 192nds, mines, holds/rolls (HOLD_LIFE 300ms), lifts, fakes, hands.
 - 6 modifiers: mirror, left, right, shuffle, hidden, sudden + chartSpeed local (0.5–4x) y scrollSpeed global (0.5–3x).
 - Librería en IndexedDB con import individual (.ssc/.sm + audio), import packs SM (carpetas), backup ZIP completo (canciones + scores + ajustes), restore.
-- Modos de carriles: 4 (clásico DDR), 6 y 8 con redistribución de notas para alfombras de baile completas.
+- **Política unificada de carriles:** todos los charts nuevos generados por el autostepper (tanto el integrado como el standalone) son `dance-double` (8 carriles, master único). El motor decide en runtime cómo jugarlos vía `getActiveLaneConfig` en `game.js`: **default = 4 carriles (clásico)**, mod Solo = 6, mod Full = 8. El bloque de redistribución (`game.js:279-303`) hace el remap simétrico (8→4, 8→6, o el caso legacy 4→6/4→8 sobre charts antiguos). Los charts antiguos en biblioteca con `dance-single` o `dance-solo` siguen funcionando — su `nativeLanes` original se respeta como punto de partida del remap. Mods Solo y Full mutuamente excluyentes (`song-select.js:237-238`).
 - Input: alfombra USB (con calibración por roles vía `mat-mapping` en localStorage) y teclado (← ↓ ↑ →). El soporte de guitarra Guitar Hero vive en `gh-play.html` aparte (no se mezcla aquí — game style fundamentalmente distinto, requiere strum + chord + HOPO).
 - Settings persistentes (localStorage): globalOffset, scrollSpeed, timingWindow, NoteSkin PNG personalizado, fondo procedural por título.
 - Calibración: pantalla con metrónomo + tap para medir offset real con sugerencia automática.
@@ -93,7 +93,17 @@ Constantes en `test-pad.html`:
 ### `autostepper.html`
 Generador automático de charts **StepMania (.ssc/.sm)** desde MP3/WAV. Equivalente al `phr00t/AutoStepper` (Java) pero en navegador.
 
-**Pipeline de detección compartida** — vive en `stepmania-web/js/audio-pipeline.js`, expuesta como `window.AudioPipeline.{decodeFile, toMono, bassEmphasize, computeEnergyEnvelope, computeODF, pickPeaks, detectBPM, detectOffset, ensureAudioContext}`. La usan tanto `autostepper.html` (output `.ssc/.sm`) como `gh-autostepper.html` (output `.chart`). El análisis es agnóstico al juego — solo cambia cómo se traduce el resultado a notas.
+**Política unificada 8-lane:** todos los charts se generan como `dance-double` (8 carriles: cardinales + 4 diagonales) — master único por canción. La elección de modo (4/6/8) es decisión de runtime en Sincro Play, no de autoría. En StepMania nativo, los charts aparecen bajo el modo *Doubles* (requiere dos alfombras o remapeo). El integrado en `play.html` (vía `stepmania-web/js/autostepper.js`) y el standalone `autostepper.html` comparten esta política — cero divergencia entre ambos.
+
+**Pipeline de detección compartida** — vive en `stepmania-web/js/audio-pipeline.js`, expuesta como `window.AudioPipeline.{decodeFile, toMono, bassEmphasize, computeEnergyEnvelope, computeODF, pickPeaks, detectBPM, detectOffset, ensureAudioContext, audioBufferToWav}`. La usan tanto `autostepper.html` (output `.ssc/.sm`) como `gh-autostepper.html` (output `.chart`). El análisis es agnóstico al juego — solo cambia cómo se traduce el resultado a notas.
+
+**Cap de duración (Completa / 90s / 120s / 180s)** — selector en el paso "Estilo" de ambos autosteppers SM (integrado en `play.html` y standalone `autostepper.html`). Cuando se elige un cap menor que la duración de la canción:
+- Filtra los onsets a `t < effectiveDuration` (no se generan pasos en sección recortada).
+- Recalcula `totalUnits`, `sampleStart`, `estimateMeter`, `calculateRadarValues` con `effectiveDuration` en lugar de `buffer.duration`.
+- Llama a `AudioPipeline.audioBufferToWav(buffer, effectiveDuration, 1.5)` para producir un WAV PCM 16-bit recortado con fade-out lineal de 1.5s (evita clicks de truncación).
+- Guarda el blob en `q.result.croppedAudio` y nombre en `q.result.croppedAudioName` (extensión `.wav`).
+- `saveAllToLibrary`, `downloadAllZip`, `buildSscForSong` y `buildSmForSong` consumen `croppedAudio || q.file` y `croppedAudioName || q.file.name` con la misma lógica — coherencia del `#MUSIC` field con el archivo realmente empaquetado.
+- Si se elige "Completa", el archivo original (MP3/WAV/etc.) se conserva sin re-codificar.
 
 Algoritmo (optimizado para música bailable: techno, dance, pop, rock):
 1. `decodeAudioData` → mono Float32Array

@@ -63,12 +63,14 @@ const LANE_CONFIGS = {
   }
 };
 function getActiveLaneConfig(nativeLanes) {
-  // mod overrides chart-native; otherwise use whatever the chart was authored for
+  // Runtime decides lane count via mods. Default is always 4 (clásico), the
+  // chart's nativeLanes is just the "master" complexity from which we
+  // redistribute. Authoring at 8 + playing default 4 = compress 8→4 every play.
   if (typeof activeMods !== 'undefined') {
     if (activeMods.full) return LANE_CONFIGS[8];
     if (activeMods.solo) return LANE_CONFIGS[6];
   }
-  return LANE_CONFIGS[nativeLanes] || LANE_CONFIGS[4];
+  return LANE_CONFIGS[4];
 }
 
 let gameState = null;
@@ -102,8 +104,12 @@ function recomputePlayfieldSize() {
   buildArrowSprites();
 }
 function resizeCanvas() {
+  // Reservamos 52px abajo para el footer .gameHUD, que es position:fixed.
+  // Sin esto las notas que aún no han llegado al receptor (viven en la mitad
+  // inferior del canvas mientras caen) se ocultarían tras el footer.
+  const HUD_FOOTER_H = 52;
   canvasW = canvas.width = window.innerWidth;
-  canvasH = canvas.height = window.innerHeight;
+  canvasH = canvas.height = Math.max(200, window.innerHeight - HUD_FOOTER_H);
   recomputePlayfieldSize();
 }
 window.addEventListener('resize', resizeCanvas);
@@ -345,6 +351,10 @@ async function startGame() {
     keyHeld:      new Array(N).fill(false),
     padPrev:      new Array(N).fill(false),
     flashTime:    new Array(N).fill(0),
+    // Flash rojo en el receptor cuando se pierde una nota (no se presionó a
+    // tiempo) o cuando se golpea una mine. Es el feedback visual inmediato
+    // pegado al receptor — sin esto el jugador solo ve el texto MISS lejos.
+    missFlashTime: new Array(N).fill(0),
     hitFx: [],   // {lane, t}
     songInfo: `${selectedSong.title} — ${selectedChart.name} ★${selectedChart.rating}${laneConfig.lanes !== nativeLanes ? ` · ${laneConfig.label}` : ''}`,
     finished: false,
@@ -506,6 +516,7 @@ function gameLoop() {
         n.judged = 'mine-hit';
         gameState.score = Math.max(0, gameState.score - 200);
         gameState.combo = 0;
+        gameState.missFlashTime[n.lane] = performance.now();
         showJudgment('miss');
       } else if (audioTime > n.time + T.mine) {
         n.judged = 'mine-pass';
@@ -516,6 +527,7 @@ function gameLoop() {
       n.judged = 'miss';
       gameState.judgments.miss++;
       gameState.combo = 0;
+      gameState.missFlashTime[n.lane] = performance.now();
       showJudgment('miss');
     }
   }
@@ -622,6 +634,11 @@ function showJudgment(judg) {
   const el = document.getElementById('hudJudgment');
   el.textContent = judg.toUpperCase();
   el.className = 'judgment show ' + judg;
+  // Posición ENCIMA del receptor — receptorY se calcula en render() con la
+  // misma fórmula. Le restamos ~55px para que quede claramente arriba sin
+  // tapar las notas que se acercan ni invadir el topbar.
+  const receptorY = Math.round(110 * uiScale);
+  el.style.top = Math.max(60, receptorY - 55) + 'px';
   setTimeout(() => { if (el.classList) el.classList.remove('show'); }, 400);
 }
 
@@ -722,6 +739,24 @@ function render(audioTime) {
       ctx2d.beginPath();
       ctx2d.arc(cx, cy, receptorRadius - 2, 0, Math.PI*2);
       ctx2d.fill();
+    }
+    // Miss flash: anillo rojo expansivo cuando se pierde nota o se pisa mine.
+    // Mismo principio que los hit fx pero centrado en el receptor del lane,
+    // así el ojo del jugador (mirando los receptores) capta el fallo al
+    // instante en lugar de tener que leer el texto MISS.
+    const missAge = (performance.now() - gameState.missFlashTime[i]) / 350;
+    if (missAge >= 0 && missAge < 1) {
+      const a = 1 - missAge;
+      ctx2d.save();
+      ctx2d.globalAlpha = a;
+      ctx2d.shadowBlur = 22;
+      ctx2d.shadowColor = '#ff3366';
+      ctx2d.strokeStyle = '#ff3366';
+      ctx2d.lineWidth = 5;
+      ctx2d.beginPath();
+      ctx2d.arc(cx, cy, receptorRadius * (1 + missAge * 0.6), 0, Math.PI*2);
+      ctx2d.stroke();
+      ctx2d.restore();
     }
     // Receptor arrow outline (transparent)
     const sprite = getArrowSprite(rotations[i], 'rgba(160,160,180,0.35)');
@@ -936,17 +971,36 @@ async function endGame() {
     }
   }
 
-  document.getElementById('resultsTitle').textContent = grade + ' — ' + Math.round(accuracy) + '%';
-  let html = `<div style="text-align:center;font-size:0.9em;color:#aaa;margin-bottom:14px">${gameState.songInfo}</div>`;
-  html += `<div class="stat-line"><span class="key">Score:</span><span style="color:#ffbe0b;font-weight:700">${gameState.score.toLocaleString()}</span></div>`;
-  html += `<div class="stat-line"><span class="key">Combo máximo:</span><span>${gameState.maxCombo}</span></div>`;
-  html += `<div class="stat-line"><span class="key" style="color:#00f5d4">Marvelous:</span><span>${j.marvelous}</span></div>`;
-  html += `<div class="stat-line"><span class="key" style="color:#ffbe0b">Perfect:</span><span>${j.perfect}</span></div>`;
-  html += `<div class="stat-line"><span class="key" style="color:#00ff64">Great:</span><span>${j.great}</span></div>`;
-  html += `<div class="stat-line"><span class="key" style="color:#3a86ff">Good:</span><span>${j.good}</span></div>`;
-  html += `<div class="stat-line"><span class="key" style="color:#ff006e">Bad:</span><span>${j.bad}</span></div>`;
-  html += `<div class="stat-line"><span class="key" style="color:#ff3366">Miss:</span><span>${j.miss}</span></div>`;
-  document.getElementById('resultsContent').innerHTML = html;
+  document.getElementById('resultsTitle').textContent = gameState.songInfo || 'Resultados';
+  // Resumen estilo SM5: grade gigante + score/accuracy/maxcombo arriba, grid
+  // de judgments con barra proporcional al % del total. Cada barra usa
+  // currentColor de su clase (.j-marvelous, .j-perfect…) para el relleno.
+  const gradeClass = 'g-' + grade.toLowerCase();
+  const rows = [
+    ['marvelous','Marvelous'], ['perfect','Perfect'], ['great','Great'],
+    ['good','Good'], ['bad','Bad'], ['miss','Miss'],
+  ];
+  const judgmentRows = rows.map(([k, label]) => {
+    const count = j[k] || 0;
+    const pct = total ? (count / total) * 100 : 0;
+    return `
+      <div class="judgment-row j-${k}">
+        <span class="jname">${label}</span>
+        <span class="jbar"><i style="width:${pct.toFixed(1)}%"></i></span>
+        <span class="jcount">${count}</span>
+      </div>`;
+  }).join('');
+  document.getElementById('resultsContent').innerHTML = `
+    <div class="results-header">
+      <div class="results-grade ${gradeClass}">${grade}</div>
+      <div class="results-summary">
+        <div class="cell"><div class="lbl">Score</div><div class="val" style="color:#ffbe0b">${gameState.score.toLocaleString()}</div></div>
+        <div class="cell"><div class="lbl">Accuracy</div><div class="val">${accuracy.toFixed(2)}%</div></div>
+        <div class="cell"><div class="lbl">Max Combo</div><div class="val" style="color:#00ff64">${gameState.maxCombo}</div></div>
+      </div>
+    </div>
+    <div class="results-judgments">${judgmentRows}</div>
+  `;
   stopGame();
   goto('results');
   // Hook de modo playlist: si hay sesión activa, inyecta banner de siguiente

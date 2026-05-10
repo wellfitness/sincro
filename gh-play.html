@@ -456,7 +456,10 @@
   #setup-screen.hidden { display: none; }
 
   #game-screen {
-    position: fixed; inset: 0;
+    /* bottom:52px reserva el espacio del footer .hud (position:fixed). El
+       canvas#highway hereda esa altura vía width/height:100%, así su bitmap
+       (dimensionado en JS a innerHeight-52) se mapea 1:1 sin distorsión. */
+    position: fixed; top: 0; left: 0; right: 0; bottom: 52px;
     background: linear-gradient(180deg, #000 0%, #0a0a14 100%);
   }
   canvas#highway {
@@ -464,33 +467,54 @@
     display: block;
   }
 
+  /* HUD = footer delgado (52px) anclado al borde inferior. Estructura:
+     [título canción] · [Score] · [Combo · multiplicador] · [Notas hit/total].
+     El judge-text vuela centrado sobre el highway, no en el footer. */
   .hud {
-    position: absolute; top: 20px; left: 20px; right: 20px;
-    display: flex; justify-content: space-between; align-items: flex-start;
+    position: fixed; left: 0; right: 0; bottom: 0;
+    height: 52px; padding: 0 18px;
+    display: flex; align-items: center; gap: 18px;
+    background: rgba(0,0,0,0.78);
+    border-top: 1px solid rgba(249,115,22,0.35);
+    backdrop-filter: blur(8px);
     pointer-events: none; z-index: 10;
   }
-  .hud-left, .hud-right, .hud-center {
-    background: rgba(0,0,0,0.55); padding: 12px 18px;
-    border-radius: 10px; backdrop-filter: blur(6px);
-    border: 1px solid rgba(255,255,255,0.08);
+  .hud .hud-cell { display: flex; align-items: center; gap: 6px; }
+  .hud .hud-song {
+    flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--gris-300); font-size: 0.9em;
+    font-family: var(--font-mono); font-weight: 700;
   }
-  .hud .label { font-size: 0.7em; color: var(--gris-400); text-transform: uppercase; letter-spacing: 0.05em; }
-  .hud .value { font-family: var(--font-display); font-size: 1.6em; color: #fff; line-height: 1; }
-  .hud-center .multiplier {
-    font-size: 2em; color: var(--fret-yellow);
+  .hud .label {
+    font-size: 0.68em; color: var(--gris-400);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .hud .value {
+    font-family: var(--font-display); font-size: 1.3em; color: #fff;
+    line-height: 1;
+  }
+  .hud .multiplier {
+    font-family: var(--font-display); font-size: 1.5em;
+    color: var(--fret-yellow); line-height: 1;
     text-shadow: 0 0 10px rgba(250,204,21,0.6);
   }
-  .hud-right { text-align: right; }
 
+  /* judge-text aparece JUSTO ENCIMA del hit zone (que vive a canvasH*0.88).
+     Antes estaba en top:60% — se perdía visualmente porque los ojos del
+     jugador están en los receptores, abajo. Pegado a top:78% queda en la
+     franja donde el ojo ya está mirando. Pequeño fondo translúcido para
+     contraste cuando el highway está iluminado. */
   .judge-text {
-    position: absolute; left: 50%; top: 60%;
+    position: absolute; left: 50%; top: 78%;
     transform: translate(-50%, -50%);
     font-family: var(--font-display); font-size: 2em;
-    text-shadow: 0 0 20px currentColor;
+    background: rgba(0,0,0,0.5); padding: 4px 18px; border-radius: 8px;
+    text-shadow: 0 0 14px currentColor, 0 1px 3px rgba(0,0,0,0.9);
     pointer-events: none; opacity: 0;
     transition: opacity 0.2s, transform 0.2s;
   }
-  .judge-text.show { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+  .judge-text.show { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
   .judge-perfect { color: var(--fret-yellow); }
   .judge-good    { color: var(--color-success); }
   .judge-miss    { color: var(--rosa-500); }
@@ -506,14 +530,14 @@
 
   /* ===== RESULTS ===== */
   #results-screen {
-    padding: 30px 20px; max-width: 700px; margin: 0 auto;
+    padding: 30px 20px; max-width: 760px; margin: 0 auto;
     min-height: 100vh; display: none; flex-direction: column; gap: 18px;
   }
   #results-screen.active { display: flex; }
   #results-screen h1 {
-    text-align: center; font-family: var(--font-display); font-size: 2.4em;
-    background: linear-gradient(90deg, var(--fret-yellow), var(--fret-orange), var(--fret-red));
-    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-align: center; font-family: var(--font-display); font-size: 1.9em;
+    color: var(--gris-300); font-weight: normal;
+    word-break: break-word;
   }
   .results-stats {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -525,6 +549,69 @@
   }
   .results-stat .label { color: var(--gris-400); font-size: 0.85em; }
   .results-stat .value { color: var(--fret-yellow); font-size: 1.8em; font-weight: 700; font-family: var(--font-display); margin-top: 4px; }
+
+  /* ===== Resumen estilo StepMania (grade + grid judgments con barra) =====
+     Grade gigante a la izquierda con glow del color del tier; a la derecha
+     resumen de Score/Accuracy/MaxCombo. Debajo, una fila por judgment con
+     barra horizontal proporcional al % del total. */
+  .results-header {
+    display: grid; grid-template-columns: auto 1fr; gap: 22px;
+    align-items: center;
+    background: rgba(0,0,0,0.35); border: 1px solid rgba(249,115,22,0.2);
+    border-radius: 14px; padding: 20px 22px;
+  }
+  .results-grade {
+    font-family: var(--font-display); font-size: 5em; line-height: 1;
+    text-align: center; min-width: 110px;
+    text-shadow: 0 0 30px currentColor, 0 0 14px rgba(0,0,0,0.85);
+  }
+  .results-grade.g-s { color: var(--fret-green); }
+  .results-grade.g-a { color: var(--fret-yellow); }
+  .results-grade.g-b { color: var(--fret-blue); }
+  .results-grade.g-c { color: var(--fret-orange); }
+  .results-grade.g-d, .results-grade.g-f { color: var(--fret-red); }
+  .results-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .results-summary .cell {
+    background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; padding: 10px 12px; text-align: center;
+  }
+  .results-summary .cell .lbl {
+    color: var(--gris-400); font-size: 0.72em;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .results-summary .cell .val {
+    font-family: var(--font-display); font-size: 1.4em; color: #fff; margin-top: 2px;
+  }
+  .results-judgments {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 18px;
+    background: rgba(0,0,0,0.35); border: 1px solid rgba(249,115,22,0.2);
+    border-radius: 14px; padding: 16px 22px;
+  }
+  @media (max-width: 540px) {
+    .results-header { grid-template-columns: 1fr; }
+    .results-judgments { grid-template-columns: 1fr; }
+  }
+  .judgment-row {
+    display: grid; grid-template-columns: 100px 1fr 56px;
+    align-items: center; gap: 10px; padding: 6px 4px;
+    font-family: var(--font-mono); font-size: 0.92em;
+  }
+  .judgment-row .jname { font-weight: 700; }
+  .judgment-row .jbar {
+    height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px;
+    overflow: hidden;
+  }
+  .judgment-row .jbar > i {
+    display: block; height: 100%;
+    background: currentColor; opacity: 0.85;
+    transition: width 0.4s ease-out;
+  }
+  .judgment-row .jcount { text-align: right; color: #fff; font-weight: 700; }
+  .j-perfect    { color: var(--fret-yellow); }
+  .j-good       { color: var(--color-success); }
+  .j-bad        { color: var(--fret-orange); }
+  .j-miss       { color: var(--rosa-500); }
+  .j-overstrum  { color: var(--gris-400); }
 
   .footer-link {
     text-align: center; color: var(--gris-500); font-size: 0.85em;
@@ -588,6 +675,9 @@
     max-width: 1600px; margin: 0 auto;
     min-height: 100vh; display: flex; flex-direction: column; gap: 20px;
   }
+  /* Tocar es vista de selección — no necesita ancho de cockpit. 1000px
+     mejora la legibilidad y mantiene los cards a una proporción cómoda. */
+  #gh-songs-screen { max-width: 1000px; }
   .gh-screen.hidden { display: none; }
   .gh-screen h1 {
     text-align: center; font-family: var(--font-display); font-size: 2.4em;
@@ -652,6 +742,34 @@
 
   /* Banner pequeño de calibración para el menú GH (más compacto que en Tocar) */
   #gh-menu-screen .calib-banner { font-size: 0.85em; padding: 10px 14px; }
+
+  /* Comparador de densidad por dificultad GH: 4 barras de altura creciente
+     reflejando los caps NPS de difficulty-tiers.js (1.4/2.5/4.5/7.5). Mismo
+     lenguaje visual que play.html (SM) pero acentuado en naranja GH. */
+  .diff-density-bars {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 28px;
+    padding: 2px 6px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(249,115,22,0.18);
+    border-radius: 6px;
+  }
+  .diff-density-bars .db-bar {
+    width: 7px;
+    background: rgba(255,255,255,0.18);
+    border-radius: 2px 2px 0 0;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  .diff-density-bars .db-bar[data-tier="EasySingle"]   { height: 28%; }
+  .diff-density-bars .db-bar[data-tier="MediumSingle"] { height: 50%; }
+  .diff-density-bars .db-bar[data-tier="HardSingle"]   { height: 72%; }
+  .diff-density-bars .db-bar[data-tier="ExpertSingle"] { height: 100%; }
+  .diff-density-bars .db-bar.on {
+    background: linear-gradient(180deg, #fbbf24, var(--gh-accent));
+    box-shadow: 0 0 8px rgba(249,115,22,0.6);
+  }
 </style>
 </head>
 <body>
@@ -685,19 +803,31 @@
   <!-- Selector de dificultad común — el ajuste más "por canción" queda visible
        aquí; todo lo demás (speed, offset, HOPO) vive en el modal ⚙. -->
   <div class="card">
-    <div class="form-row" style="margin-bottom:0">
-      <label>Dificultad común:</label>
-      <select id="difficulty" onchange="onGHDiffChange()" style="flex:0 0 auto;min-width:160px">
-        <option value="EasySingle">Easy</option>
-        <option value="MediumSingle" selected>Medium</option>
-        <option value="HardSingle">Hard</option>
-        <option value="ExpertSingle">Expert</option>
-      </select>
-      <span style="font-size:0.82em;color:var(--gris-500);flex:1;min-width:200px">
-        Si la canción no tiene esta dificultad, se usa la más cercana.
-      </span>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end">
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:160px">
+        <label for="difficulty" style="color:var(--gris-400);font-size:0.82em">Dificultad común</label>
+        <select id="difficulty" onchange="onGHDiffChange()" style="min-width:160px">
+          <option value="EasySingle">Easy</option>
+          <option value="MediumSingle" selected>Medium</option>
+          <option value="HardSingle">Hard</option>
+          <option value="ExpertSingle">Expert</option>
+        </select>
+      </div>
+      <div style="flex:1;min-width:240px;display:flex;flex-direction:column;gap:6px">
+        <span style="color:var(--gris-400);font-size:0.82em">Densidad de notas</span>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div id="ghDiffDensityBars" class="diff-density-bars" role="img" aria-label="Comparativa de densidad entre las 4 dificultades">
+            <div class="db-bar" data-tier="EasySingle"   title="Easy · ~1-1.5 notas/seg"></div>
+            <div class="db-bar" data-tier="MediumSingle" title="Medium · ~2-3 notas/seg"></div>
+            <div class="db-bar" data-tier="HardSingle"   title="Hard · ~4-5 notas/seg"></div>
+            <div class="db-bar" data-tier="ExpertSingle" title="Expert · hasta 7-8 notas/seg"></div>
+          </div>
+          <span id="ghDiffDensityText" style="color:var(--gh-accent);font-size:0.85em;line-height:1.3">—</span>
+        </div>
+      </div>
       <button class="action-btn secondary" onclick="openGHConfig()" style="font-size:0.85em;padding:8px 14px">⚙ Ajustes</button>
     </div>
+    <p style="margin:10px 0 0;font-size:0.82em;color:var(--gris-500)">Si la canción no tiene esta dificultad, se usa la más cercana.</p>
   </div>
 
   <!-- Barra "Crear partida" sticky-top. Activa al marcar ≥1 partitura. -->
@@ -717,8 +847,7 @@
   </div>
 
   <div style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-    <button class="action-btn secondary" onclick="goto('library')">📚 Gestionar mis canciones</button>
-    <a href="play.html" class="action-btn secondary" style="text-decoration:none;display:inline-block">⌂ Volver a Sincro</a>
+    <button class="action-btn secondary" onclick="goto('library')">📚 Gestionar mis canciones</button>    
   </div>
 </div>
 
@@ -826,18 +955,12 @@
 <div id="game-screen">
   <canvas id="highway"></canvas>
   <div class="hud">
-    <div class="hud-left">
-      <div class="label">Score</div>
-      <div class="value" id="hudScore">0</div>
-    </div>
-    <div class="hud-center">
-      <div class="multiplier" id="hudMult">x1</div>
-      <div class="label" style="text-align:center">Combo <span id="hudCombo">0</span></div>
-    </div>
-    <div class="hud-right">
-      <div class="label">Notas</div>
-      <div class="value"><span id="hudHit">0</span> / <span id="hudTotal">0</span></div>
-    </div>
+    <!-- Footer delgado: título canción + métricas en cells horizontales.
+         El judge-text (PERFECT/GOOD/MISS) sigue volando centrado en pantalla. -->
+    <div class="hud-song" id="hudSong"></div>
+    <div class="hud-cell"><span class="label">Score</span><span class="value" id="hudScore">0</span></div>
+    <div class="hud-cell"><span class="label">Combo</span><span class="value" id="hudCombo">0</span><span class="multiplier" id="hudMult">x1</span></div>
+    <div class="hud-cell"><span class="label">Notas</span><span class="value"><span id="hudHit">0</span>/<span id="hudTotal">0</span></span></div>
   </div>
   <div class="judge-text" id="judgeText"></div>
   <div class="pause-overlay" id="pauseOverlay">
@@ -938,6 +1061,21 @@ async function refreshLibraryList() {
   }
   const entries = await window.GHLibrary.all();
   countEl.textContent = entries.length ? `(${entries.length})` : '';
+  // Recalcular la caché de notas/diff/chart para la leyenda de densidad.
+  // Se hace aquí (no en cada render del select) porque parsear chartText
+  // de varias canciones tiene coste — pero solo cambia cuando la biblioteca
+  // cambia. Mantiene IDs ya cacheados intactos si no hay cambio.
+  const seenIds = new Set();
+  for (const e of entries) {
+    seenIds.add(e.id);
+    if (!_ghNotesByDiffCache.has(e.id) && e.chartText) {
+      _ghNotesByDiffCache.set(e.id, _ghCountNotesPerDiff(e.chartText));
+    }
+  }
+  for (const id of [..._ghNotesByDiffCache.keys()]) {
+    if (!seenIds.has(id)) _ghNotesByDiffCache.delete(id);
+  }
+  updateGHDiffDensityIndicator();
   if (!entries.length) {
     el.innerHTML = '<p style="color:var(--gris-500)">Tu biblioteca está vacía. Genera partituras en <a href="gh-autostepper.html" style="color:var(--gh-accent)">Crear partituras</a> y guárdalas aquí, o usa el cargador de abajo para importar un ZIP/.chart suelto.</p>';
     return;
@@ -1449,9 +1587,64 @@ function applyGlobalConfigAndPlay() {
   startGame(effective);
 }
 
-// Stub para handler del select global. Como la diff global se aplica solo al
-// arrancar la siguiente partida, no hace falta más que reflejar el cambio.
-function onGHDiffChange() { /* no-op por ahora */ }
+// Handler del select global de dificultad. La diff se aplica al arrancar la
+// siguiente partida; aquí solo refrescamos la leyenda visual de densidad.
+function onGHDiffChange() {
+  updateGHDiffDensityIndicator();
+}
+
+// Leyenda de densidad por dificultad GH. Cadencias teóricas alineadas con
+// los caps NPS de difficulty-tiers.js (Easy 1.4 / Medium 2.5 / Hard 4.5 /
+// Expert 7.5 notas/seg) — calibrados a charts oficiales GH 1/2/3 y a la
+// guía diff_guitar de la comunidad Clone Hero.
+const _GH_DIFF_LEGEND = {
+  EasySingle:   { rate: '~1-1.5 notas/seg',  mood: 'pocas notas, sin chords' },
+  MediumSingle: { rate: '~2-3 notas/seg',    mood: 'ritmo cómodo, chords ocasionales' },
+  HardSingle:   { rate: '~4-5 notas/seg',    mood: 'ritmo rápido, los 5 trastes y chords' },
+  ExpertSingle: { rate: 'hasta 7-8 notas/seg', mood: 'sin descanso, HOPOs y chords frecuentes' }
+};
+
+// Caché de notas por dificultad por chart-id. Se rellena en refreshLibraryList
+// para evitar parsear el chartText cada vez que cambia el dropdown.
+const _ghNotesByDiffCache = new Map(); // id → {EasySingle: n, MediumSingle: n, ...}
+
+function _ghCountNotesPerDiff(chartText) {
+  const out = { EasySingle: 0, MediumSingle: 0, HardSingle: 0, ExpertSingle: 0 };
+  for (const d of Object.keys(out)) {
+    const re = new RegExp('\\[' + d + '\\]\\s*\\{([\\s\\S]*?)\\}', 'm');
+    const m = chartText.match(re);
+    if (m) {
+      const noteLines = m[1].match(/^\s*\d+\s*=\s*N\s+\d+\s+\d+/gm) || [];
+      out[d] = noteLines.length;
+    }
+  }
+  return out;
+}
+
+function updateGHDiffDensityIndicator() {
+  const bars = document.getElementById('ghDiffDensityBars');
+  const text = document.getElementById('ghDiffDensityText');
+  if (!bars || !text) return;
+  const sel = document.getElementById('difficulty');
+  const key = sel ? sel.value : 'MediumSingle';
+  bars.querySelectorAll('.db-bar').forEach(b => {
+    b.classList.toggle('on', b.dataset.tier === key);
+  });
+  const info = _GH_DIFF_LEGEND[key];
+  if (!info) { text.textContent = ''; return; }
+  // Media real desde la biblioteca: solo cuenta charts que tienen ese diff
+  let avg = null;
+  if (_ghNotesByDiffCache.size > 0) {
+    const counts = [];
+    for (const counts_per_diff of _ghNotesByDiffCache.values()) {
+      const n = counts_per_diff[key];
+      if (typeof n === 'number' && n > 0) counts.push(n);
+    }
+    if (counts.length) avg = Math.round(counts.reduce((a,b) => a+b, 0) / counts.length);
+  }
+  const avgPart = avg !== null ? ` · ≈${avg} notas por canción en tu biblioteca` : '';
+  text.textContent = `${info.rate} · ${info.mood}${avgPart}`;
+}
 
 // updatePlayState quedó obsoleta: el big CTA "Tocar canción" ya no existe.
 // Se conserva como no-op para no romper llamadas residuales (returnToSetup,
@@ -1720,6 +1913,14 @@ function startGame(diffOverride) {
     maxCombo: 0,
     hits: 0,
     misses: 0,
+    // Desglose por judgement para el resumen final estilo SM5.
+    // overstrums = strums sin frets correctos (combo break sin nota concreta).
+    judgments: { perfect: 0, good: 0, bad: 0, miss: 0 },
+    overstrums: 0,
+    // Flash visual por receptor — { kind, time } con kind=perfect/good/bad/miss.
+    // El render() dibuja un anillo expansivo del color del kind durante 180ms.
+    // Es el feedback inmediato pegado al receptor (donde miran los ojos).
+    fretFlashes: [null, null, null, null, null],
     starPower: 0,
     starPowerActive: false,
     audioStartTime: 0,
@@ -1741,6 +1942,12 @@ function startGame(diffOverride) {
   document.getElementById('hudScore').textContent = '0';
   document.getElementById('hudCombo').textContent = '0';
   document.getElementById('hudMult').textContent = 'x1';
+  // Título canción + dificultad en el footer (truncado por CSS si no cabe).
+  const songTitle = (song.meta && (song.meta.Name || song.meta.Title)) || 'Sin título';
+  const songArtist = (song.meta && song.meta.Artist) ? ' — ' + song.meta.Artist : '';
+  const diffShort = diff.replace('Single', '').trim();
+  document.getElementById('hudSong').textContent =
+    `${songTitle}${songArtist}${diffShort ? '  ·  ' + diffShort : ''}`;
 
   // Setup canvas
   canvas = document.getElementById('highway');
@@ -1901,12 +2108,21 @@ function judgeHit(note, idx, t) {
   if (dt < TIMING_PERFECT) kind = 'perfect';
   else if (dt < TIMING_GOOD) kind = 'good';
   game.score += SCORES[kind] * getMultiplier();
+  game.judgments[kind]++;
+  flashFrets(note.frets, kind, t);
   if (idx === game.nextNoteIdx) game.nextNoteIdx++;
   showJudge(kind);
   updateHud();
 }
 
 function breakCombo() {
+  // Overstrum: strum sin frets correctos. No es un miss de nota concreta,
+  // pero rompe combo. Lo trackeamos aparte para el resumen.
+  game.overstrums++;
+  // Flash rojo en TODOS los frets para que el overstrum se vea sin
+  // ambigüedad (no hay un fret concreto al que asociarlo).
+  const ctx = window.AudioPipeline.ensureAudioContext();
+  flashFrets([0,1,2,3,4], 'miss', ctx.currentTime - game.audioStartTime);
   if (game.combo > 0) {
     game.combo = 0;
     showJudge('miss');
@@ -1921,11 +2137,22 @@ function processMisses(t) {
     if (n.time + TIMING_BAD < t) {
       n.judged = true;
       game.misses++;
+      game.judgments.miss++;
+      flashFrets(n.frets, 'miss', t);
       game.combo = 0;
       if (i === game.nextNoteIdx) game.nextNoteIdx++;
       showJudge('miss');
       updateHud();
     } else break;
+  }
+}
+
+// Marca cada fret con el kind del judgment + timestamp. El render() dibujará
+// un anillo expansivo coloreado durante FLASH_DURATION segundos.
+function flashFrets(frets, kind, t) {
+  if (!game) return;
+  for (const f of frets) {
+    if (f >= 0 && f < 5) game.fretFlashes[f] = { kind, time: t };
   }
 }
 
@@ -1980,11 +2207,25 @@ function updateHud() {
 //                          RENDER
 // ============================================================================
 function resizeCanvas() {
+  // Reservamos 52px abajo para el footer .hud (position:fixed). Sin esto el
+  // hit zone (canvasH*0.88 ≈ 950px en 1080p) acabaría parcialmente tapado
+  // por el footer y los receptores quedarían escondidos.
+  const HUD_FOOTER_H = 52;
   canvasW = canvas.width = window.innerWidth;
-  canvasH = canvas.height = window.innerHeight;
+  canvasH = canvas.height = Math.max(200, window.innerHeight - HUD_FOOTER_H);
 }
 
 const FRET_COLORS = ['#10b981', '#ef4444', '#facc15', '#3b82f6', '#f97316'];
+// Colores del flash de feedback en los receptores. Mapean a las clases
+// .j-perfect/.j-good/.j-bad/.j-miss del resumen final, así el ojo aprende
+// la asociación color↔judgment desde la propia partida.
+const FLASH_COLORS = {
+  perfect: '#facc15',  // amarillo (fret-yellow)
+  good:    '#10b981',  // verde (color-success)
+  bad:     '#f97316',  // naranja (fret-orange)
+  miss:    '#ef4444',  // rojo (color-error)
+};
+const FLASH_DURATION = 0.18;  // segundos — corto para no estorbar lectura
 
 function render(t) {
   ctx2d.clearRect(0, 0, canvasW, canvasH);
@@ -2044,6 +2285,25 @@ function render(t) {
       ctx2d.fillStyle = '#fff';
       ctx2d.fill();
       ctx2d.shadowBlur = 0;
+    }
+    // Flash de feedback: anillo expansivo del color del último judgment de
+    // este fret. Crece de 1× a 1.7× del radio mientras se desvanece, así el
+    // ojo capta el éxito/fallo en la zona donde ya está mirando.
+    const flash = game && game.fretFlashes[i];
+    if (flash && t - flash.time < FLASH_DURATION) {
+      const age = (t - flash.time) / FLASH_DURATION;   // 0 → 1
+      const alpha = 1 - age;
+      const radiusMul = 1 + age * 0.7;
+      ctx2d.save();
+      ctx2d.globalAlpha = alpha;
+      ctx2d.shadowBlur = 26;
+      ctx2d.shadowColor = FLASH_COLORS[flash.kind];
+      ctx2d.strokeStyle = FLASH_COLORS[flash.kind];
+      ctx2d.lineWidth = 5;
+      ctx2d.beginPath();
+      ctx2d.arc(cx, hitY, receptorRadius * radiusMul, 0, Math.PI * 2);
+      ctx2d.stroke();
+      ctx2d.restore();
     }
   }
 
@@ -2121,17 +2381,49 @@ function finishGame() {
   document.getElementById('game-screen').classList.remove('active');
   document.getElementById('results-screen').classList.add('active');
   document.body.classList.remove('playing');
+  // Título: canción + dificultad. El grade se muestra grande en el resumen.
+  const diffShort = game.diff.replace('Single', '').trim();
   document.getElementById('resultsTitle').textContent =
-    `${grade} · ${escHtml(song.meta.Name || 'Sin título')}`;
+    `${song.meta.Name || 'Sin título'}${diffShort ? ' · ' + diffShort : ''}`;
+
+  // Resumen estilo SM5: grade gigante + score/accuracy/maxCombo + grid de
+  // judgments con barra horizontal proporcional al % del total. Overstrums
+  // se muestran como métrica adicional (combo breaks sin nota).
+  const j = game.judgments;
+  const gradeClass = 'g-' + grade.toLowerCase();
+  const rows = [
+    ['perfect', 'Perfect'],
+    ['good',    'Good'],
+    ['bad',     'Bad'],
+    ['miss',    'Miss'],
+  ];
+  const judgmentRows = rows.map(([k, label]) => {
+    const count = j[k] || 0;
+    const pct = total ? (count / total) * 100 : 0;
+    return `
+      <div class="judgment-row j-${k}">
+        <span class="jname">${label}</span>
+        <span class="jbar"><i style="width:${pct.toFixed(1)}%"></i></span>
+        <span class="jcount">${count}</span>
+      </div>`;
+  }).join('') + `
+      <div class="judgment-row j-overstrum">
+        <span class="jname">Overstrum</span>
+        <span class="jbar"><i style="width:0%"></i></span>
+        <span class="jcount">${game.overstrums}</span>
+      </div>`;
 
   const stats = document.getElementById('resultsStats');
   stats.innerHTML = `
-    <div class="results-stat"><div class="label">Score</div><div class="value">${Math.round(game.score)}</div></div>
-    <div class="results-stat"><div class="label">Accuracy</div><div class="value">${accuracy.toFixed(1)}%</div></div>
-    <div class="results-stat"><div class="label">Hits</div><div class="value">${game.hits}/${total}</div></div>
-    <div class="results-stat"><div class="label">Misses</div><div class="value">${game.misses}</div></div>
-    <div class="results-stat"><div class="label">Max combo</div><div class="value">${game.maxCombo}</div></div>
-    <div class="results-stat"><div class="label">Dificultad</div><div class="value" style="font-size:1em">${game.diff.replace('Single','')}</div></div>
+    <div class="results-header">
+      <div class="results-grade ${gradeClass}">${grade}</div>
+      <div class="results-summary">
+        <div class="cell"><div class="lbl">Score</div><div class="val" style="color:var(--fret-yellow)">${Math.round(game.score).toLocaleString()}</div></div>
+        <div class="cell"><div class="lbl">Accuracy</div><div class="val">${accuracy.toFixed(2)}%</div></div>
+        <div class="cell"><div class="lbl">Max Combo</div><div class="val" style="color:var(--color-success)">${game.maxCombo}</div></div>
+      </div>
+    </div>
+    <div class="results-judgments">${judgmentRows}</div>
   `;
   // Hook playlist mode: si hay sesión activa, inyecta banner de siguiente o
   // resumen final. Capturamos los datos antes de game = null.
