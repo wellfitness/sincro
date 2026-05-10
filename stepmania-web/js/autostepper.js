@@ -179,19 +179,13 @@ function snapToResolution(positions, resolution) {
   const sp = RES_SPACING[resolution] || 12;
   return [...new Set(positions.map(p => Math.round(p/sp)*sp))].sort((a,b)=>a-b);
 }
-function generateBaseNotes(positions, difficulty, jumpProb, handsProb, numLanes) {
+function generateBaseNotes(positions, difficulty, jumpProb, handsProb, numLanes, bpm, offsetSec, presetMul) {
   const N = numLanes || 4;
-  let filtered;
-  if (difficulty === 'beginner') {
-    filtered = positions.filter(p => p % 48 === 0).filter((p,i) => i%2===0);
-  } else if (difficulty === 'easy') {
-    filtered = positions.filter(p => p % 24 === 0);
-    if (filtered.length > 80) filtered = filtered.filter((p,i) => i%2===0);
-  } else if (difficulty === 'medium') {
-    filtered = positions.filter(p => p % 12 === 0);
-  } else {
-    filtered = positions.slice();
-  }
+  // Filtrado calibrado a NPS objetivo + minGap absoluto en segundos.
+  // Si DifficultyTiers no está disponible o falta BPM, fallback al pass-through.
+  const filtered = (window.DifficultyTiers && bpm)
+    ? window.DifficultyTiers.filterPositions48(positions, bpm, offsetSec, difficulty, presetMul)
+    : positions.slice();
   const notes = [];
   let last = -1, lastLast = -1;
   const realJumpProb = difficulty === 'challenge' ? jumpProb*1.4 : difficulty === 'hard' ? jumpProb : difficulty === 'medium' ? jumpProb*0.3 : 0;
@@ -399,9 +393,16 @@ async function analyzeOne(q) {
     { key: 'medium', name: 'Medium' }, { key: 'hard', name: 'Hard' },
     { key: 'challenge', name: 'Challenge' }
   ];
+  // Multiplicador del preset (suave/normal/intenso/custom). Modula minGap y
+  // NPS target del filtrado por dificultad de DifficultyTiers.
+  const activePresetEl = document.querySelector('.preset.selected');
+  const presetKey = (activePresetEl && activePresetEl.dataset.preset) || 'normal';
+  const presetMul = (window.DifficultyTiers
+    && window.DifficultyTiers.PRESET_MULTIPLIER[presetKey]) || 1.0;
+
   const charts = [];
   for (const d of diffs) {
-    const baseNotes = generateBaseNotes(positions, d.key, jumpProb, 0.15, numLanes);
+    const baseNotes = generateBaseNotes(positions, d.key, jumpProb, 0.15, numLanes, bpm, offsetSec, presetMul);
     const finalNotes = addHoldsAndRolls(baseNotes, d.key, holdDensity, numLanes);
     const rows = notesToRows(finalNotes, totalUnits, numLanes);
     const count = finalNotes.reduce((s,n) => s + n.cols.filter(c => c===1||c===2||c===4).length, 0);

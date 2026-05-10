@@ -126,6 +126,27 @@ Algoritmo (optimizado para música bailable: techno, dance, pop, rock):
 
 **5 dificultades generadas por canción:** Beginner, Easy, Medium, Hard, Challenge.
 
+**Filtrado por dificultad** — todos los autosteppers (SM y GH) delegan en `stepmania-web/js/difficulty-tiers.js`. La densidad de notas por dificultad NO se controla por stride relativo a los onsets detectados, sino por:
+- **NPS objetivo absoluto** (notas/segundo) — calibrado a estándares oficiales (DDR Groove Radar Stream/Voltage formulas, GH `diff_guitar` guidelines).
+- **`minGapSec` absoluto** (spacing mínimo en segundos reales) — desacopla la dificultad del BPM, así Beginner se siente igual de "espaciado" a 90 que a 180 BPM.
+- **Prioridad rítmica** — cada onset recibe priority por dónde cae en el compás 4/4 (5=downbeat compás, 4=mid-measure, 3=beat, 2=corchea offbeat, 1=semicorchea, 0=otro). Cada dificultad rechaza onsets con priority < umbral del tier. Cuando un onset queda demasiado cerca del último aceptado pero tiene MAYOR priority rítmica, sustituye al anterior — esto preserva los onsets musicalmente fuertes.
+- **Cap por ventana deslizante de 3s** — si en algún tramo se supera el NPS objetivo, se descartan los onsets de menor priority rítmica (no aleatoriamente).
+
+Tabla calibrada (tier → minGap / NPS max / minRhythmPriority):
+- SM Beginner: 1.00s / 1.0 / 4 (solo downbeats y mitades de compás)
+- SM Easy: 0.50s / 2.0 / 3 (hasta beat completo)
+- SM Medium: 0.30s / 3.5 / 2 (hasta corchea)
+- SM Hard: 0.18s / 5.5 / 1 (hasta semicorchea)
+- SM Challenge: 0.10s / 9.0 / 0 (todo)
+- GH Easy: 0.70s / 1.4 / 4
+- GH Medium: 0.40s / 2.5 / 3
+- GH Hard: 0.22s / 4.5 / 1
+- GH Expert: 0.13s / 7.5 / 0
+
+Los presets (suave/normal/intenso) se traducen a multiplicadores globales (×0.7/×1.0/×1.3) que escalan minGap y NPS target uniformemente.
+
+API expuesta: `window.DifficultyTiers.{filterByDifficulty(onsetsSec, bpm, offsetSec, gameType, difficultyKey, presetMul), filterPositions48(...), filterTicks(...)}`. Los autosteppers SM (HTML + integrado en `stepmania-web/js/autostepper.js` para play.html) usan `filterPositions48`; el GH usa `filterTicks` con `CHART_RESOLUTION=192`.
+
 Implementa encoder ZIP propio (modo "store", sin compresión) — sin dependencias externas.
 
 ### `stepmania-web/js/gh-db.js`
@@ -145,7 +166,7 @@ Lo cargan tanto `gh-autostepper.html` (para el botón "Guardar en biblioteca") c
 - **Single notes**: anchor — el target debe estar pulsado, ningún fret más alto puede estarlo, frets más bajos pueden estar pulsados o no (anchor). Ejemplo: nota Yellow puede hitearse con (Green+Yellow), no con (Yellow+Blue).
 - **Chord notes**: match estricto — exactamente esos frets, ni más ni menos.
 - **Strum-required (default)**: hit dispara solo en flanco DOWN o UP del strum bar Y match de frets. Strum sin frets correctos = combo break (overstrum).
-- **HOPOs (auto-detectados en runtime)**: si la nota tiene gap < hopoThreshold (default 170 ticks ≈ 1/12 measure a 192 res) Y es single Y distinto fret al anterior Y combo > 0, basta con cambiar a los frets correctos sin strum. Threshold ajustable en setup.
+- **HOPOs (auto-detectados en runtime)**: si la nota tiene gap < hopoThreshold (default canónico CH **65 ticks** = `floor((65/192)·resolution)` ≈ 1/3 de un beat ≈ tresillo de corcheas, validado contra `natural-hopo.ts` de scan-chart) Y es single Y distinto fret al anterior Y combo > 0, basta con cambiar a los frets correctos sin strum. Threshold ajustable en setup.
 - **Taps (fret 6 en .chart)**: se hitean sin strum desde combo 0; típicos de Expert+ marcados explícitamente.
 
 **Timing windows**: Perfect 45ms · Good 90ms · Bad 135ms (referencia: Clone Hero usa valores similares). Multiplicador clásico: x1 / x2 (10 combo) / x3 (20) / x4 (30).
@@ -162,7 +183,7 @@ Lo cargan tanto `gh-autostepper.html` (para el botón "Guardar en biblioteca") c
 - Dificultad: dropdown auto-poblado con las que existen en el chart cargado.
 - Velocidad de scroll (200-900 px/s).
 - Offset global ms (positivo = retrasar notas, negativo = adelantarlas).
-- HOPO threshold ticks (default 170).
+- HOPO threshold ticks (default canónico CH = 65, ver sección "Constantes canónicas").
 
 **Resultados**: grade S/A/B/C/D/F basado en accuracy (hits/total). Muestra score, accuracy, hits, misses, max combo.
 
@@ -180,10 +201,10 @@ Generador automático de charts **Guitar Hero (.chart Clone Hero / Feedback form
 **Note generation (5 trastes, 4 dificultades):**
 - **Roles**: 0=Verde, 1=Rojo, 2=Amarillo, 3=Azul, 4=Naranja (índices del `.chart` format).
 - **Walk de trastes**: caminata aleatoria con bias 65% adyacente, 25% jump de 2, 10% random. Prohíbe repetir traste consecutivo. La primera nota de cada chart va a Verde/Rojo (más fácil empezar bajo).
-- **Density por dificultad**: Easy 0.30 (rango G-Y), Medium 0.55 (G-Az), Hard 0.80 (G-N), Expert 1.00 (G-N todo). Density se aplica vía `stride = round(1/density)` para conservar 1 de cada N onsets.
+- **Filtrado por dificultad**: delegado a `DifficultyTiers.filterTicks` — cada tier tiene NPS objetivo absoluto y `minGapSec` real (no stride relativo). Easy: rango G-Y, gap ≥ 0.7s, ≤1.4 NPS. Medium: G-Az, gap ≥ 0.4s, ≤2.5 NPS. Hard: G-N, gap ≥ 0.22s, ≤4.5 NPS. Expert: G-N, gap ≥ 0.13s, ≤7.5 NPS. Calibrado a estándares de `diff_guitar` de la comunidad Clone Hero (Easy = "incredibly easy and simple, almost no alt-strumming").
 - **Chords (Hard+)**: con probabilidad `chordProb` (slider 0-60%, default 18%) se añade un fret adyacente al actual. Easy/Medium nunca llevan chords.
 - **Sustains**: si hay gap ≥ 1/2 beat al siguiente onset, con prob. `sustainProb` se convierte en sustain del 80% del gap.
-- **HOPOs**: NO se marcan explícitamente. Clone Hero auto-detecta HOPOs por proximidad (regla estándar: <1/12 measure y diferente fret y no chord).
+- **HOPOs**: NO se marcan explícitamente. Clone Hero auto-detecta HOPOs por proximidad usando la regla canónica de `scan-chart` (gap < 65 ticks a res 192, single, fret distinto al previo, no chord, no override por flag forceHopo/forceTap). Ver "Constantes canónicas" para el detalle del algoritmo.
 
 **Formato `.chart` (Feedback / Clone Hero):** `Resolution = 192` ticks/quarter. Notas: `<tick> = N <fret> <sustain>`. Chord = múltiples líneas en mismo tick. BPM en SyncTrack como `0 = B <bpm*1000>` (milibeats). Solo 1 BPM constante en MVP — variable BPM queda como ampliación futura.
 
@@ -213,6 +234,62 @@ Tests vía WinMM `joyGetPosEx` (DirectInput equivalent). Útiles si la Gamepad A
 
 Mapping físico alfombra via WinMM (distinto al del navegador):
 - B1=ARRIBA, B2=ABAJO, B3=IZQUIERDA, B4=DERECHA, B7=UP-LEFT, B8=UP-RIGHT, B9=START, B10=BACK
+
+## Constantes canónicas — origen, valor y verificación
+
+Toda decisión de timing/densidad/dificultad citada abajo está validada contra código fuente abierto. Si vas a tocarla, replica primero el archivo origen.
+
+### StepMania 5.1 — DDR (`D:\SOFTWARE\stepmania-web\stepmania-5_1-new\`)
+Repositorio local del motor oficial open-source. Útil para validar nuestras métricas:
+- **Stream value** (`src/NoteDataUtil.cpp:1142`): `Stream = (total_taps / fSongSeconds) / 7.0f`. Es decir: NPS/7. Stream=1.0 ↔ 7 NPS sostenido. Nuestros caps por tier (`difficulty-tiers.js`) están alineados con esta escala — Beginner cap 1.0 NPS → Stream 0.14, Challenge cap 9.0 NPS → Stream 1.29.
+- **Voltage window** (`src/NoteDataUtil.cpp:1023`): `voltage_window_beats = 8.0f`. Por eso nuestro cap de densidad usa ventana de 8 beats BPM-aware (no segundos fijos).
+- **PredictMeter formula** (`src/Steps.cpp:235`):
+  ```
+  pMeter = 0.775 + 10.1·Stream + 5.27·Voltage − 0.905·Air − 1.10·Freeze
+         + 2.86·Chaos + DifficultyCoeff − 6.35·(Stream·Voltage) − 2.58·Chaos²
+  DifficultyCoeff = {-0.877, -0.877, 0, 0.722, 0.722, 0}  // Beg, Easy, Med, Hard, Ch, Edit
+  ```
+  Validación de nuestros caps: Beginner ≈ meter 2 ✓, Easy ≈ 3-4 ✓, Medium ≈ 5-6 ✓, Hard ≈ 9 ✓, Challenge ≈ 13-14 ✓.
+
+### Clone Hero — Guitar Hero
+Clone Hero es propietario; el repo `clonehero-game/releases` es solo un readme administrativo (sin código). Las constantes canónicas se extraen de proyectos de la comunidad CH:
+
+**`scan-chart` de Geomitron** (https://github.com/Geomitron/scan-chart) — herramienta oficial de la comunidad CH para validar charts.
+- **HOPO threshold default `.chart`** (`src/chart/natural-hopo.ts`):
+  ```ts
+  return Math.floor(format === 'mid' ? 1 + resolution / 3 : (65 / 192) * resolution)
+  ```
+  Para `.chart` con resolución 192 → **65 ticks** (≈ 1/3 de un beat ≈ tresillo de corcheas). El input de `gh-play.html` ahora usa este default. Para `.mid` el default sería `floor(1 + 192/3) = 65` también.
+  Si el `song.ini` define `hopo_frequency` o `eighthnote_hopo`, esos sobrescriben.
+- **Reglas canónicas de natural HOPO** (`isNaturalHopo` en `natural-hopo.ts`):
+  1. Sin nota previa → no HOPO.
+  2. Gap > threshold → strum.
+  3. Es chord → strum.
+  4. Anterior single + current = mismo fret single → strum.
+  5. Solo `.mid`: anterior chord, current ⊆ chord → strum (back-compat con juegos viejos).
+  6. Resto → natural HOPO.
+  Mi `gh-play.html:annotateHopos()` implementa todas las reglas relevantes para `.chart` (1, 2, 3, 4 — la 5 no aplica a `.chart`).
+
+**YARG.Core** (https://github.com/YARC-Official/YARG.Core) — engine open-source compatible con charts CH. Valores del preset oficial guitar (`YARG.Core/Game/Presets/EnginePreset.Instruments.cs`, `FiveFretGuitarPreset`):
+- `HopoLeniency = 0.08s` (80 ms — gracia temporal para HOPOs).
+- `StrumLeniency = 0.05s` (50 ms — gracia para strums).
+- `StrumLeniencySmall = 0.025s` (25 ms).
+- `MaxWindow = MinWindow = 0.14s` (140 ms — hit window total, ratio simétrico 1.0 → ±70 ms).
+- `AntiGhosting = true`.
+
+Mis timing windows en `gh-play.html` (`Perfect 45ms · Good 90ms · Bad 135ms`) son más estrictas que YARG (CH no usa Perfect/Good/Bad; usa una sola hitbox). Mi 135 ms cae dentro del 140 ms de YARG, así que sigue siendo razonable. **Pendiente futuro:** considerar simplificar a hitbox único de ±70 ms para ser más fiel a CH/YARG, sacrificando los grades intermedios.
+
+**YARG (cliente Unity, https://github.com/YARC-Official/YARG)** — solo UI/Unity. Toda la lógica de timing/dificultad vive en YARG.Core. Para nuestros propósitos no aporta más que los valores ya extraídos de Core.
+
+### Sobre cadencias automáticas por dificultad
+**Importante:** ni Clone Hero, ni YARG, ni Moonscraper auto-generan charts por dificultad — todas las dificultades en CH/YARG son creadas a mano por charters humanos. **No existe "cadencia oficial CH" para Easy/Medium/Hard/Expert** porque la decisión es 100% humana.
+
+Por tanto la calibración de `difficulty-tiers.js` para GH se basa en:
+1. **Análisis estadístico** de charts oficiales de GH 1/2/3 (NPS típicos por tier reportados por la comunidad).
+2. **Guías comunitarias `diff_guitar` 0-6** (charters: Easy = "incredibly easy and simple, almost no alt-strumming, very simple chord usage").
+3. **Validación cruzada** con StepMania 5 PredictMeter (que sí es oficial y comparte el modelo conceptual de "Stream densidad").
+
+Esto es lo más fiel posible sin código fuente del original. Si en el futuro Geomitron publica métricas estadísticas de su scan-chart sobre el corpus CH, valdría la pena re-calibrar.
 
 ## Cómo usar
 

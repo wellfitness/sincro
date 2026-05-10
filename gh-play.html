@@ -113,6 +113,145 @@
   }
   .center { text-align: center; }
 
+  /* ===== BIG PLAY CTA (arcade-style "Press Start") =====
+     El botón gigante para arrancar la canción. Cuando está disabled se ve
+     apagado; cuando hay chart cargado se enciende, hace un pulse y queda
+     latiendo suavemente para anunciarse desde 1.5–2 m de distancia. */
+  .play-cta-bar {
+    margin: 22px 0 28px;
+    padding: 22px 18px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.7));
+    border: 1px solid rgba(249,115,22,0.18);
+    border-radius: 16px;
+  }
+  .play-cta-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .play-cta-hint {
+    color: var(--gris-400);
+    font-size: 0.88em;
+    letter-spacing: 0.02em;
+    font-family: var(--font-mono);
+    margin-bottom: 4px;
+    text-align: center;
+  }
+  .play-cta-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 64px;
+    font-family: var(--font-display);
+    font-size: 1.7em;
+    letter-spacing: 0.06em;
+    color: #fff;
+    background: linear-gradient(135deg, var(--gris-700), var(--gris-800));
+    border: 2px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s;
+    min-width: 320px;
+    justify-content: center;
+  }
+  .play-cta-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(0.6);
+  }
+  .play-cta-btn .play-cta-icon {
+    font-size: 0.85em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    transition: transform 0.2s ease;
+  }
+  .play-cta-btn.ready {
+    background: linear-gradient(135deg, var(--gh-accent) 0%, #f59e0b 50%, var(--fret-red) 130%);
+    border-color: var(--fret-yellow);
+    color: #1a0d04;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.18);
+    box-shadow:
+      0 0 0 4px rgba(249,115,22,0.18),
+      0 8px 28px rgba(249,115,22,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.3);
+    animation: gh-cta-pulse 1.6s ease-in-out infinite;
+  }
+  .play-cta-btn.ready .play-cta-icon {
+    background: rgba(0,0,0,0.28);
+    color: #fff;
+  }
+  .play-cta-btn.ready:hover {
+    transform: translateY(-2px) scale(1.02);
+    animation-play-state: paused;
+    box-shadow:
+      0 0 0 4px rgba(249,115,22,0.32),
+      0 12px 36px rgba(249,115,22,0.55),
+      inset 0 1px 0 rgba(255,255,255,0.4);
+  }
+  .play-cta-btn.ready:hover .play-cta-icon { transform: scale(1.15); }
+  .play-cta-btn.ready:active { transform: translateY(0) scale(0.99); }
+  @keyframes gh-cta-pulse {
+    0%, 100% {
+      box-shadow:
+        0 0 0 4px rgba(249,115,22,0.18),
+        0 8px 28px rgba(249,115,22,0.4),
+        inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+    50% {
+      box-shadow:
+        0 0 0 10px rgba(249,115,22,0.08),
+        0 14px 40px rgba(249,115,22,0.6),
+        inset 0 1px 0 rgba(255,255,255,0.45);
+    }
+  }
+  /* Anuncio extra al pasar de "no listo" → "listo": un solo bounce. */
+  .play-cta-btn.just-enabled {
+    animation: gh-cta-pulse 1.6s ease-in-out infinite, gh-cta-bounce 0.6s ease-out;
+  }
+  @keyframes gh-cta-bounce {
+    0%   { transform: scale(0.9); }
+    40%  { transform: scale(1.08); }
+    70%  { transform: scale(0.97); }
+    100% { transform: scale(1); }
+  }
+  @media (max-width: 600px) {
+    .play-cta-btn {
+      min-width: 0;
+      width: 100%;
+      padding: 18px 24px;
+      font-size: 1.4em;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .play-cta-btn.ready,
+    .play-cta-btn.just-enabled { animation: none; }
+  }
+
+  /* ===== Cards & info refinement ===== */
+  .card { transition: border-color 0.2s; }
+  .card:hover { border-color: rgba(249,115,22,0.45); }
+  .info-item {
+    transition: background 0.15s, transform 0.15s;
+  }
+  .info-item:hover {
+    background: rgba(249,115,22,0.10);
+    transform: translateY(-1px);
+  }
+  .results-stat {
+    transition: transform 0.15s, box-shadow 0.2s;
+  }
+  .results-stat:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(249,115,22,0.18);
+  }
+
   .calib-banner {
     padding: 12px 16px; border-radius: 10px;
     background: rgba(250,204,21,0.10); border-left: 4px solid var(--tulip-tree-500);
@@ -353,14 +492,23 @@
     </div>
     <div class="form-row">
       <label>HOPO threshold (ticks):</label>
-      <input type="number" id="hopoThreshold" value="170" step="10">
-      <span style="font-size:0.8em;color:var(--gris-500)">CH usa ~170 (1/12 measure a 192 res)</span>
+      <input type="number" id="hopoThreshold" value="65" step="5">
+      <span style="font-size:0.8em;color:var(--gris-500)">CH .chart oficial: floor((65/192)·resolution) = 65 a res 192 (≈1/3 beat)</span>
     </div>
   </div>
 
-  <div class="center" style="margin: 18px 0 30px">
-    <button class="action-btn" id="playBtn" onclick="startGame()" disabled>▶ Tocar</button>
-    <button class="action-btn secondary" onclick="window.location.href='test-pad.html'">Calibrar guitarra →</button>
+  <!-- BIG PLAY CTA — patrón arcade: el botón gigante es lo único que arranca
+       el juego. Se queda gris/disabled hasta que hay chart cargado, luego
+       hace un pulse de bienvenida para anunciarse. -->
+  <div class="play-cta-bar">
+    <div class="play-cta-center">
+      <div class="play-cta-hint" id="playHint">Carga un chart o elige uno de tu biblioteca</div>
+      <button class="play-cta-btn" id="playBtn" onclick="startGame()" disabled aria-label="Empezar a tocar">
+        <span class="play-cta-icon">▶</span>
+        <span class="play-cta-label">Tocar canción</span>
+      </button>
+      <button class="action-btn secondary" style="margin-top:10px;font-size:0.9em;padding:8px 18px" onclick="window.location.href='test-pad.html'">🎸 Calibrar guitarra →</button>
+    </div>
   </div>
 
   <div class="footer-link">
@@ -732,11 +880,35 @@ async function loadSong(chartText, audioBytes, audioFilename) {
       audioFilename
     };
     renderSongInfo();
-    document.getElementById('playBtn').disabled = false;
+    const btn = document.getElementById('playBtn');
+    const wasDisabled = btn.disabled;
+    btn.disabled = false;
+    btn.classList.add('ready');
+    // Pulse de bienvenida solo al pasar de "no listo" a "listo" — comunica
+    // a la usuaria que ese es el botón siguiente. Al re-cargar otra canción
+    // ya no necesita reanunciarse.
+    if (wasDisabled) {
+      btn.classList.add('just-enabled');
+      setTimeout(() => btn.classList.remove('just-enabled'), 2400);
+    }
+    updatePlayHint();
   } catch (err) {
     alert('Error cargando: ' + err.message);
     console.error(err);
   }
+}
+
+// Texto contextual debajo del botón: comunica el estado actual.
+function updatePlayHint() {
+  const hint = document.getElementById('playHint');
+  if (!hint) return;
+  if (!song) {
+    hint.textContent = 'Carga un chart o elige uno de tu biblioteca';
+    return;
+  }
+  const sel = document.getElementById('difficulty');
+  const diffLabel = sel.options[sel.selectedIndex]?.textContent || '';
+  hint.textContent = `Listo: ${song.meta.Name || 'canción'} · ${diffLabel}`;
 }
 
 function renderSongInfo() {
@@ -797,6 +969,7 @@ function handleFile(type, file) {
 document.getElementById('speedSlider').addEventListener('input', e => {
   document.getElementById('speedVal').textContent = e.target.value;
 });
+document.getElementById('difficulty').addEventListener('change', updatePlayHint);
 
 // ============================================================================
 //                          ZIP STORE PARSER (for autostepper output)
@@ -969,8 +1142,10 @@ function startGame() {
   const notes = song.charts[diff];
   if (!notes || notes.length === 0) { alert('No hay notas en esa dificultad'); return; }
 
-  // Anotar HOPOs según threshold configurado
-  const hopoThr = parseInt(document.getElementById('hopoThreshold').value) || 170;
+  // Anotar HOPOs según threshold configurado.
+  // Default 65 ticks = (65/192)·resolution — la fórmula canónica de Clone Hero
+  // para .chart, validada en scan-chart de Geomitron (natural-hopo.ts).
+  const hopoThr = parseInt(document.getElementById('hopoThreshold').value) || 65;
   annotateHopos(notes, hopoThr);
 
   // Convertir notas a representación runtime con tiempos absolutos
@@ -1263,12 +1438,18 @@ const FRET_COLORS = ['#10b981', '#ef4444', '#facc15', '#3b82f6', '#f97316'];
 
 function render(t) {
   ctx2d.clearRect(0, 0, canvasW, canvasH);
-  // Highway: 5 carriles centrados en pantalla
-  const highwayW = Math.min(canvasW * 0.7, 600);
+  // Highway: 5 carriles centrados.
+  // Optimizado para laptops 14"-17" (1366-1920 px). Antes el ancho estaba
+  // capado a 600 px → en una FHD eran solo el 31% del viewport. Ahora
+  // ocupamos ~50% del ancho (clamp 540-1040) para que las notas se vean
+  // grandes sin invadir la HUD lateral.
+  const highwayW = Math.max(540, Math.min(canvasW * 0.5, 1040));
   const laneW = highwayW / 5;
   const highwayX = (canvasW - highwayW) / 2;
-  const hitY = canvasH * 0.85;          // posición del hit zone
-  const topY = canvasH * 0.05;
+  // topY respeta la topbar persistente de 50 px (z-index 100) dejando
+  // margen para el HUD; hitY se mantiene cerca del borde inferior.
+  const topY = Math.max(70, canvasH * 0.08);
+  const hitY = canvasH * 0.88;          // posición del hit zone
 
   // Fondo highway
   ctx2d.fillStyle = 'rgba(0,0,0,0.6)';
@@ -1291,8 +1472,10 @@ function render(t) {
   ctx2d.moveTo(highwayX, hitY); ctx2d.lineTo(highwayX + highwayW, hitY);
   ctx2d.stroke();
 
-  // Receptors en hit zone (5 frets)
-  const receptorRadius = laneW * 0.3;
+  // Receptors en hit zone (5 frets) — radio 0.42 de laneW (antes 0.30)
+  // para que el "agujero" donde encaja la nota se vea claramente desde
+  // 1.5 m de distancia (postura típica con guitarra de plástico).
+  const receptorRadius = laneW * 0.42;
   for (let i = 0; i < 5; i++) {
     const cx = highwayX + (i + 0.5) * laneW;
     const held = inputState.fretsHeld[i];
@@ -1301,10 +1484,10 @@ function render(t) {
     ctx2d.fillStyle = held ? FRET_COLORS[i] : 'rgba(0,0,0,0.5)';
     ctx2d.fill();
     ctx2d.strokeStyle = FRET_COLORS[i];
-    ctx2d.lineWidth = 3;
+    ctx2d.lineWidth = 4;
     ctx2d.stroke();
     if (held) {
-      ctx2d.shadowBlur = 18;
+      ctx2d.shadowBlur = 24;
       ctx2d.shadowColor = FRET_COLORS[i];
       ctx2d.beginPath();
       ctx2d.arc(cx, hitY, receptorRadius * 0.6, 0, Math.PI * 2);
@@ -1326,33 +1509,34 @@ function render(t) {
     if (n.judged && !n.sustain) continue;       // notas ya hit o miss desaparecen
     if (n.judged && n.sustain && n.sustainBroken) continue;
 
-    // Sustain tail (antes que la cabeza)
+    // Sustain tail (antes que la cabeza) — barra al 24% del lane (antes 16%)
     if (n.sustain) {
       const yEnd = hitY - (Math.min(n.sustainEnd, n.time + (n.sustainEnd - n.time)) - t) * speed;
       for (const f of n.frets) {
         const cx = highwayX + (f + 0.5) * laneW;
         ctx2d.fillStyle = FRET_COLORS[f] + 'cc';
-        ctx2d.fillRect(cx - laneW * 0.08, Math.min(yCenter, yEnd), laneW * 0.16, Math.abs(yCenter - yEnd));
+        ctx2d.fillRect(cx - laneW * 0.12, Math.min(yCenter, yEnd), laneW * 0.24, Math.abs(yCenter - yEnd));
       }
     }
-    // Cabeza de la nota
+    // Cabeza de la nota — radio 0.42 de laneW (antes 0.32) para igualar
+    // al receptor: la nota encaja visualmente en el agujero al hitear.
     for (const f of n.frets) {
       const cx = highwayX + (f + 0.5) * laneW;
-      const r = laneW * 0.32;
+      const r = laneW * 0.42;
       ctx2d.beginPath();
       ctx2d.arc(cx, yCenter, r, 0, Math.PI * 2);
       ctx2d.fillStyle = FRET_COLORS[f];
       ctx2d.fill();
       // HOPO: borde blanco; Tap: relleno blanco; normal: borde negro
       if (n.isHopo) {
-        ctx2d.strokeStyle = '#fff'; ctx2d.lineWidth = 3; ctx2d.stroke();
+        ctx2d.strokeStyle = '#fff'; ctx2d.lineWidth = 4; ctx2d.stroke();
       } else if (n.isTap) {
         ctx2d.fillStyle = '#fff';
         ctx2d.beginPath();
         ctx2d.arc(cx, yCenter, r * 0.55, 0, Math.PI * 2);
         ctx2d.fill();
       } else {
-        ctx2d.strokeStyle = '#000'; ctx2d.lineWidth = 2; ctx2d.stroke();
+        ctx2d.strokeStyle = '#000'; ctx2d.lineWidth = 3; ctx2d.stroke();
       }
     }
   }

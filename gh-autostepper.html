@@ -405,6 +405,7 @@
 </div>
 
 <script src="stepmania-web/js/audio-pipeline.js"></script>
+<script src="stepmania-web/js/difficulty-tiers.js"></script>
 <script src="stepmania-web/js/gh-db.js"></script>
 <script>
 // ============================================================================
@@ -581,25 +582,33 @@ function log(msg, cls='') {
 
 const FRET_GREEN = 0, FRET_RED = 1, FRET_YELLOW = 2, FRET_BLUE = 3, FRET_ORANGE = 4;
 
-// Configuración por dificultad: densidad (qué fracción de onsets se conservan),
-// rango de trastes permitidos, si se permiten chords, si se permiten sustains.
+// Configuración por dificultad: rango de trastes, si se permiten chords/sustains.
+// La densidad efectiva se controla mediante DifficultyTiers (NPS objetivo +
+// minGap absoluto en segundos), no con un stride uniforme — esto desacopla la
+// dificultad del BPM y la percusividad del audio. La key 'tier' alimenta
+// directamente DifficultyTiers.filterTicks(...).
 const DIFFICULTIES = [
-  { name: 'Easy',       section: 'EasySingle',   density: 0.30, fretRange: [0, 2], allowChords: false, sustainsAllowed: true,  meter: 1 },
-  { name: 'Medium',     section: 'MediumSingle', density: 0.55, fretRange: [0, 3], allowChords: false, sustainsAllowed: true,  meter: 3 },
-  { name: 'Hard',       section: 'HardSingle',   density: 0.80, fretRange: [0, 4], allowChords: true,  sustainsAllowed: true,  meter: 5 },
-  { name: 'Expert',     section: 'ExpertSingle', density: 1.00, fretRange: [0, 4], allowChords: true,  sustainsAllowed: true,  meter: 7 }
+  { name: 'Easy',   section: 'EasySingle',   tier: 'easy',   fretRange: [0, 2], allowChords: false, sustainsAllowed: true,  meter: 1 },
+  { name: 'Medium', section: 'MediumSingle', tier: 'medium', fretRange: [0, 3], allowChords: false, sustainsAllowed: true,  meter: 3 },
+  { name: 'Hard',   section: 'HardSingle',   tier: 'hard',   fretRange: [0, 4], allowChords: true,  sustainsAllowed: true,  meter: 5 },
+  { name: 'Expert', section: 'ExpertSingle', tier: 'expert', fretRange: [0, 4], allowChords: true,  sustainsAllowed: true,  meter: 7 }
 ];
 
 // Devuelve un array de notas para la dificultad dada.
-//   onsetTicks: array de ticks (int) de cada onset detectado
+//   onsetTicks: array de ticks (int) de cada onset detectado (resolución 192/quarter)
 //   bpm: tempo en BPM (constante por toda la canción para MVP)
-function generateNotesForDifficulty(onsetTicks, diff, chordProb, sustainProb) {
+//   offsetSec: instante del primer downbeat
+//   presetMul: multiplicador del preset suave/normal/intenso (1.0 default)
+function generateNotesForDifficulty(onsetTicks, diff, chordProb, sustainProb, bpm, offsetSec, presetMul) {
   if (onsetTicks.length === 0) return [];
   const notes = [];
-  // Density filter: conservamos cada N-ésimo onset según density
-  const stride = Math.max(1, Math.round(1 / diff.density));
-  const filtered = [];
-  for (let i = 0; i < onsetTicks.length; i += stride) filtered.push(onsetTicks[i]);
+
+  // Filtro principal por dificultad — NPS objetivo + minGap absoluto.
+  // La función trabaja en segundos internamente y devuelve ticks de los onsets
+  // que sobreviven (en la misma resolución de entrada).
+  const filtered = window.DifficultyTiers
+    ? window.DifficultyTiers.filterTicks(onsetTicks, CHART_RESOLUTION, bpm, offsetSec, diff.tier, presetMul)
+    : onsetTicks.slice();
 
   let lastFret = -1;
   for (let i = 0; i < filtered.length; i++) {
@@ -847,10 +856,17 @@ async function processOne(q, opts) {
   // Eliminar duplicados después de quantizar
   const uniqueTicks = [...new Set(quantized)].sort((a, b) => a - b);
 
+  // Multiplicador del preset activo — modula uniformemente NPS target y minGap
+  // de las 4 dificultades. Los presets actuales también ajustan sensitivity de
+  // detección (cuántos onsets vienen del ODF), pero el filtrado por tier
+  // garantiza que Easy/Medium nunca se saturen aunque el ODF detecte mucho.
+  const presetMul = (window.DifficultyTiers
+    && window.DifficultyTiers.PRESET_MULTIPLIER[activePreset]) || 1.0;
+
   const charts = DIFFICULTIES.map(d => ({
     name: d.name,
     section: d.section,
-    notes: generateNotesForDifficulty(uniqueTicks, d, opts.chordProb, opts.sustainProb),
+    notes: generateNotesForDifficulty(uniqueTicks, d, opts.chordProb, opts.sustainProb, bpm, offsetSec, presetMul),
     meter: d.meter
   }));
   for (const c of charts) {

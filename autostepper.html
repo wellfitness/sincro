@@ -502,6 +502,7 @@
 </div>
 
 <script src="stepmania-web/js/audio-pipeline.js"></script>
+<script src="stepmania-web/js/difficulty-tiers.js"></script>
 <script>
 // ============================================================
 //                  GLOBAL STATE
@@ -776,21 +777,14 @@ function snapToResolution(positions, resolution) {
   return [...new Set(positions.map(p => Math.round(p / spacing) * spacing))].sort((a,b) => a-b);
 }
 
-// Generates note objects with cols as integers (0=empty, 1=tap)
-// difficulty filters by spacing: beginner=quarters, easy=eighths, medium=sixteenths, hard=all, challenge=all+denser
-function generateBaseNotes(positions, difficulty, jumpProb, handsProb) {
-  let filtered;
-  if (difficulty === 'beginner') {
-    filtered = positions.filter(p => p % 48 === 0);   // quarters only
-    filtered = filtered.filter((p, i) => i % 2 === 0); // every other quarter
-  } else if (difficulty === 'easy') {
-    filtered = positions.filter(p => p % 24 === 0);   // eighths
-    if (filtered.length > 80) filtered = filtered.filter((p,i) => i % 2 === 0);
-  } else if (difficulty === 'medium') {
-    filtered = positions.filter(p => p % 12 === 0);   // sixteenths
-  } else {
-    filtered = positions.slice();                      // all (hard, challenge)
-  }
+// Generates note objects with cols as integers (0=empty, 1=tap).
+// Filtra por dificultad usando DifficultyTiers — calibrado a NPS objetivo y
+// minGap absoluto en segundos (no por subdivisión modular). Esto desacopla la
+// dificultad efectiva del BPM y de la percusividad de la canción.
+function generateBaseNotes(positions, difficulty, jumpProb, handsProb, bpm, offsetSec, presetMul) {
+  const filtered = (window.DifficultyTiers && bpm)
+    ? window.DifficultyTiers.filterPositions48(positions, bpm, offsetSec, difficulty, presetMul)
+    : positions.slice();
 
   const ARROWS = 4;
   const notes = [];
@@ -1161,9 +1155,17 @@ async function analyzeOne(q) {
   ];
 
   const totalMeasures = Math.ceil(totalUnits / 192);
+  // El preset (suave/normal/intenso/custom) modula minGap y NPS target del
+  // filtrado por dificultad. La selección actual viene del .preset.selected
+  // del DOM; default 'normal' si no hay nada marcado.
+  const activePresetEl = document.querySelector('.preset.selected');
+  const presetKey = (activePresetEl && activePresetEl.dataset.preset) || 'normal';
+  const presetMul = (window.DifficultyTiers
+    && window.DifficultyTiers.PRESET_MULTIPLIER[presetKey]) || 1.0;
+
   const charts = [];
   for (const d of difficulties) {
-    const baseNotes  = generateBaseNotes(positions, d.key, jumpProb, handsProb);
+    const baseNotes  = generateBaseNotes(positions, d.key, jumpProb, handsProb, bpm, offsetSec, presetMul);
     const finalNotes = addHoldsAndRolls(baseNotes, d.key, holdDensity);
     const rows       = notesToRows(finalNotes, totalUnits);
     const count      = finalNotes.reduce((s, n) => s + n.cols.filter(c => c===1||c===2||c===4).length, 0);
