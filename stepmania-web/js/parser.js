@@ -190,8 +190,21 @@ function parseAttacks(text) {
   return out;
 }
 
+// Map STEPSTYPE → number of lanes. Anything we don't recognize falls back to 4.
+// `dance-solo` is the standard 6-lane mode (L ↖ U D ↗ R) used by DDR Solo.
+// `dance-double` is officially 8 lanes (two single pads side by side); we reuse
+// it for our custom 9-panel "Full" layout (L ↖ ↙ U D ↗ ↘ R).
+function lanesFromStepType(stepType) {
+  const s = (stepType || '').toLowerCase();
+  if (s === 'dance-solo') return 6;
+  if (s === 'dance-double' || s === 'dance-couple' || s === 'dance-routine') return 8;
+  return 4;
+}
+
 // Per-row beat = measure*4 + r/total*4. Each measure is exactly 4 beats.
-function parseNotesToEvents(notesText, timingEngine) {
+// chartHeader is optional (back-compat). Returns { notes, numLanes }.
+function parseNotesToEvents(notesText, timingEngine, chartHeader) {
+  const numLanes = lanesFromStepType(chartHeader && chartHeader.STEPSTYPE);
   const measures = notesText.split(',').map(m => m.trim());
   const events = [];
   for (let m = 0; m < measures.length; m++) {
@@ -200,9 +213,9 @@ function parseNotesToEvents(notesText, timingEngine) {
     if (!total) continue;
     for (let r = 0; r < total; r++) {
       const row = rows[r];
-      if (row.length < 4) continue;
+      if (row.length < numLanes) continue;
       const beat = m*4 + (r/total)*4;
-      for (let lane = 0; lane < 4; lane++) {
+      for (let lane = 0; lane < numLanes; lane++) {
         const ch = row[lane];
         if (ch === '0' || ch === undefined) continue;
         let type;
@@ -219,7 +232,7 @@ function parseNotesToEvents(notesText, timingEngine) {
     }
   }
   const finalNotes = [];
-  const openHolds = [null, null, null, null];
+  const openHolds = new Array(numLanes).fill(null);
   for (const e of events) {
     const t = timingEngine.beatToTime(e.beat);
     if (t === null) continue;
@@ -243,7 +256,7 @@ function parseNotesToEvents(notesText, timingEngine) {
       if (h) { h.endBeat = e.beat; h.endTime = t; openHolds[e.lane] = null; }
     }
   }
-  return finalNotes;
+  return { notes: finalNotes, numLanes };
 }
 
 // Beat denominator → ITG/SM color.

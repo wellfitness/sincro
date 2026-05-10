@@ -248,6 +248,19 @@
         <div class="preset" data-preset="custom"><div class="preset-name">⚙️ Personalizado</div><div class="preset-desc">Ajusta cada parámetro</div></div>
       </div>
 
+      <div class="param" style="margin-top:12px">
+        <div class="param-header">
+          <span class="param-label">🎚 Carriles del chart</span>
+          <span class="param-value" id="lanesSelectVal">4 (single)</span>
+        </div>
+        <select id="lanesSelect" onchange="document.getElementById('lanesSelectVal').textContent = this.options[this.selectedIndex].text">
+          <option value="4" selected>4 — Single (← ↓ ↑ →)</option>
+          <option value="6">6 — Solo (añade ↖ ↗)</option>
+          <option value="8">8 — Full (las 4 diagonales)</option>
+        </select>
+        <div class="param-help">Ojo: las canciones generadas en 6 u 8 quedan asociadas a su número de carriles. Para jugar una canción de 4 con diagonales, usa los mods Solo/Full en la pantalla de Dificultad.</div>
+      </div>
+
       <div id="customParams" style="display:none;margin-top:12px">
         <div class="param">
           <div class="param-header"><span class="param-label">🎯 Sensibilidad</span><span class="param-value" id="sensValue">1.7</span></div>
@@ -453,6 +466,18 @@
           <div class="mod-name">💨 Sudden</div>
           <div class="mod-help">Flechas aparecen tarde</div>
         </div>
+        <div class="mod-toggle" data-mod="solo">
+          <div class="mod-name">🎯 Solo (6)</div>
+          <div class="mod-help">Añade ↖ ↗ — redistribuye las notas a 6 carriles</div>
+        </div>
+        <div class="mod-toggle" data-mod="full">
+          <div class="mod-name">🌟 Full (8)</div>
+          <div class="mod-help">Añade las 4 diagonales — redistribuye a 8 carriles</div>
+        </div>
+        <div class="mod-toggle" data-mod="randomFixed">
+          <div class="mod-name">🎲 Random fijo</div>
+          <div class="mod-help">Solo/Full: misma redistribución cada partida</div>
+        </div>
       </div>
       <div class="param" style="margin-top:14px">
         <div class="param-header"><span class="param-label">⚡ Speed mod (chart)</span><span class="param-value" id="chartSpeedVal">1.0x</span></div>
@@ -540,6 +565,9 @@
         <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🏷 Etiqueta las canciones</h3>
         <p style="line-height:1.6;color:var(--gris-300)">Cuando tengas varias canciones, ponles tags en la pantalla de Dificultad: <code>favorita</code>, <code>calentamiento</code>, <code>cardio</code>, <code>lenta</code>, lo que quieras. Luego en Jugar puedes filtrar por tag y encuentras lo que buscas en un click.</p>
 
+        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🎯 Aprovecha las diagonales</h3>
+        <p style="line-height:1.6;color:var(--gris-300)">Tu alfombra tiene 4 paneles cardinales (← ↓ ↑ →) y 4 diagonales (↖ ↗ ↙ ↘) — estas últimas no se usaban antes. Activa el mod <strong>🎯 Solo (6)</strong> en la pantalla de Dificultad para añadir las dos diagonales superiores, o <strong>🌟 Full (8)</strong> para usar todas. Funciona con cualquier canción de tu librería: las notas se redistribuyen al volar para incluir los nuevos carriles. Si juegas con teclado, las teclas extra son <code>Q</code> y <code>E</code> para Solo, más <code>Z</code> y <code>C</code> para Full.</p>
+
         <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🚫 Cosas a evitar</h3>
         <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
           <li><strong>No abras la app en modo incógnito</strong> para "probarla" — al cerrar la ventana pierdes todo lo que hayas guardado.</li>
@@ -602,11 +630,28 @@
         <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
           <li>🪞 <strong>Mirror</strong>: invierte izquierda↔derecha.</li>
           <li>↺ <strong>Left</strong> / ↻ <strong>Right</strong>: rotación 90° de los carriles.</li>
-          <li>🔀 <strong>Shuffle</strong>: permutación aleatoria de los 4 carriles.</li>
+          <li>🔀 <strong>Shuffle</strong>: permutación aleatoria de los carriles.</li>
           <li>👁 <strong>Hidden</strong>: las flechas desaparecen al acercarse al receptor.</li>
           <li>💨 <strong>Sudden</strong>: las flechas aparecen tarde (visible solo cerca del receptor).</li>
+          <li>🎯 <strong>Solo (6)</strong>: añade ↖ ↗ y redistribuye las notas a 6 carriles. Útil para entrenar todo el cuerpo aunque la canción haya sido generada en single.</li>
+          <li>🌟 <strong>Full (8)</strong>: añade las 4 diagonales — redistribuye las notas a 8 carriles para máxima actividad.</li>
+          <li>🎲 <strong>Random fijo</strong>: cuando usas Solo o Full, la redistribución es la misma cada vez que juegas esa canción (memorizable). Sin esto, cambia en cada partida.</li>
           <li>⚡ <strong>Speed mod</strong>: multiplicador de velocidad de scroll local del chart (combina con el global de Ajustes).</li>
         </ul>
+
+        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Mappings de teclado por modo</h3>
+        <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:0.88em;font-family:var(--font-mono)">
+          <thead><tr style="background:rgba(0,190,200,0.1)">
+            <th style="padding:6px 10px;text-align:left;color:var(--turquesa-400);border-bottom:1px solid rgba(0,190,200,0.2)">Modo</th>
+            <th style="padding:6px 10px;text-align:left;color:var(--turquesa-400);border-bottom:1px solid rgba(0,190,200,0.2)">Carriles y teclas</th>
+          </tr></thead>
+          <tbody style="color:var(--gris-300)">
+            <tr><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">Single (4)</td><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">← ↓ ↑ →</td></tr>
+            <tr><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">Solo (6)</td><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">←  Q  ↑  ↓  E  →   (Q=↖, E=↗)</td></tr>
+            <tr><td style="padding:5px 10px">Full (8)</td><td style="padding:5px 10px">←  Q  Z  ↑  ↓  E  C  →   (Q=↖, Z=↙, E=↗, C=↘)</td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:8px;color:var(--gris-400);font-size:0.9em">Si juegas con la alfombra: las diagonales superiores deberían responder al pisar las esquinas correspondientes. Si tu pad no responde, comprueba qué LED se enciende en <strong>🦶 Probar alfombra → Crudo / LEDs</strong> y dímelo (puede que tu pad use buttons distintos a los habituales B4-B7).</p>
       </div>
 
       <!-- TUT: CREATE -->
@@ -619,9 +664,12 @@
           <li>Menú → <strong>🎵 Crear charts</strong>.</li>
           <li>Arrastra audios al área punteada (o haz click para elegirlos). Detecta el "Artista - Título" del nombre de archivo.</li>
           <li>Elige un <strong>preset</strong>: 🌿 Suave / ⚡ Normal / 🔥 Intenso / ⚙ Personalizado (sliders independientes).</li>
+          <li><strong>🎚 Carriles</strong>: 4 (single, default), 6 (solo: añade ↖ ↗) o 8 (full: las 4 diagonales). El selector está debajo de los presets.</li>
           <li>Pulsa <strong>▶ Analizar todo</strong>. Cada canción tarda ~5-15s según duración.</li>
           <li>Cuando termine: <strong>💾 Guardar en mi librería</strong> (queda accesible desde Jugar) o <strong>Descargar ZIP</strong> (.ssc + audio para llevar a otra máquina o a StepMania 5 nativo).</li>
         </ol>
+
+        <p style="margin-top:8px;padding:10px 14px;background:rgba(0,190,200,0.08);border-left:3px solid var(--turquesa-600);border-radius:6px;color:var(--gris-300);font-size:0.9em">💡 <strong>4 vs 6 vs 8</strong>: el selector decide cómo se distribuyen las notas <em>al generar</em>. Una canción de 4 carriles también se puede jugar con diagonales activando los mods Solo/Full en la pantalla de Dificultad — es la forma más fácil de aprovechar tus diagonales sin regenerar nada. El selector solo importa si quieres charts "auténticos" en 6/8 (por ejemplo para exportar el ZIP a SM5 nativo como dance-solo o dance-double).</p>
 
         <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Cómo detecta el ritmo</h3>
         <p style="line-height:1.6;color:var(--gris-300)">Usa pico-detección sobre la energía bass-emphasized (énfasis en kick/bajo) para hallar onsets, autocorrelación de la ODF para BPM (rango 90-180), y correlación de fase para offset. Funciona bien con techno, dance, pop, rock — peor con música muy ambient o sin pulso claro.</p>

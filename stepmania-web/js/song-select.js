@@ -5,7 +5,9 @@
 
 let selectedSong = null;
 let selectedChart = null;
-const activeMods = { mirror:false, left:false, right:false, shuffle:false, hidden:false, sudden:false, chartSpeed: 1.0 };
+// solo/full are mutually exclusive lane-count overrides; randomFixed pins
+// the redistribution to a per-song seed (vs full random each play).
+const activeMods = { mirror:false, left:false, right:false, shuffle:false, hidden:false, sudden:false, solo:false, full:false, randomFixed:false, chartSpeed: 1.0 };
 let _allSongsCache = [];
 
 async function refreshSongs() {
@@ -133,7 +135,7 @@ async function renderDiffScreen() {
     t.classList.toggle('on', !!activeMods[m]);
     t.onclick = () => {
       activeMods[m] = !activeMods[m];
-      // mirror/left/right/shuffle are mutually exclusive (one rotation/permutation at a time)
+      // mirror/left/right/shuffle are mutually exclusive (one permutation at a time)
       if (['mirror','left','right','shuffle'].includes(m) && activeMods[m]) {
         for (const x of ['mirror','left','right','shuffle']) if (x !== m) activeMods[x] = false;
         document.querySelectorAll('#modsContainer .mod-toggle').forEach(other => {
@@ -145,6 +147,9 @@ async function renderDiffScreen() {
         if (m === 'hidden') { activeMods.sudden = false; document.querySelector('[data-mod="sudden"]').classList.remove('on'); }
         if (m === 'sudden') { activeMods.hidden = false; document.querySelector('[data-mod="hidden"]').classList.remove('on'); }
       }
+      // solo vs full mutually exclusive (both alter lane count)
+      if (m === 'solo' && activeMods.solo) { activeMods.full = false; document.querySelector('[data-mod="full"]')?.classList.remove('on'); }
+      if (m === 'full' && activeMods.full) { activeMods.solo = false; document.querySelector('[data-mod="solo"]')?.classList.remove('on'); }
       t.classList.toggle('on', activeMods[m]);
     };
   });
@@ -301,16 +306,22 @@ function cancelSongPreview() {
   stopSongPreview();
 }
 
-let _shufflePerm = [0,1,2,3];
-function applyModsToLane(lane) {
-  if (activeMods.mirror)  return [3,2,1,0][lane];
-  if (activeMods.left)    return [1,3,0,2][lane];   // 90° CCW: lane permutation only
-  if (activeMods.right)   return [2,0,3,1][lane];   // 90° CW
-  if (activeMods.shuffle) return _shufflePerm[lane];
+// Permutations are now lane-count aware. The base perms live in LANE_CONFIGS
+// (game.js); we look them up dynamically via the count of lanes the chart
+// is actually playing with after any solo/full redistribution.
+let _shufflePerm = [];
+function applyModsToLane(lane, numLanes) {
+  const cfg = (typeof LANE_CONFIGS !== 'undefined') ? LANE_CONFIGS[numLanes] : null;
+  if (!cfg) return lane; // safety: unknown lane count
+  if (activeMods.mirror)  return cfg.mirrorPerm[lane];
+  if (activeMods.left)    return cfg.leftPerm[lane];
+  if (activeMods.right)   return cfg.rightPerm[lane];
+  if (activeMods.shuffle) return (_shufflePerm[lane] !== undefined ? _shufflePerm[lane] : lane);
   return lane;
 }
-function rerollShuffle() {
-  const a = [0,1,2,3];
+function rerollShuffle(numLanes) {
+  const n = numLanes || 4;
+  const a = []; for (let i = 0; i < n; i++) a.push(i);
   for (let i = a.length-1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
   _shufflePerm = a;
 }

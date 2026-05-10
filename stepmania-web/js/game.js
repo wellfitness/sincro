@@ -18,9 +18,58 @@ function getTimingWindows() {
 }
 const SCORES = { marvelous: 1000, perfect: 800, great: 500, good: 200, bad: 50, miss: 0 };
 const HOLD_LIFE = 0.300; // seconds you can release before hold goes NG (StepMania default ~0.3s)
-const LANES = 4;
-const LANE_KEYS = ['ArrowLeft', 'ArrowDown', 'ArrowUp', 'ArrowRight'];
-const LANE_PAD = [0, 1, 2, 3];
+
+// All lane-count-dependent constants live here. Single source of truth.
+//   4 — dance-single (cardinals)
+//   6 — dance-solo  (cardinals + ↖ ↗)             column order: L ↖ U D ↗ R
+//   8 — dance-double (cardinals + 4 diagonals)    column order: L ↖ ↙ U D ↗ ↘ R
+// keyMap uses event.code (ArrowLeft, KeyQ...). padMap maps lane→gamepad button index.
+const LANE_CONFIGS = {
+  4: {
+    lanes: 4,
+    keyMap:    ['ArrowLeft', 'ArrowDown', 'ArrowUp', 'ArrowRight'],
+    padMap:    [0, 1, 2, 3],
+    rotations: [-90, 180, 0, 90],
+    tints:     ['#ff006e', '#3a86ff', '#00ff64', '#ffbe0b'],
+    mirrorPerm:[3, 2, 1, 0],
+    leftPerm:  [1, 3, 0, 2],
+    rightPerm: [2, 0, 3, 1],
+    label:     'Single (4)',
+    stepType:  'dance-single'
+  },
+  6: {
+    lanes: 6,
+    keyMap:    ['ArrowLeft', 'KeyQ', 'ArrowUp', 'ArrowDown', 'KeyE', 'ArrowRight'],
+    padMap:    [0, 4, 2, 1, 5, 3],
+    rotations: [-90, -45, 0, 180, 45, 90],
+    tints:     ['#ff006e', '#a259ff', '#00ff64', '#3a86ff', '#ffbe0b', '#ff8800'],
+    mirrorPerm:[5, 4, 3, 2, 1, 0],
+    leftPerm:  [3, 0, 5, 1, 2, 4],   // approx CCW: down→left, ul→down, etc
+    rightPerm: [1, 3, 4, 0, 5, 2],   // approx CW
+    label:     'Solo (6)',
+    stepType:  'dance-solo'
+  },
+  8: {
+    lanes: 8,
+    keyMap:    ['ArrowLeft', 'KeyQ', 'KeyZ', 'ArrowUp', 'ArrowDown', 'KeyE', 'KeyC', 'ArrowRight'],
+    padMap:    [0, 4, 6, 2, 1, 5, 7, 3],
+    rotations: [-90, -45, -135, 0, 180, 45, 135, 90],
+    tints:     ['#ff006e', '#a259ff', '#ff66c4', '#00ff64', '#3a86ff', '#ffbe0b', '#ff8800', '#00f5d4'],
+    mirrorPerm:[7, 6, 5, 4, 3, 2, 1, 0],
+    leftPerm:  [4, 1, 0, 3, 5, 7, 6, 2],
+    rightPerm: [3, 1, 7, 6, 0, 5, 2, 4],
+    label:     'Full (8)',
+    stepType:  'dance-double'
+  }
+};
+function getActiveLaneConfig(nativeLanes) {
+  // mod overrides chart-native; otherwise use whatever the chart was authored for
+  if (typeof activeMods !== 'undefined') {
+    if (activeMods.full) return LANE_CONFIGS[8];
+    if (activeMods.solo) return LANE_CONFIGS[6];
+  }
+  return LANE_CONFIGS[nativeLanes] || LANE_CONFIGS[4];
+}
 
 let gameState = null;
 const canvas = document.getElementById('gameCanvas');
@@ -34,10 +83,12 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 
 // ----- Pre-rendered arrow sprite cache (rotated per lane) -------------------
+// Cache key is rotation+color (not lane index) so the same rotation is
+// reused across configs (e.g. lane 0 in single and lane 0 in solo are both
+// the "left" arrow at -90°). Sprites get rebuilt on canvas resize.
 const ARROW_SIZE = 56;
-const arrowSpriteCache = new Map(); // key = laneRotation+'_'+color
+const arrowSpriteCache = new Map();
 function buildArrowSprites() { arrowSpriteCache.clear(); }
-const LANE_ROTATION = [-90, 180, 0, 90]; // L, D, U, R — rotation of base arrow (which points up)
 
 // Optional user-uploaded NoteSkin PNG. If present, overrides the polygonal
 // sprite. Color tint is applied via 'source-atop' overlay so quant colors
@@ -119,8 +170,8 @@ function drawProceduralBg(W, H, title) {
   ctx2d.fillStyle = grad;
   ctx2d.fillRect(0, 0, W, H);
 }
-function getArrowSprite(lane, color) {
-  const key = LANE_ROTATION[lane] + '_' + color + (noteskinImage ? '_png' : '');
+function getArrowSprite(rotation, color) {
+  const key = rotation + '_' + color + (noteskinImage ? '_png' : '');
   let s = arrowSpriteCache.get(key);
   if (s) return s;
   const c = document.createElement('canvas');
@@ -129,7 +180,7 @@ function getArrowSprite(lane, color) {
   // PNG noteskin path — draw image rotated, then tint with quant color
   if (noteskinImage) {
     cx.translate(ARROW_SIZE/2, ARROW_SIZE/2);
-    cx.rotate(LANE_ROTATION[lane] * Math.PI/180);
+    cx.rotate(rotation * Math.PI/180);
     cx.drawImage(noteskinImage, -ARROW_SIZE/2, -ARROW_SIZE/2, ARROW_SIZE, ARROW_SIZE);
     // Tint: only paints where the image already has alpha
     cx.globalCompositeOperation = 'source-atop';
@@ -140,7 +191,7 @@ function getArrowSprite(lane, color) {
     return c;
   }
   cx.translate(ARROW_SIZE/2, ARROW_SIZE/2);
-  cx.rotate(LANE_ROTATION[lane] * Math.PI/180);
+  cx.rotate(rotation * Math.PI/180);
   // Up-pointing arrow
   const r = ARROW_SIZE/2 - 4;
   cx.fillStyle = color;
@@ -179,7 +230,6 @@ async function startGame() {
   resizeCanvas();
   ensureAudioCtx();
   if (audioCtx.state === 'suspended') await audioCtx.resume();
-  if (activeMods.shuffle) rerollShuffle();
 
   // Decode audio
   const arrayBuf = await selectedSong.audioBlob.arrayBuffer();
@@ -194,9 +244,42 @@ async function startGame() {
   // permanently mutate them across plays.
   const attacks = parseAttacks((chartData && chartData.ATTACKS) || parsed.header.ATTACKS || '');
   const baseMods = { ...activeMods };
-  let notes = parseNotesToEvents(chartData.NOTES, tEngine);
-  // Apply lane permutation modifiers
-  for (const n of notes) n.lane = applyModsToLane(n.lane);
+  const parseRes = parseNotesToEvents(chartData.NOTES, tEngine, chartData);
+  let notes = parseRes.notes;
+  const nativeLanes = parseRes.numLanes;
+  // Resolve which lane config we'll actually play with: solo/full mods override
+  // the chart's native lane count by REDISTRIBUTING notes; otherwise we play
+  // with whatever the chart was authored for.
+  const laneConfig = getActiveLaneConfig(nativeLanes);
+  if (laneConfig.lanes !== nativeLanes) {
+    // Redistribute notes from `nativeLanes` to `laneConfig.lanes`. Fixed mode
+    // (random per song-id+noteIndex) gives memorable charts; full random mode
+    // re-shuffles every play.
+    const fixedSeed = !!activeMods.randomFixed;
+    const songSeed = (selectedSong.id || 0) + ':' + (selectedSong.title || '');
+    // Group hold-tail to its head: same-lane mapping per beat.
+    // Approach: for each unique (beat, originalLane) pair pick one new lane
+    // and apply it consistently (so head + tail map to same target).
+    const remap = new Map();
+    notes.forEach((n, idx) => {
+      const key = n.beat + ':' + n.lane;
+      if (!remap.has(key)) {
+        let target;
+        if (fixedSeed) {
+          let h = 0; const s = songSeed + ':' + key;
+          for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+          target = Math.abs(h) % laneConfig.lanes;
+        } else {
+          target = Math.floor(Math.random() * laneConfig.lanes);
+        }
+        remap.set(key, target);
+      }
+      n.lane = remap.get(key);
+    });
+  }
+  // Apply lane permutation modifiers (mirror/left/right/shuffle) on the FINAL lane count
+  if (activeMods.shuffle) rerollShuffle(laneConfig.lanes);
+  for (const n of notes) n.lane = applyModsToLane(n.lane, laneConfig.lanes);
   // Mark each note with judging/hold state
   for (const n of notes) {
     n.judged = null;
@@ -223,6 +306,7 @@ async function startGame() {
   const startAt = audioCtx.currentTime + 0.05;
   src.start(startAt);
 
+  const N = laneConfig.lanes;
   gameState = {
     notes, audioBuffer, src,
     startTime: startAt,
@@ -232,17 +316,19 @@ async function startGame() {
     duration: audioBuffer.duration,
     score: 0, combo: 0, maxCombo: 0,
     judgments: { marvelous: 0, perfect: 0, great: 0, good: 0, bad: 0, miss: 0 },
-    pressedLanes: [false, false, false, false],
-    keyHeld: [false, false, false, false],
-    padPrev:  [false, false, false, false],
-    flashTime: [0, 0, 0, 0],
+    pressedLanes: new Array(N).fill(false),
+    keyHeld:      new Array(N).fill(false),
+    padPrev:      new Array(N).fill(false),
+    flashTime:    new Array(N).fill(0),
     hitFx: [],   // {lane, t}
-    songInfo: `${selectedSong.title} — ${selectedChart.name} ★${selectedChart.rating}`,
+    songInfo: `${selectedSong.title} — ${selectedChart.name} ★${selectedChart.rating}${laneConfig.lanes !== nativeLanes ? ` · ${laneConfig.label}` : ''}`,
     finished: false,
     pixelsPerSec: 600 * settings.scrollSpeed * activeMods.chartSpeed,
     timing: getTimingWindows(),
     attacks,
     baseMods,
+    laneConfig,
+    nativeLanes,
   };
   document.getElementById('hudSongInfo').textContent = gameState.songInfo;
   document.getElementById('hudScore').textContent = '0';
@@ -293,7 +379,7 @@ function stopGame() {
 function onKeyDown(e) {
   if (!gameState || gameState.finished) return;
   if (e.code === 'Escape') { e.preventDefault(); stopGame(); goto('diff'); return; }
-  const lane = LANE_KEYS.indexOf(e.code);
+  const lane = gameState.laneConfig.keyMap.indexOf(e.code);
   if (lane === -1) return;
   e.preventDefault();
   if (gameState.keyHeld[lane]) return;
@@ -304,10 +390,10 @@ function onKeyDown(e) {
 }
 function onKeyUp(e) {
   if (!gameState) return;
-  const lane = LANE_KEYS.indexOf(e.code);
+  const lane = gameState.laneConfig.keyMap.indexOf(e.code);
   if (lane === -1) return;
   gameState.keyHeld[lane] = false;
-  if (!gamepadButtonState[LANE_PAD[lane]]) {
+  if (!gamepadButtonState[gameState.laneConfig.padMap[lane]]) {
     gameState.pressedLanes[lane] = false;
     handleLaneRelease(lane);
   }
@@ -359,8 +445,9 @@ function gameLoop() {
   }
 
   // Gamepad input — track press AND release for lift notes
-  for (let i = 0; i < 4; i++) {
-    const padBtn = LANE_PAD[i];
+  const padMap = gameState.laneConfig.padMap;
+  for (let i = 0; i < gameState.laneConfig.lanes; i++) {
+    const padBtn = padMap[i];
     const pressed = gamepadButtonState[padBtn];
     const wasPressed = gameState.padPrev[i];
     if (gamepadJustPressed[padBtn]) {
@@ -508,8 +595,6 @@ function showJudgment(judg) {
   setTimeout(() => { if (el.classList) el.classList.remove('show'); }, 400);
 }
 
-const LANE_TINT = ['#ff006e', '#3a86ff', '#00ff64', '#ffbe0b'];
-
 function render(audioTime) {
   const W = canvasW, H = canvasH;
   ctx2d.clearRect(0, 0, W, H);
@@ -523,8 +608,14 @@ function render(audioTime) {
     drawProceduralBg(W, H, selectedSong.title || '');
   }
 
-  const laneWidth = 80;
-  const totalWidth = laneWidth * 4;
+  // Lane geometry depends on the active config (4/6/8 lanes).
+  const cfg = gameState.laneConfig;
+  const numLanes = cfg.lanes;
+  const tints = cfg.tints;
+  const rotations = cfg.rotations;
+  // Shrink lane width slightly for high lane counts so the playfield still fits.
+  const laneWidth = numLanes <= 4 ? 80 : (numLanes === 6 ? 70 : 64);
+  const totalWidth = laneWidth * numLanes;
   const startX = W/2 - totalWidth/2;
   const receptorY = 110;
   // Apply per-section #SPEEDS and #SCROLLS modifiers based on current beat.
@@ -546,7 +637,7 @@ function render(audioTime) {
   // Lane separators
   ctx2d.strokeStyle = 'rgba(255,255,255,0.06)';
   ctx2d.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
+  for (let i = 0; i <= numLanes; i++) {
     ctx2d.beginPath();
     ctx2d.moveTo(startX + i*laneWidth, 0);
     ctx2d.lineTo(startX + i*laneWidth, H);
@@ -570,20 +661,21 @@ function render(audioTime) {
   }
 
   // Receptor row
-  for (let i = 0; i < 4; i++) {
+  const receptorRadius = numLanes <= 4 ? 28 : (numLanes === 6 ? 24 : 22);
+  for (let i = 0; i < numLanes; i++) {
     const cx = startX + i*laneWidth + laneWidth/2;
     const cy = receptorY;
     // Outer ring (beat pulse)
     ctx2d.strokeStyle = `rgba(255,255,255,${0.15 + beatPulse*0.5})`;
     ctx2d.lineWidth = 2 + beatPulse*2;
     ctx2d.beginPath();
-    ctx2d.arc(cx, cy, 32 + beatPulse*4, 0, Math.PI*2);
+    ctx2d.arc(cx, cy, receptorRadius + 4 + beatPulse*4, 0, Math.PI*2);
     ctx2d.stroke();
     // Lane-color receptor
-    ctx2d.strokeStyle = LANE_TINT[i];
+    ctx2d.strokeStyle = tints[i];
     ctx2d.lineWidth = 3;
     ctx2d.beginPath();
-    ctx2d.arc(cx, cy, 28, 0, Math.PI*2);
+    ctx2d.arc(cx, cy, receptorRadius, 0, Math.PI*2);
     ctx2d.stroke();
     // Press flash
     const flashAge = (performance.now() - gameState.flashTime[i]) / 200;
@@ -591,11 +683,11 @@ function render(audioTime) {
     if (flashAlpha > 0) {
       ctx2d.fillStyle = `rgba(255,255,255,${flashAlpha*0.5})`;
       ctx2d.beginPath();
-      ctx2d.arc(cx, cy, 26, 0, Math.PI*2);
+      ctx2d.arc(cx, cy, receptorRadius - 2, 0, Math.PI*2);
       ctx2d.fill();
     }
     // Receptor arrow outline (transparent)
-    const sprite = getArrowSprite(i, 'rgba(160,160,180,0.35)');
+    const sprite = getArrowSprite(rotations[i], 'rgba(160,160,180,0.35)');
     ctx2d.drawImage(sprite, cx - ARROW_SIZE/2, cy - ARROW_SIZE/2);
   }
 
@@ -673,7 +765,7 @@ function render(audioTime) {
       // Fakes: ghosted arrow (40% alpha), no scoring
       ctx2d.save();
       ctx2d.globalAlpha = alpha * 0.4;
-      const sprite = getArrowSprite(n.lane, '#888');
+      const sprite = getArrowSprite(rotations[n.lane], '#888');
       ctx2d.drawImage(sprite, cx - ARROW_SIZE/2, y - ARROW_SIZE/2);
       ctx2d.restore();
       continue;
@@ -684,7 +776,7 @@ function render(audioTime) {
       ctx2d.save();
       ctx2d.globalAlpha = alpha;
       const color = quantColorFor(n.row || 0, n.total || 4);
-      const sprite = getArrowSprite(n.lane, color);
+      const sprite = getArrowSprite(rotations[n.lane], color);
       // Draw the sprite at lower alpha + a bright outline ring
       ctx2d.globalAlpha = alpha * 0.5;
       ctx2d.drawImage(sprite, cx - ARROW_SIZE/2, y - ARROW_SIZE/2);
@@ -701,7 +793,7 @@ function render(audioTime) {
     if (n.judged === 'miss') {
       ctx2d.save();
       ctx2d.globalAlpha = alpha * 0.4;
-      const sprite = getArrowSprite(n.lane, '#666');
+      const sprite = getArrowSprite(rotations[n.lane], '#666');
       ctx2d.drawImage(sprite, cx - ARROW_SIZE/2, y - ARROW_SIZE/2);
       ctx2d.restore();
       continue;
@@ -710,7 +802,7 @@ function render(audioTime) {
     const color = quantColorFor(n.row || 0, n.total || 4);
     ctx2d.save();
     ctx2d.globalAlpha = alpha;
-    const sprite = getArrowSprite(n.lane, color);
+    const sprite = getArrowSprite(rotations[n.lane], color);
     ctx2d.drawImage(sprite, cx - ARROW_SIZE/2, y - ARROW_SIZE/2);
     ctx2d.restore();
   }
@@ -749,14 +841,14 @@ function render(audioTime) {
     ctx2d.lineWidth = 3 * (1-age);
     ctx2d.beginPath(); ctx2d.arc(cx, receptorY, radius, 0, Math.PI*2); ctx2d.stroke();
     // Lane-tinted ring (smaller)
-    ctx2d.strokeStyle = `${LANE_TINT[fx.lane]}${Math.floor(alpha*255).toString(16).padStart(2,'0')}`;
+    ctx2d.strokeStyle = `${tints[fx.lane]}${Math.floor(alpha*255).toString(16).padStart(2,'0')}`;
     ctx2d.lineWidth = 5 * (1-age);
     ctx2d.beginPath(); ctx2d.arc(cx, receptorY, radius*0.7, 0, Math.PI*2); ctx2d.stroke();
     // Particles (if present — old fx without particles still render the rings)
     if (fx.particles) {
       const t = ageMs / 1000;
       const G = 280; // gravity (px/s²)
-      ctx2d.fillStyle = LANE_TINT[fx.lane];
+      ctx2d.fillStyle = tints[fx.lane];
       for (const p of fx.particles) {
         const px = cx + p.vx * t;
         const py = receptorY + p.vy * t + 0.5 * G * t * t;

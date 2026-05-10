@@ -107,12 +107,18 @@ document.getElementById('importPackInput').addEventListener('change', async e =>
         bpm, offsetSec,
         duration: decoded.duration,
         sampleStart,
-        charts: parsed.charts.map(c => ({
-          name: c.DIFFICULTY || 'Edit',
-          key: (c.DIFFICULTY || 'edit').toLowerCase(),
-          rating: parseInt(c.METER || '1') || 1,
-          count: (c.NOTES || '').split('\n').filter(r => r.length === 4 && r !== '0000').length
-        })),
+        charts: parsed.charts.map(c => {
+          const stepType = (c.STEPSTYPE || 'dance-single');
+          const numLanes = (typeof lanesFromStepType === 'function') ? lanesFromStepType(stepType) : 4;
+          const emptyRow = '0'.repeat(numLanes);
+          return {
+            name: c.DIFFICULTY || 'Edit',
+            key: (c.DIFFICULTY || 'edit').toLowerCase(),
+            rating: parseInt(c.METER || '1') || 1,
+            count: (c.NOTES || '').split('\n').filter(r => r.length >= numLanes && r !== emptyRow).length,
+            stepType, numLanes
+          };
+        }),
         tags: [],
         addedAt: Date.now()
       });
@@ -160,12 +166,18 @@ document.getElementById('importInput').addEventListener('change', async e => {
       bpm, offsetSec,
       duration: decoded.duration,
       sampleStart,
-      charts: parsed.charts.map(c => ({
-        name: c.DIFFICULTY || 'Edit',
-        key: (c.DIFFICULTY || 'edit').toLowerCase(),
-        rating: parseInt(c.METER || '1') || 1,
-        count: (c.NOTES || '').split('\n').filter(r => r.length === 4 && r !== '0000').length
-      })),
+      charts: parsed.charts.map(c => {
+        const stepType = (c.STEPSTYPE || 'dance-single');
+        const numLanes = (typeof lanesFromStepType === 'function') ? lanesFromStepType(stepType) : 4;
+        const emptyRow = '0'.repeat(numLanes);
+        return {
+          name: c.DIFFICULTY || 'Edit',
+          key: (c.DIFFICULTY || 'edit').toLowerCase(),
+          rating: parseInt(c.METER || '1') || 1,
+          count: (c.NOTES || '').split('\n').filter(r => r.length >= numLanes && r !== emptyRow).length,
+          stepType, numLanes
+        };
+      }),
       addedAt: Date.now()
     });
   }
