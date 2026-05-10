@@ -219,9 +219,68 @@
   }
   .footer-link a { color: var(--gh-accent); text-decoration: none; }
   .footer-link a:hover { text-decoration: underline; }
+
+  /* Topbar persistente — consistente con play.html */
+  #sat-topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 50px;
+    background: rgba(0,0,0,0.85); border-bottom: 1px solid rgba(249,115,22,0.4);
+    display: flex; align-items: center; padding: 0 20px;
+    z-index: 100; backdrop-filter: blur(8px);
+  }
+  #sat-topbar .logo {
+    font-family: var(--font-display); font-weight: 800; font-size: 1.1em;
+    background: linear-gradient(90deg, var(--fret-green), var(--fret-yellow), var(--gh-accent), var(--fret-red));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-decoration: none; cursor: pointer;
+  }
+  #sat-topbar .crumb { color: var(--gris-400); margin-left: 14px; font-size: 0.9em; }
+  #sat-topbar .spacer { flex: 1; }
+  #sat-topbar .topbar-nav { display: flex; gap: 4px; margin-right: 10px; }
+  #sat-topbar .topbar-link {
+    background: transparent; border: 1px solid rgba(255,255,255,0.08);
+    color: var(--gris-300); padding: 6px 12px; border-radius: 7px;
+    font-family: inherit; font-size: 0.85em; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap; text-decoration: none;
+  }
+  #sat-topbar .topbar-link:hover {
+    background: rgba(249,115,22,0.18); border-color: rgba(249,115,22,0.5); color: #fff;
+  }
+  #sat-topbar .topbar-link.active {
+    background: rgba(249,115,22,0.25); border-color: var(--gh-accent); color: #fff;
+  }
+  #sat-topbar .home-btn {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    color: #fff; padding: 6px 14px; border-radius: 7px; cursor: pointer;
+    font-size: 0.9em; margin-left: 8px; text-decoration: none;
+  }
+  #sat-topbar .home-btn:hover { background: rgba(0,190,200,0.25); }
+  body { padding-top: 50px; }
+  #setup-screen { padding-top: 70px; }
+  @media (max-width: 900px) {
+    #sat-topbar .topbar-link { padding: 6px 8px; font-size: 0; }
+    #sat-topbar .topbar-link::first-letter { font-size: 16px; }
+    #sat-topbar .crumb { display: none; }
+  }
+  /* En modo juego, el topbar se oculta para no distraer */
+  body.playing #sat-topbar { display: none; }
+  body.playing { padding-top: 0; }
 </style>
 </head>
 <body>
+
+<!-- Topbar persistente — consistente con play.html y los demás satellites -->
+<nav id="sat-topbar">
+  <a href="play.html" class="logo">⚡ Sincro</a>
+  <span class="crumb">· 🎸 GH Play</span>
+  <span class="spacer"></span>
+  <div class="topbar-nav">
+    <a href="play.html?screen=songs" class="topbar-link">🦶 Bailar</a>
+    <a href="gh-play.html" class="topbar-link active">🎸 Tocar</a>
+    <a href="test-pad.html" class="topbar-link">🛠️ Equipo</a>
+    <a href="play.html?screen=tutorial" class="topbar-link">📖 Tutorial</a>
+  </div>
+  <a href="play.html" class="home-btn" title="Menú principal">⌂</a>
+</nav>
 
 <!-- ============== SETUP SCREEN ============== -->
 <div id="setup-screen">
@@ -883,6 +942,7 @@ function startGame() {
   // Cambiar pantalla
   document.getElementById('setup-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.add('active');
+  document.body.classList.add('playing');
   document.getElementById('hudTotal').textContent = runtimeNotes.length;
   document.getElementById('hudHit').textContent = '0';
   document.getElementById('hudScore').textContent = '0';
@@ -967,6 +1027,7 @@ function quitGame() {
   game = null;
   document.getElementById('game-screen').classList.remove('active');
   document.getElementById('setup-screen').classList.remove('hidden');
+  document.body.classList.remove('playing');
 }
 
 // ============================================================================
@@ -1257,6 +1318,7 @@ function finishGame() {
 
   document.getElementById('game-screen').classList.remove('active');
   document.getElementById('results-screen').classList.add('active');
+  document.body.classList.remove('playing');
   document.getElementById('resultsTitle').textContent =
     `${grade} · ${escHtml(song.meta.Name || 'Sin título')}`;
 

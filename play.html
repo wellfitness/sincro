@@ -11,9 +11,15 @@
   <div class="logo" onclick="goto('menu')">⚡ Sincro</div>
   <div class="crumb" id="crumb"></div>
   <div class="spacer"></div>
+  <div class="topbar-nav">
+    <button class="topbar-link" onclick="goto('songs')" title="Bailar con alfombra">🦶 Bailar</button>
+    <button class="topbar-link" onclick="window.location.href='gh-play.html'" title="Tocar guitarra">🎸 Tocar</button>
+    <button class="topbar-link" onclick="window.open('test-pad.html','_blank')" title="Probar hardware">🛠️ Equipo</button>
+    <button class="topbar-link" onclick="goto('tutorial')" title="Tutorial">📖 Tutorial</button>
+  </div>
   <div class="pill off" id="padPill">alfombra: no detectada</div>
   <button class="icon-btn" onclick="openSettings()" id="settingsBtn" style="margin-left:10px" title="Ajustes">⚙</button>
-  <button class="icon-btn" onclick="goto('menu')" id="homeBtn" style="margin-left:6px">⌂ Menú</button>
+  <button class="icon-btn" onclick="goto('menu')" id="homeBtn" style="margin-left:6px" title="Menú principal">⌂</button>
 </nav>
 
 <!-- SETTINGS MODAL -->
@@ -119,40 +125,74 @@
   <div class="container">
     <h1>Sincro</h1>
     <p class="subtitle">Crea, comprueba y juega coreografías directamente en el navegador</p>
-    <div class="menu-grid">
-      <div class="menu-card" onclick="goto('songs')">
-        <div class="icon">🎮</div>
-        <div class="title">Jugar</div>
-        <div class="desc">Elige una canción de tu biblioteca y juégala con la alfombra, la guitarra o el teclado.</div>
+    <!-- ===== SECCIÓN STEPMANIA (alfombra) ===== -->
+    <section class="dashboard-section sm-section">
+      <h2 class="section-title">🦶 StepMania <span class="section-subtitle">— alfombra de baile</span></h2>
+      <div class="menu-grid">
+        <div class="menu-card" onclick="goto('songs')">
+          <div class="icon">▶</div>
+          <div class="title">Bailar</div>
+          <div class="desc">Elige una coreografía de tu biblioteca y juégala con la alfombra o teclado (← ↓ ↑ →).</div>
+        </div>
+        <div class="menu-card" onclick="goto('create')">
+          <div class="icon">🎵</div>
+          <div class="title">Crear coreografías</div>
+          <div class="desc">AutoStepper: convierte cualquier MP3 en una coreografía DDR con cinco dificultades.</div>
+        </div>
+        <div class="menu-card" onclick="goto('library')">
+          <div class="icon">📚</div>
+          <div class="title">Mis canciones</div>
+          <div class="desc">Gestiona tu biblioteca: añade canciones (.ssc o .sm + audio) o paquetes ZIP del AutoStepper.</div>
+        </div>
       </div>
-      <div class="menu-card" onclick="goto('create')">
-        <div class="icon">🎵</div>
-        <div class="title">Crear coreografías</div>
-        <div class="desc">AutoStepper: convierte cualquier MP3 en una coreografía con cinco dificultades.</div>
+    </section>
+
+    <!-- ===== SECCIÓN GUITAR HERO (guitarra) ===== -->
+    <section class="dashboard-section gh-section">
+      <h2 class="section-title">🎸 Guitar Hero <span class="section-subtitle">— guitarra</span></h2>
+      <div class="menu-grid">
+        <div class="menu-card" onclick="window.location.href='gh-play.html'">
+          <div class="icon">▶</div>
+          <div class="title">Tocar</div>
+          <div class="desc">Charts estilo Guitar Hero: 5 trastes + strum + sustains + HOPOs. Lee tu calibración del test de hardware.</div>
+        </div>
+        <div class="menu-card" onclick="window.location.href='gh-autostepper.html'">
+          <div class="icon">🎼</div>
+          <div class="title">Crear charts</div>
+          <div class="desc">Genera notes.chart desde MP3/WAV — listo para Clone Hero o el simulador de Sincro.</div>
+        </div>
+        <div class="menu-card disabled" title="Próximamente">
+          <div class="icon">🔒</div>
+          <div class="title">Mis charts <span class="coming-soon">próximamente</span></div>
+          <div class="desc">Biblioteca de charts de guitarra para no tener que cargar el ZIP cada vez. En cocina.</div>
+        </div>
       </div>
-      <div class="menu-card" onclick="window.open('test-pad.html','_blank')">
-        <div class="icon">🎸</div>
-        <div class="title">Comprobar el equipo</div>
-        <div class="desc">Diagnóstico de la alfombra y la guitarra: calibración, tiempo de respuesta, saltos y acordes, rasgueo, palanca, sensores pegados, sincronización.</div>
+    </section>
+
+    <!-- ===== SECCIÓN COMUNES (ambos hardware) ===== -->
+    <section class="dashboard-section common-section">
+      <h2 class="section-title">🛠️ Comunes <span class="section-subtitle">— para los dos</span></h2>
+      <div class="menu-grid">
+        <div class="menu-card" onclick="window.open('test-pad.html','_blank')">
+          <div class="icon">🛠️</div>
+          <div class="title">Comprobar el equipo</div>
+          <div class="desc">Diagnóstico de alfombra y guitarra: calibración, latencia, saltos/chords, rasgueo, palanca, sensores pegados, sync.</div>
+        </div>
+        <div class="menu-card" onclick="goto('calib')">
+          <div class="icon">🎯</div>
+          <div class="title">Calibración audio</div>
+          <div class="desc">Mide tu desfase real con un metrónomo y aplícalo en Ajustes.</div>
+        </div>
+        <div class="menu-card" onclick="goto('tutorial')">
+          <div class="icon">📖</div>
+          <div class="title">Tutorial</div>
+          <div class="desc">Cómo usar cada herramienta y cada ajuste, paso a paso.</div>
+        </div>
       </div>
-      <div class="menu-card" onclick="goto('library')">
-        <div class="icon">📚</div>
-        <div class="title">Mis canciones</div>
-        <div class="desc">Gestiona tu biblioteca: añade canciones (.ssc o .sm + audio) o paquetes ZIP del AutoStepper.</div>
-      </div>
-      <div class="menu-card" onclick="goto('calib')">
-        <div class="icon">🎯</div>
-        <div class="title">Calibración</div>
-        <div class="desc">Mide tu desfase real con un metrónomo y aplícalo en Ajustes.</div>
-      </div>
-      <div class="menu-card" onclick="goto('tutorial')">
-        <div class="icon">📖</div>
-        <div class="title">Tutorial</div>
-        <div class="desc">Cómo usar cada herramienta y cada ajuste, paso a paso.</div>
-      </div>
-    </div>
+    </section>
+
     <p class="help" style="text-align:center;margin-top:30px">
-      Teclado para jugar: ← ↓ ↑ →. La alfombra USB se detecta sola.
+      Alfombra: ← ↓ ↑ → (teclado fallback). Guitarra: 1-5 trastes + Espacio strum. Ambas se detectan solas si están conectadas.
     </p>
   </div>
 </div>

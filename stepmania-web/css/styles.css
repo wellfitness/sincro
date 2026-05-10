@@ -82,6 +82,84 @@ body {
 }
 #topbar .pill.off { background: rgba(225,29,72,0.18); color: var(--rosa-500); }
 
+/* Navegación rápida en topbar (Bailar / Tocar / Equipo / Tutorial) */
+#topbar .topbar-nav {
+  display: flex; gap: 4px; margin-right: 10px;
+}
+#topbar .topbar-link {
+  background: transparent; border: 1px solid rgba(255,255,255,0.08);
+  color: var(--gris-300); padding: 6px 12px; border-radius: 7px;
+  font-family: inherit; font-size: 0.85em; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap;
+}
+#topbar .topbar-link:hover {
+  background: rgba(0,190,200,0.18); border-color: rgba(0,190,200,0.5);
+  color: #fff;
+}
+@media (max-width: 900px) {
+  #topbar .topbar-link {
+    padding: 6px 8px; font-size: 0; /* solo emoji en móvil */
+  }
+  #topbar .topbar-link::first-letter { font-size: 16px; }
+  #topbar .crumb { display: none; }
+}
+
+/* ==== Dashboard secciones (StepMania / Guitar Hero / Comunes) ==== */
+.dashboard-section {
+  margin-bottom: 28px;
+  padding: 20px 24px;
+  border-radius: 14px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.dashboard-section .section-title {
+  font-family: var(--font-display);
+  font-size: 1.3em; letter-spacing: 0.02em;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.dashboard-section .section-subtitle {
+  color: var(--gris-500); font-size: 0.7em;
+  font-weight: 400; letter-spacing: 0;
+  font-family: var(--font-sans);
+}
+.dashboard-section.sm-section {
+  border-color: rgba(0,190,200,0.3);
+  background: linear-gradient(135deg, rgba(0,190,200,0.05), rgba(0,0,0,0.3));
+}
+.dashboard-section.sm-section .section-title { color: var(--turquesa-400); }
+.dashboard-section.gh-section {
+  border-color: rgba(249,115,22,0.3);
+  background: linear-gradient(135deg, rgba(249,115,22,0.05), rgba(0,0,0,0.3));
+}
+.dashboard-section.gh-section .section-title { color: #f97316; }
+.dashboard-section.common-section {
+  border-color: rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.35);
+}
+.dashboard-section.common-section .section-title { color: var(--gris-300); }
+
+/* Card "próximamente" */
+.menu-card.disabled {
+  opacity: 0.55; cursor: not-allowed;
+  background: rgba(0,0,0,0.4);
+  border: 1px dashed rgba(255,255,255,0.18) !important;
+}
+.menu-card.disabled:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+.menu-card .coming-soon {
+  display: inline-block;
+  font-size: 0.65em; font-weight: 400;
+  margin-left: 6px; padding: 2px 8px;
+  background: rgba(250,204,21,0.18); color: var(--tulip-tree-500);
+  border-radius: 10px; vertical-align: middle;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  font-family: var(--font-sans);
+}
+
 /* SCREENS */
 .screen {
   position: fixed; top: 50px; left: 0; right: 0; bottom: 0;

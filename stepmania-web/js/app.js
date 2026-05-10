@@ -101,4 +101,12 @@ function autoDetectLatency() {
 // ----- Kickoff ---------------------------------------------------------------
 pollGamepad();   // start gamepad RAF loop (defined in core.js)
 padTestLoop();   // start pad-test RAF loop (defined in pad-test.js)
-goto('menu');    // initial screen
+
+// Si la URL incluye ?screen=tutorial (o cualquier screen válida), abrimos
+// directo allí. Permite a los archivos satellite (gh-play, gh-autostepper,
+// test-pad) enlazar a screens concretas del SPA con `play.html?screen=X`.
+const _initialScreen = (() => {
+  const want = new URLSearchParams(window.location.search).get('screen');
+  return SCREENS.includes(want) ? want : 'menu';
+})();
+goto(_initialScreen);
