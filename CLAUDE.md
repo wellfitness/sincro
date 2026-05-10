@@ -65,12 +65,30 @@ Diagnóstico de hardware en el navegador (Gamepad API). Selector inicial **Alfom
 - `button[8]` = START · `button[9]` = BACK
 - Cualquier pad con mapping distinto (ImpactDX, Cobalt Flux, mats genéricos chinos, X-Pad…) recalibra los 10 roles desde la pestaña "Calibrar".
 
-**Mapping físico guitarra Guitar Hero PS2 via receptor Sony-emulado (VID 054C/PID 0268)** — default; recalibrable:
-- `button[0..4]` = trastes Verde/Rojo/Amarillo/Azul/Naranja
-- `button[6]` = strum ↓ · `button[7]` = strum ↑
-- `button[8]` = Select · `button[9]` = Start
-- `axes[2]` (eje Z) = palanca de whammy
-- Tilt y Star Power dependen del modelo — calibrar.
+**Mapping físico guitarra Guitar Hero PS2 via receptor Sony-emulado (VID 054C/PID 0268)** — defaults; calibrables. Mapping observado en una GH original (validado por inspección de `navigator.getGamepads()` con DevTools):
+- Trastes: btn[7]=Verde · btn[1]=Rojo · btn[0]=Amarillo · btn[2]=Azul · btn[3]=Naranja (orden no consecutivo — el receptor genérico no respeta el orden GH oficial).
+- **Strum bar y palanca de whammy COMPARTEN el mismo eje `axes[1]`** (10 ejes en total). Esta es la rareza crítica de este receptor:
+  - Strum ↓ = `{axis:1, dir:+1}` → axes[1] salta a +1 instantáneo (microswitch digital).
+  - Strum ↑ = `{axis:1, dir:-1}` → axes[1] salta a -1 instantáneo.
+  - Whammy = `axes[1]` con valores intermedios `0.004 → -0.169 → -0.365 → -0.741 → -1` (potenciómetro analógico, gradual).
+- Tilt y Star Power: btn[6] y btn[9] respectivamente (varía por modelo).
+- Select = btn[8]. Start: variable, calibrar.
+
+**Discriminación strum vs. whammy en `axes[1]` (algoritmo en `detectAxisStrum`):**
+La función dispara strum SOLO cuando se cumplen las dos condiciones simultáneamente:
+1. **Frame anterior** del eje estaba en zona neutra (`|lastV| < 0.3`).
+2. **Frame actual** del eje pasa la zona extrema (`|v| > 0.85`).
+
+El strum es un microswitch digital que salta de 0 → ±1 en un solo frame, así cumple ambas. La whammy es un potenciómetro físico que SIEMPRE pasa por valores intermedios antes de llegar al extremo, así nunca cumple la primera condición — no genera falsos positivos. Sin esta lógica, la whammy a fondo (que sí llega a ±1 ocasionalmente) dispararía strum erróneamente.
+
+Constantes en `test-pad.html`:
+- `AXIS_STRUM_FIRE = 0.85` (threshold del extremo).
+- `AXIS_NEUTRAL_ZONE = 0.3` (cuán cerca de 0 debe estar el frame anterior).
+- `lastAxisValue[i]` se actualiza al final de cada llamada a `detectAxisStrum` para tener disponible "v del frame previo" en la siguiente iteración.
+
+**Notas para receptores diferentes:**
+- En **receptores PS3 nativos / GH3 USB**, el strum bar puede estar en buttons (12/13 = D-pad como botones cuando `mapping="standard"`). En ese caso `strumDown`/`strumUp` se guardan como `number` (índice de button) y `detectAxisStrum` los ignora (pasan por el polling de botones convencional). El sistema soporta ambos formatos transparentemente vía `isAxisSpec()`.
+- La calibración multi-step (`detectCalibAxisCapture` + `captureCalib`) discrimina automáticamente: si durante el step de strum el usuario pulsa un botón, lo guarda como `number`; si en su lugar mueve un eje > 0.6 desde baseline, lo guarda como `{axis, dir}`.
 
 ### `autostepper.html`
 Generador automático de charts StepMania desde MP3/WAV. Equivalente al `phr00t/AutoStepper` (Java) pero en navegador.
