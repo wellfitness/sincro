@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>GH Play — Simulador Guitar Hero · Sincro</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=ABeeZee&family=Righteous&display=swap');
+
+  :root {
+    --rosa-500: #e11d48;
+    --rosa-600: #e11d48;
+    --rosa-700: #be123c;
+    --tulip-tree-500: #eab308;
+    --color-success: #10b981;
+    --color-warning: #f59e0b;
+    --color-error: #ef4444;
+    --gris-100: #f3f4f6;
+    --gris-300: #d1d5db;
+    --gris-400: #9ca3af;
+    --gris-500: #6b7280;
+    --gris-700: #374151;
+    --gris-800: #1f2937;
+    --gris-900: #111827;
+
+    --fret-green:  #10b981;
+    --fret-red:    #ef4444;
+    --fret-yellow: #facc15;
+    --fret-blue:   #3b82f6;
+    --fret-orange: #f97316;
+    --gh-accent:   #f97316;
+
+    --font-display: 'Righteous', Arial, sans-serif;
+    --font-sans: 'ABeeZee', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'Consolas', 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    background: linear-gradient(135deg, var(--gris-900) 0%, #000 100%);
+    color: #fff; min-height: 100vh; overflow: hidden;
+  }
+
+  /* ===== SETUP SCREEN ===== */
+  #setup-screen {
+    padding: 20px; max-width: 900px; margin: 0 auto;
+    min-height: 100vh; display: flex; flex-direction: column; gap: 20px;
+  }
+  #setup-screen h1 {
+    text-align: center; font-family: var(--font-display); font-size: 2.4em;
+    background: linear-gradient(90deg, var(--fret-green), var(--fret-yellow), var(--fret-orange), var(--fret-red));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    margin-top: 30px;
+  }
+  .subtitle { color: var(--gris-400); text-align: center; font-size: 0.95em; margin-bottom: 14px; }
+
+  .card {
+    background: rgba(0,0,0,0.4); border-radius: 14px;
+    padding: 20px 24px; border: 1px solid rgba(249,115,22,0.25);
+  }
+  .card h2 {
+    font-family: var(--font-display); color: var(--gh-accent);
+    font-size: 1.1em; margin-bottom: 14px;
+    border-bottom: 1px solid rgba(249,115,22,0.3); padding-bottom: 8px;
+  }
+  .card p { color: var(--gris-300); font-size: 0.9em; line-height: 1.55; }
+
+  .drop-zone {
+    border: 2px dashed rgba(249,115,22,0.5); border-radius: 12px;
+    padding: 26px; text-align: center; cursor: pointer;
+    transition: all 0.2s; background: rgba(249,115,22,0.05); display: block;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--gh-accent); background: rgba(249,115,22,0.12);
+  }
+  .drop-zone.loaded {
+    border-style: solid; border-color: var(--color-success);
+    background: rgba(16,185,129,0.08);
+  }
+  .drop-zone .icon { font-size: 2.5em; margin-bottom: 6px; }
+  .drop-zone .filename { color: var(--color-success); font-family: var(--font-mono); margin-top: 4px; }
+  input[type="file"] { display: none; }
+
+  .files-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    margin-top: 12px;
+  }
+  @media (max-width: 700px) { .files-grid { grid-template-columns: 1fr; } }
+
+  .info-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px; margin-top: 14px;
+  }
+  .info-item {
+    background: rgba(255,255,255,0.04); padding: 10px 14px;
+    border-radius: 8px; font-size: 0.9em;
+  }
+  .info-item .key { color: var(--gris-400); font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.04em; }
+  .info-item .val { color: var(--tulip-tree-500); font-family: var(--font-mono); margin-top: 2px; font-weight: 700; }
+
+  button.action-btn {
+    padding: 14px 30px; font-size: 1.1em;
+    background: linear-gradient(90deg, var(--gh-accent), var(--fret-red));
+    border: none; color: white; border-radius: 10px;
+    cursor: pointer; font-weight: 700;
+    font-family: var(--font-display); letter-spacing: 0.04em;
+    transition: opacity 0.2s, box-shadow 0.2s, transform 0.1s;
+  }
+  button.action-btn:hover { box-shadow: 0 0 20px rgba(249,115,22,0.6); transform: translateY(-1px); }
+  button.action-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; transform: none; }
+  button.action-btn.secondary {
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+  }
+  .center { text-align: center; }
+
+  .calib-banner {
+    padding: 12px 16px; border-radius: 10px;
+    background: rgba(250,204,21,0.10); border-left: 4px solid var(--tulip-tree-500);
+    font-size: 0.9em;
+  }
+  .calib-banner strong { color: var(--tulip-tree-500); }
+  .calib-banner.error { background: rgba(239,68,68,0.10); border-left-color: var(--color-error); }
+  .calib-banner.error strong { color: var(--color-error); }
+  .calib-banner.ok { background: rgba(16,185,129,0.10); border-left-color: var(--color-success); }
+  .calib-banner.ok strong { color: var(--color-success); }
+
+  .form-row { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .form-row label { color: var(--gris-400); min-width: 130px; font-size: 0.9em; }
+  .form-row input[type="range"] { flex: 1; min-width: 180px; accent-color: var(--gh-accent); }
+  .form-row input[type="number"] {
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(249,115,22,0.4);
+    color: #fff; padding: 6px 10px; border-radius: 6px; font-family: var(--font-mono); width: 80px;
+  }
+  .form-row select {
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(249,115,22,0.4);
+    color: #fff; padding: 6px 10px; border-radius: 6px;
+  }
+  .form-row .display { font-family: var(--font-mono); color: var(--fret-yellow); font-weight: 700; min-width: 60px; }
+
+  /* ===== GAME SCREEN ===== */
+  #game-screen, #results-screen { display: none; }
+  #game-screen.active, #results-screen.active { display: block; }
+  #setup-screen.hidden { display: none; }
+
+  #game-screen {
+    position: fixed; inset: 0;
+    background: linear-gradient(180deg, #000 0%, #0a0a14 100%);
+  }
+  canvas#highway {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    display: block;
+  }
+
+  .hud {
+    position: absolute; top: 20px; left: 20px; right: 20px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    pointer-events: none; z-index: 10;
+  }
+  .hud-left, .hud-right, .hud-center {
+    background: rgba(0,0,0,0.55); padding: 12px 18px;
+    border-radius: 10px; backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .hud .label { font-size: 0.7em; color: var(--gris-400); text-transform: uppercase; letter-spacing: 0.05em; }
+  .hud .value { font-family: var(--font-display); font-size: 1.6em; color: #fff; line-height: 1; }
+  .hud-center .multiplier {
+    font-size: 2em; color: var(--fret-yellow);
+    text-shadow: 0 0 10px rgba(250,204,21,0.6);
+  }
+  .hud-right { text-align: right; }
+
+  .judge-text {
+    position: absolute; left: 50%; top: 60%;
+    transform: translate(-50%, -50%);
+    font-family: var(--font-display); font-size: 2em;
+    text-shadow: 0 0 20px currentColor;
+    pointer-events: none; opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .judge-text.show { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+  .judge-perfect { color: var(--fret-yellow); }
+  .judge-good    { color: var(--color-success); }
+  .judge-miss    { color: var(--rosa-500); }
+
+  .pause-overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.8); display: none;
+    align-items: center; justify-content: center; flex-direction: column;
+    z-index: 100; gap: 18px;
+  }
+  .pause-overlay.show { display: flex; }
+  .pause-overlay h2 { font-family: var(--font-display); font-size: 2.5em; color: var(--gh-accent); }
+
+  /* ===== RESULTS ===== */
+  #results-screen {
+    padding: 30px 20px; max-width: 700px; margin: 0 auto;
+    min-height: 100vh; display: none; flex-direction: column; gap: 18px;
+  }
+  #results-screen.active { display: flex; }
+  #results-screen h1 {
+    text-align: center; font-family: var(--font-display); font-size: 2.4em;
+    background: linear-gradient(90deg, var(--fret-yellow), var(--fret-orange), var(--fret-red));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .results-stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .results-stat {
+    background: rgba(0,0,0,0.4); padding: 16px; border-radius: 10px;
+    border: 1px solid rgba(249,115,22,0.2); text-align: center;
+  }
+  .results-stat .label { color: var(--gris-400); font-size: 0.85em; }
+  .results-stat .value { color: var(--fret-yellow); font-size: 1.8em; font-weight: 700; font-family: var(--font-display); margin-top: 4px; }
+
+  .footer-link {
+    text-align: center; color: var(--gris-500); font-size: 0.85em;
+    padding: 20px;
+  }
+  .footer-link a { color: var(--gh-accent); text-decoration: none; }
+  .footer-link a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<!-- ============== SETUP SCREEN ============== -->
+<div id="setup-screen">
+  <h1>🎸 GH Play</h1>
+  <p class="subtitle">Simulador Guitar Hero · Cargá un chart y a tocar</p>
+
+  <div class="card">
+    <h2>1 · Estado de la guitarra</h2>
+    <div id="calibStatus"></div>
+  </div>
+
+  <div class="card">
+    <h2>2 · Cargar canción</h2>
+    <p>Sube el ZIP que generó <a href="gh-autostepper.html" style="color:var(--gh-accent)">gh-autostepper</a>, o un <code>.chart</code> + audio por separado.</p>
+
+    <div class="files-grid" style="margin-top:14px">
+      <label class="drop-zone" id="zipDrop">
+        <div class="icon">📦</div>
+        <p><strong>ZIP del autostepper</strong></p>
+        <p style="font-size:0.8em;color:var(--gris-500)">Contiene chart + ini + audio</p>
+        <div class="filename" id="zipName"></div>
+        <input type="file" id="zipInput" accept=".zip">
+      </label>
+
+      <div>
+        <label class="drop-zone" id="chartDrop" style="margin-bottom:10px">
+          <div class="icon">📄</div>
+          <p><strong>notes.chart</strong> (suelto)</p>
+          <div class="filename" id="chartName"></div>
+          <input type="file" id="chartInput" accept=".chart">
+        </label>
+        <label class="drop-zone" id="audioDrop">
+          <div class="icon">🎵</div>
+          <p><strong>Audio</strong> (mp3/ogg/wav)</p>
+          <div class="filename" id="audioName"></div>
+          <input type="file" id="audioInput" accept="audio/*">
+        </label>
+      </div>
+    </div>
+
+    <div id="songInfo" class="info-grid" style="display:none"></div>
+  </div>
+
+  <div class="card">
+    <h2>3 · Ajustes</h2>
+    <div class="form-row">
+      <label>Dificultad:</label>
+      <select id="difficulty">
+        <option value="ExpertSingle">Expert</option>
+        <option value="HardSingle">Hard</option>
+        <option value="MediumSingle" selected>Medium</option>
+        <option value="EasySingle">Easy</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Velocidad de scroll:</label>
+      <input type="range" id="speedSlider" min="200" max="900" step="50" value="500">
+      <span class="display" id="speedVal">500</span>
+    </div>
+    <div class="form-row">
+      <label>Offset global (ms):</label>
+      <input type="number" id="globalOffset" value="0" step="10">
+      <span style="font-size:0.8em;color:var(--gris-500)">+ = retraso (notas más tarde) · - = adelanto</span>
+    </div>
+    <div class="form-row">
+      <label>HOPO threshold (ticks):</label>
+      <input type="number" id="hopoThreshold" value="170" step="10">
+      <span style="font-size:0.8em;color:var(--gris-500)">CH usa ~170 (1/12 measure a 192 res)</span>
+    </div>
+  </div>
+
+  <div class="center" style="margin: 18px 0 30px">
+    <button class="action-btn" id="playBtn" onclick="startGame()" disabled>▶ Tocar</button>
+    <button class="action-btn secondary" onclick="window.location.href='test-pad.html'">Calibrar guitarra →</button>
+  </div>
+
+  <div class="footer-link">
+    Suite Sincro · <a href="gh-autostepper.html">Generar charts</a> · <a href="test-pad.html">Probar hardware</a> · <a href="autostepper.html">AutoStepper StepMania</a>
+  </div>
+</div>
+
+<!-- ============== GAME SCREEN ============== -->
+<div id="game-screen">
+  <canvas id="highway"></canvas>
+  <div class="hud">
+    <div class="hud-left">
+      <div class="label">Score</div>
+      <div class="value" id="hudScore">0</div>
+    </div>
+    <div class="hud-center">
+      <div class="multiplier" id="hudMult">x1</div>
+      <div class="label" style="text-align:center">Combo <span id="hudCombo">0</span></div>
+    </div>
+    <div class="hud-right">
+      <div class="label">Notas</div>
+      <div class="value"><span id="hudHit">0</span> / <span id="hudTotal">0</span></div>
+    </div>
+  </div>
+  <div class="judge-text" id="judgeText"></div>
+  <div class="pause-overlay" id="pauseOverlay">
+    <h2>PAUSA</h2>
+    <button class="action-btn" onclick="resumeGame()">▶ Continuar</button>
+    <button class="action-btn secondary" onclick="quitGame()">Volver al menú</button>
+  </div>
+</div>
+
+<!-- ============== RESULTS SCREEN ============== -->
+<div id="results-screen">
+  <h1 id="resultsTitle">¡Resultados!</h1>
+  <div class="results-stats" id="resultsStats"></div>
+  <div class="center" style="margin-top:20px">
+    <button class="action-btn" onclick="returnToSetup()">⏎ Volver al menú</button>
+  </div>
+</div>
+
+<script src="stepmania-web/js/audio-pipeline.js"></script>
+<script>
+// ============================================================================
+//                          GH PLAY — Simulador Guitar Hero
+//
+//  Motor de juego con strum + frets + HOPO + sustains. Lee el guitarMapping
+//  calibrado en test-pad.html (localStorage 'guitar-mapping') para mapear
+//  buttons físicos → roles lógicos. La detección de strum cuando es axis-based
+//  reusa la lógica del test (transición desde neutro hasta extremo).
+// ============================================================================
+
+// ---- Constantes ----
+const CHART_RESOLUTION = 192;     // ticks/quarter — debe coincidir con gh-autostepper
+
+// Timing windows (en segundos) — referencia: Clone Hero usa ~70ms para Perfect
+// y ~140ms para Good. Sincro adopta valores similares.
+const TIMING_PERFECT = 0.045;
+const TIMING_GOOD    = 0.090;
+const TIMING_BAD     = 0.135;     // último margen antes de miss
+
+const SCORES = { perfect: 50, good: 25, bad: 10, miss: 0 };
+const SUSTAIN_POINTS_PER_SEC = 25; // mientras se mantiene el sustain
+
+// Strum axis detection (reusa los mismos thresholds que test-pad.html para
+// distinguir strum de whammy en eje compartido)
+const AXIS_STRUM_FIRE   = 0.85;
+const AXIS_NEUTRAL_ZONE = 0.30;
+
+// ---- Estado global ----
+let song = null;        // { meta, syncTrack, charts: { ExpertSingle, ... }, audioBuffer, audioBlob }
+let game = null;        // estado del juego en curso (creado al startGame)
+let canvas, ctx2d;
+let canvasW = 0, canvasH = 0;
+let pausedAt = 0;       // cuando se pausó (audioCtx time)
+let isPaused = false;
+let rafId = null;
+
+// Calibración de guitarra (cargada de localStorage del test-pad)
+let guitarMapping = null;
+function loadGuitarMappingFromStorage() {
+  try {
+    const stored = localStorage.getItem('guitar-mapping');
+    if (!stored) return null;
+    return JSON.parse(stored);
+  } catch (e) { return null; }
+}
+
+// ---- Calibración status banner ----
+function refreshCalibStatus() {
+  const el = document.getElementById('calibStatus');
+  guitarMapping = loadGuitarMappingFromStorage();
+  if (!guitarMapping) {
+    el.innerHTML = '<div class="calib-banner error">' +
+      '<strong>⚠ Sin calibración.</strong> Tu guitarra no está calibrada todavía. ' +
+      'Ve a <a href="test-pad.html" style="color:var(--gh-accent)">Probar hardware → Guitarra → Calibrar</a> ' +
+      'antes de tocar. Mientras tanto puedes jugar con teclado: trastes <strong>1-5</strong>, strum <strong>Espacio</strong>.' +
+      '</div>';
+    return;
+  }
+  const fretCount = ['fretGreen','fretRed','fretYellow','fretBlue','fretOrange']
+    .filter(r => guitarMapping[r] !== null && guitarMapping[r] !== undefined).length;
+  const strumOk = (typeof guitarMapping.strumDown === 'number' || (guitarMapping.strumDown && typeof guitarMapping.strumDown.axis === 'number'))
+              && (typeof guitarMapping.strumUp === 'number' || (guitarMapping.strumUp && typeof guitarMapping.strumUp.axis === 'number'));
+  const cls = (fretCount >= 5 && strumOk) ? 'ok' : 'error';
+  const verdict = (fretCount >= 5 && strumOk)
+    ? `<strong>✓ Lista.</strong> ${fretCount}/5 trastes + strum bar ${strumOk ? 'configurado' : 'NO configurado'}.`
+    : `<strong>⚠ Calibración incompleta:</strong> ${fretCount}/5 trastes${strumOk ? '' : ', strum NO detectado'}. Re-calibra.`;
+  el.innerHTML = `<div class="calib-banner ${cls}">${verdict}</div>`;
+}
+refreshCalibStatus();
+
+// ============================================================================
+//                          .CHART PARSER
+// ============================================================================
+// Parsea el formato Feedback / Clone Hero. Soporta:
+//   - [Song]: metadata key=value
+//   - [SyncTrack]: 0 = TS 4 / 0 = B 120000 (BPMs en milibeats)
+//   - [Events]: ignorado por ahora (sections, lyrics)
+//   - [DifficultyName]: tick = N fret sustain (chord = múltiples líneas mismo tick)
+//
+// Para MVP soportamos solo BPM constante (la primera entrada B en SyncTrack).
+// Variable BPM queda como mejora futura — el motor de timing se puede extender
+// con un array de BPM markers y conversión tick→time por tramos.
+
+function parseChart(text) {
+  const sections = {};
+  let currentSection = null;
+  let currentBody = [];
+  const lines = text.split(/\r?\n/);
+
+  for (let raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith('[') && line.endsWith(']')) {
+      if (currentSection) sections[currentSection] = currentBody;
+      currentSection = line.slice(1, -1);
+      currentBody = [];
+      continue;
+    }
+    if (line === '{' || line === '}') continue;
+    if (currentSection) currentBody.push(line);
+  }
+  if (currentSection) sections[currentSection] = currentBody;
+
+  // Parse [Song]
+  const meta = {};
+  for (const line of (sections['Song'] || [])) {
+    const m = line.match(/^([A-Za-z][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!m) continue;
+    let key = m[1], val = m[2].trim();
+    if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
+    meta[key] = val;
+  }
+
+  // Parse [SyncTrack] — solo extraemos primer BPM y TS para MVP
+  let bpm = 120, timeSignature = 4;
+  for (const line of (sections['SyncTrack'] || [])) {
+    const m = line.match(/^(\d+)\s*=\s*(B|TS)\s+(\d+)/);
+    if (!m) continue;
+    if (m[2] === 'B' && parseInt(m[1]) === 0) bpm = parseInt(m[3]) / 1000;
+    if (m[2] === 'TS' && parseInt(m[1]) === 0) timeSignature = parseInt(m[3]);
+  }
+
+  // Parse cada sección de notas: [ExpertSingle], [HardSingle], etc.
+  // También soporta otras instrument modes (Bass, Drums) pero solo nos
+  // interesan las Single (guitar lead).
+  const charts = {};
+  for (const sec of Object.keys(sections)) {
+    if (!/^(Easy|Medium|Hard|Expert)Single$/.test(sec)) continue;
+    const notesByTick = new Map(); // tick → { frets: Set, sustain }
+    for (const line of sections[sec]) {
+      const m = line.match(/^(\d+)\s*=\s*N\s+(\d+)\s+(\d+)/);
+      if (!m) continue;
+      const tick = parseInt(m[1]);
+      const fret = parseInt(m[2]);
+      const sustainTicks = parseInt(m[3]);
+      // Frets 0-4 son trastes; 5/6 son flags (force HOPO/Tap); 7 es open note
+      if (fret > 7) continue;
+      if (!notesByTick.has(tick)) notesByTick.set(tick, { frets: new Set(), forceHopo: false, forceTap: false, sustain: 0 });
+      const n = notesByTick.get(tick);
+      if (fret === 5) n.forceHopo = true;
+      else if (fret === 6) n.forceTap = true;
+      else { n.frets.add(fret); n.sustain = Math.max(n.sustain, sustainTicks); }
+    }
+    // Convertir a array ordenado por tick
+    const arr = [];
+    for (const [tick, info] of notesByTick) {
+      if (info.frets.size === 0) continue; // solo flags sin notas → ignorar
+      arr.push({
+        tick,
+        frets: [...info.frets].sort((a, b) => a - b),
+        sustain: info.sustain,
+        forceHopo: info.forceHopo,
+        forceTap: info.forceTap
+      });
+    }
+    arr.sort((a, b) => a.tick - b.tick);
+    charts[sec] = arr;
+  }
+
+  return { meta, bpm, timeSignature, charts };
+}
+
+// Convierte tick a tiempo (segundos) asumiendo BPM constante.
+function tickToTime(tick, bpm) {
+  return (tick / CHART_RESOLUTION) * (60 / bpm);
+}
+
+// Auto-detecta HOPOs según regla Clone Hero:
+//   - nota single (no chord) AND
+//   - distinta a la anterior (no fret en común) AND
+//   - gap de tick < hopoThreshold AND
+//   - no tiene flag forceTap (que cancelaría HOPO)
+// O si forceHopo: HOPO independiente del gap.
+function annotateHopos(notes, hopoThresholdTicks) {
+  for (let i = 0; i < notes.length; i++) {
+    const n = notes[i];
+    n.isHopo = false;
+    n.isTap = n.forceTap;
+    if (n.isTap) continue;
+    if (n.forceHopo) { n.isHopo = true; continue; }
+    if (i === 0) continue;
+    const prev = notes[i-1];
+    if (n.frets.length !== 1) continue;        // chords no son HOPO auto
+    if (prev.frets.includes(n.frets[0])) continue; // mismo fret no es HOPO
+    if (n.tick - prev.tick >= hopoThresholdTicks) continue;
+    n.isHopo = true;
+  }
+}
+
+// ============================================================================
+//                          FILE LOADING
+// ============================================================================
+async function handleZipFile(file) {
+  document.getElementById('zipName').textContent = file.name;
+  document.getElementById('zipDrop').classList.add('loaded');
+  // Reset chart/audio drops si los hubiera
+  document.getElementById('chartDrop').classList.remove('loaded');
+  document.getElementById('audioDrop').classList.remove('loaded');
+  document.getElementById('chartName').textContent = '';
+  document.getElementById('audioName').textContent = '';
+
+  const buf = await file.arrayBuffer();
+  const entries = parseZipStore(new Uint8Array(buf));
+  let chartText = null, audioBytes = null, audioFilename = null;
+  for (const e of entries) {
+    const lower = e.name.toLowerCase();
+    if (lower.endsWith('notes.chart')) {
+      chartText = new TextDecoder('utf-8').decode(e.data);
+    } else if (/\.(mp3|ogg|wav|m4a|flac)$/i.test(lower)) {
+      audioBytes = e.data;
+      audioFilename = e.name.split('/').pop();
+    }
+  }
+  if (!chartText) throw new Error('El ZIP no contiene notes.chart');
+  if (!audioBytes) throw new Error('El ZIP no contiene archivo de audio');
+
+  await loadSong(chartText, audioBytes, audioFilename);
+}
+
+async function handleChartFile(file) {
+  document.getElementById('chartName').textContent = file.name;
+  document.getElementById('chartDrop').classList.add('loaded');
+  document.getElementById('zipDrop').classList.remove('loaded');
+  document.getElementById('zipName').textContent = '';
+  const text = await file.text();
+  // Si ya hay audio cargado, intentar fundirlos
+  if (window._pendingAudio) {
+    await loadSong(text, window._pendingAudio.bytes, window._pendingAudio.filename);
+    window._pendingAudio = null;
+  } else {
+    window._pendingChart = text;
+    document.getElementById('songInfo').style.display = 'none';
+  }
+}
+async function handleAudioFile(file) {
+  document.getElementById('audioName').textContent = file.name;
+  document.getElementById('audioDrop').classList.add('loaded');
+  document.getElementById('zipDrop').classList.remove('loaded');
+  document.getElementById('zipName').textContent = '';
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (window._pendingChart) {
+    await loadSong(window._pendingChart, bytes, file.name);
+    window._pendingChart = null;
+  } else {
+    window._pendingAudio = { bytes, filename: file.name };
+  }
+}
+
+async function loadSong(chartText, audioBytes, audioFilename) {
+  try {
+    const parsed = parseChart(chartText);
+    if (Object.keys(parsed.charts).length === 0) throw new Error('El chart no tiene secciones de notas (Easy/Medium/Hard/Expert Single)');
+
+    // Decode audio
+    const ctx = window.AudioPipeline.ensureAudioContext();
+    const audioBuffer = await ctx.decodeAudioData(audioBytes.buffer.slice(audioBytes.byteOffset, audioBytes.byteOffset + audioBytes.byteLength));
+
+    song = {
+      meta: parsed.meta,
+      bpm: parsed.bpm,
+      timeSignature: parsed.timeSignature,
+      charts: parsed.charts,
+      audioBuffer,
+      audioBytes,
+      audioFilename
+    };
+    renderSongInfo();
+    document.getElementById('playBtn').disabled = false;
+  } catch (err) {
+    alert('Error cargando: ' + err.message);
+    console.error(err);
+  }
+}
+
+function renderSongInfo() {
+  const el = document.getElementById('songInfo');
+  el.style.display = '';
+  const dur = song.audioBuffer.duration;
+  const totalNotes = Object.values(song.charts).reduce((s, arr) => s + arr.length, 0);
+  el.innerHTML = `
+    <div class="info-item"><div class="key">Título</div><div class="val">${escHtml(song.meta.Name || '?')}</div></div>
+    <div class="info-item"><div class="key">Artista</div><div class="val">${escHtml(song.meta.Artist || '?')}</div></div>
+    <div class="info-item"><div class="key">BPM</div><div class="val">${song.bpm.toFixed(1)}</div></div>
+    <div class="info-item"><div class="key">Duración</div><div class="val">${Math.floor(dur/60)}:${('0'+Math.floor(dur%60)).slice(-2)}</div></div>
+    <div class="info-item"><div class="key">Dificultades</div><div class="val">${Object.keys(song.charts).map(k => k.replace('Single','')).join(' · ')}</div></div>
+    <div class="info-item"><div class="key">Notas totales</div><div class="val">${totalNotes}</div></div>
+  `;
+
+  // Auto-poblar el dropdown de dificultad con las que existen en el chart
+  const sel = document.getElementById('difficulty');
+  const want = sel.value;
+  const order = ['ExpertSingle','HardSingle','MediumSingle','EasySingle'];
+  sel.innerHTML = '';
+  for (const k of order) {
+    if (song.charts[k]) {
+      const opt = document.createElement('option');
+      opt.value = k; opt.textContent = k.replace('Single','') + ` (${song.charts[k].length} notas)`;
+      sel.appendChild(opt);
+    }
+  }
+  // Mantener selección si existe, si no la mejor disponible
+  if ([...sel.options].some(o => o.value === want)) sel.value = want;
+}
+function escHtml(s) { return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ---- Drop zone handlers ----
+['zip', 'chart', 'audio'].forEach(t => {
+  const dz = document.getElementById(t + 'Drop');
+  const inp = document.getElementById(t + 'Input');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) {
+      const f = e.dataTransfer.files[0];
+      handleFile(t, f);
+    }
+  });
+  inp.addEventListener('change', e => {
+    if (e.target.files.length > 0) handleFile(t, e.target.files[0]);
+  });
+});
+function handleFile(type, file) {
+  if (type === 'zip')   handleZipFile(file).catch(err => alert(err.message));
+  if (type === 'chart') handleChartFile(file).catch(err => alert(err.message));
+  if (type === 'audio') handleAudioFile(file).catch(err => alert(err.message));
+}
+
+// Sliders
+document.getElementById('speedSlider').addEventListener('input', e => {
+  document.getElementById('speedVal').textContent = e.target.value;
+});
+
+// ============================================================================
+//                          ZIP STORE PARSER (for autostepper output)
+// ============================================================================
+// Solo soporta ZIPs sin compresión (método "store"). Los ZIPs generados por
+// gh-autostepper.html son store-only así que esto basta para nuestra suite.
+function parseZipStore(bytes) {
+  // Find End of Central Directory record (signature 0x06054b50) by scanning
+  // backwards from the end of the file.
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocdPos = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+    if (view.getUint32(i, true) === 0x06054b50) { eocdPos = i; break; }
+  }
+  if (eocdPos < 0) throw new Error('ZIP inválido: no se encuentra EOCD');
+  const numEntries = view.getUint16(eocdPos + 10, true);
+  const cdSize     = view.getUint32(eocdPos + 12, true);
+  const cdOffset   = view.getUint32(eocdPos + 16, true);
+  const dec = new TextDecoder('utf-8');
+  const entries = [];
+  let p = cdOffset;
+  for (let i = 0; i < numEntries; i++) {
+    if (view.getUint32(p, true) !== 0x02014b50) throw new Error('ZIP inválido: entrada Central Directory');
+    const method = view.getUint16(p + 10, true);
+    const compSize = view.getUint32(p + 20, true);
+    const uncompSize = view.getUint32(p + 24, true);
+    const nameLen = view.getUint16(p + 28, true);
+    const extraLen = view.getUint16(p + 30, true);
+    const commentLen = view.getUint16(p + 32, true);
+    const localOffset = view.getUint32(p + 42, true);
+    const name = dec.decode(bytes.subarray(p + 46, p + 46 + nameLen));
+    p += 46 + nameLen + extraLen + commentLen;
+    if (method !== 0) throw new Error(`Entrada "${name}" usa compresión (método ${method}); solo se soporta store`);
+    // Lee local file header para saber dónde empiezan los datos
+    if (view.getUint32(localOffset, true) !== 0x04034b50) throw new Error('ZIP inválido: local header');
+    const lhNameLen = view.getUint16(localOffset + 26, true);
+    const lhExtraLen = view.getUint16(localOffset + 28, true);
+    const dataOffset = localOffset + 30 + lhNameLen + lhExtraLen;
+    const data = bytes.subarray(dataOffset, dataOffset + compSize);
+    entries.push({ name, data, size: uncompSize });
+  }
+  return entries;
+}
+
+// ============================================================================
+//                          INPUT — gamepad polling + axis-based strum
+// ============================================================================
+// Estado de inputs por frame:
+//   - fretsHeld: [bool x 5] — qué trastes están pulsados ahora
+//   - strumDownEdge / strumUpEdge: true SOLO en el frame del flanco DOWN
+//
+// Maneja tanto buttons (defaults / GH3 USB nativo) como axis-based strum
+// (Guitar Hero PS2 con receptor Sony-emulado que multiplexea en axes[1]).
+
+const inputState = {
+  fretsHeld: [false, false, false, false, false],
+  prevFretsHeld: [false, false, false, false, false],
+  strumDownEdge: false,
+  strumUpEdge: false,
+  whammy: 0,    // 0..1 (tras normalizar)
+  tilt: false
+};
+const FRET_ROLES = ['fretGreen','fretRed','fretYellow','fretBlue','fretOrange'];
+
+const lastAxisValue = {};                    // axis idx → last value (para detección de strum)
+const prevAxisStrum = { down: false, up: false };
+
+function readGamepad() {
+  // Reset edges
+  inputState.strumDownEdge = false;
+  inputState.strumUpEdge = false;
+  inputState.prevFretsHeld = inputState.fretsHeld.slice();
+  inputState.fretsHeld = [false, false, false, false, false];
+
+  if (!guitarMapping) return;
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp = null;
+  for (const p of pads) if (p && p.connected) { gp = p; break; }
+  if (!gp) return;
+
+  // Leer trastes (siempre buttons)
+  for (let i = 0; i < FRET_ROLES.length; i++) {
+    const btnIdx = guitarMapping[FRET_ROLES[i]];
+    if (typeof btnIdx === 'number' && gp.buttons[btnIdx]) {
+      inputState.fretsHeld[i] = gp.buttons[btnIdx].pressed || gp.buttons[btnIdx].value > 0.5;
+    }
+  }
+
+  // Strum: button index O axis spec
+  const sd = guitarMapping.strumDown;
+  const su = guitarMapping.strumUp;
+
+  if (typeof sd === 'number') {
+    const cur = gp.buttons[sd] && (gp.buttons[sd].pressed || gp.buttons[sd].value > 0.5);
+    if (cur && !prevAxisStrum.down) inputState.strumDownEdge = true;
+    prevAxisStrum.down = cur;
+  } else if (sd && typeof sd.axis === 'number') {
+    const v = gp.axes[sd.axis];
+    const lastV = (lastAxisValue[sd.axis] !== undefined) ? lastAxisValue[sd.axis] : 0;
+    const wasNeutral = Math.abs(lastV) < AXIS_NEUTRAL_ZONE;
+    const correctDir = (sd.dir > 0) ? (v > AXIS_STRUM_FIRE) : (v < -AXIS_STRUM_FIRE);
+    const active = wasNeutral && correctDir;
+    if (active && !prevAxisStrum.down) inputState.strumDownEdge = true;
+    prevAxisStrum.down = active;
+  }
+  if (typeof su === 'number') {
+    const cur = gp.buttons[su] && (gp.buttons[su].pressed || gp.buttons[su].value > 0.5);
+    if (cur && !prevAxisStrum.up) inputState.strumUpEdge = true;
+    prevAxisStrum.up = cur;
+  } else if (su && typeof su.axis === 'number') {
+    const v = gp.axes[su.axis];
+    const lastV = (lastAxisValue[su.axis] !== undefined) ? lastAxisValue[su.axis] : 0;
+    const wasNeutral = Math.abs(lastV) < AXIS_NEUTRAL_ZONE;
+    const correctDir = (su.dir > 0) ? (v > AXIS_STRUM_FIRE) : (v < -AXIS_STRUM_FIRE);
+    const active = wasNeutral && correctDir;
+    if (active && !prevAxisStrum.up) inputState.strumUpEdge = true;
+    prevAxisStrum.up = active;
+  }
+
+  // Whammy: lectura del eje (no edge, valor continuo)
+  const wAx = guitarMapping.whammyAxis;
+  if (typeof wAx === 'number' && gp.axes[wAx] !== undefined) {
+    inputState.whammy = Math.max(0, Math.min(1, (gp.axes[wAx] + 1) / 2));
+  }
+
+  // Tilt: button (Star Power)
+  if (typeof guitarMapping.tilt === 'number' && gp.buttons[guitarMapping.tilt]) {
+    inputState.tilt = gp.buttons[guitarMapping.tilt].pressed;
+  }
+
+  // Actualizar lastAxisValue para el siguiente frame
+  for (let i = 0; i < gp.axes.length; i++) lastAxisValue[i] = gp.axes[i];
+}
+
+// ---- Keyboard fallback (1-5 frets, Space strum) ----
+const keysHeld = { Digit1:false, Digit2:false, Digit3:false, Digit4:false, Digit5:false };
+let kbStrumQueued = false;
+window.addEventListener('keydown', e => {
+  if (!game) return;
+  if (e.code === 'Escape') { togglePause(); return; }
+  if (keysHeld.hasOwnProperty(e.code)) keysHeld[e.code] = true;
+  if (e.code === 'Space') { kbStrumQueued = true; e.preventDefault(); }
+});
+window.addEventListener('keyup', e => {
+  if (keysHeld.hasOwnProperty(e.code)) keysHeld[e.code] = false;
+});
+function applyKeyboardFallback() {
+  // Si no hay gamepad o no hay mapping, usa teclado para los frets
+  // y para el strum (Space).
+  if (!guitarMapping) {
+    inputState.fretsHeld = [
+      keysHeld.Digit1, keysHeld.Digit2, keysHeld.Digit3, keysHeld.Digit4, keysHeld.Digit5
+    ];
+    if (kbStrumQueued) { inputState.strumDownEdge = true; kbStrumQueued = false; }
+    return;
+  }
+  // Si hay mapping pero el usuario también pulsa teclas, aceptamos OR de ambas
+  for (let i = 0; i < 5; i++) {
+    inputState.fretsHeld[i] = inputState.fretsHeld[i] || keysHeld['Digit' + (i+1)];
+  }
+  if (kbStrumQueued) { inputState.strumDownEdge = true; kbStrumQueued = false; }
+}
+
+// ============================================================================
+//                          GAME LOOP
+// ============================================================================
+function startGame() {
+  if (!song) return;
+  const diff = document.getElementById('difficulty').value;
+  const notes = song.charts[diff];
+  if (!notes || notes.length === 0) { alert('No hay notas en esa dificultad'); return; }
+
+  // Anotar HOPOs según threshold configurado
+  const hopoThr = parseInt(document.getElementById('hopoThreshold').value) || 170;
+  annotateHopos(notes, hopoThr);
+
+  // Convertir notas a representación runtime con tiempos absolutos
+  const speed = parseInt(document.getElementById('speedSlider').value);
+  const offsetMs = parseInt(document.getElementById('globalOffset').value) || 0;
+  const offsetSec = offsetMs / 1000;
+  const runtimeNotes = notes.map(n => ({
+    time: tickToTime(n.tick, song.bpm) + offsetSec,
+    sustainEnd: tickToTime(n.tick + n.sustain, song.bpm) + offsetSec,
+    sustain: n.sustain > 0,
+    frets: n.frets,
+    isHopo: n.isHopo,
+    isTap: n.isTap,
+    hit: false,
+    judged: false,        // ya se procesó (hit o miss)
+    sustainScored: 0,     // segundos ya scoreados de sustain
+    sustainBroken: false  // se soltaron los frets durante el sustain → no más puntos
+  }));
+
+  game = {
+    notes: runtimeNotes,
+    diff,
+    speed,
+    score: 0,
+    combo: 0,
+    maxCombo: 0,
+    hits: 0,
+    misses: 0,
+    starPower: 0,
+    starPowerActive: false,
+    audioStartTime: 0,
+    audioSource: null,
+    nextNoteIdx: 0,
+    activeSustains: []   // notas con sustain activo (frets correctos siendo mantenidos)
+  };
+
+  // Cambiar pantalla
+  document.getElementById('setup-screen').classList.add('hidden');
+  document.getElementById('game-screen').classList.add('active');
+  document.getElementById('hudTotal').textContent = runtimeNotes.length;
+  document.getElementById('hudHit').textContent = '0';
+  document.getElementById('hudScore').textContent = '0';
+  document.getElementById('hudCombo').textContent = '0';
+  document.getElementById('hudMult').textContent = 'x1';
+
+  // Setup canvas
+  canvas = document.getElementById('highway');
+  ctx2d = canvas.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  // Start audio
+  const ctx = window.AudioPipeline.ensureAudioContext();
+  if (ctx.state === 'suspended') ctx.resume();
+  game.audioSource = ctx.createBufferSource();
+  game.audioSource.buffer = song.audioBuffer;
+  game.audioSource.connect(ctx.destination);
+  // Damos 2 segundos de countdown antes de que empiece la canción para que el
+  // jugador vea las primeras notas caer.
+  const countdownSec = 2.0;
+  game.audioStartTime = ctx.currentTime + countdownSec;
+  game.audioSource.start(game.audioStartTime);
+
+  isPaused = false;
+  document.getElementById('pauseOverlay').classList.remove('show');
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(tick);
+}
+
+function tick() {
+  if (!game) return;
+  const ctx = window.AudioPipeline.ensureAudioContext();
+  const t = ctx.currentTime - game.audioStartTime;
+
+  if (!isPaused) {
+    readGamepad();
+    applyKeyboardFallback();
+    processInput(t);
+    processSustains(t);
+    processMisses(t);
+  }
+
+  render(t);
+
+  // Fin si terminamos las notas Y ya pasó el último sustainEnd o el audio
+  const lastNote = game.notes[game.notes.length - 1];
+  if (lastNote && t > lastNote.sustainEnd + 1.0 && game.notes.every(n => n.judged)) {
+    finishGame();
+    return;
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+function togglePause() {
+  if (!game) return;
+  isPaused = !isPaused;
+  document.getElementById('pauseOverlay').classList.toggle('show', isPaused);
+  const ctx = window.AudioPipeline.ensureAudioContext();
+  if (isPaused) {
+    pausedAt = ctx.currentTime;
+    if (game.audioSource) try { game.audioSource.stop(); } catch(e){}
+  } else {
+    // Reanudar desde donde estaba
+    const pauseDuration = ctx.currentTime - pausedAt;
+    game.audioStartTime += pauseDuration;
+    game.audioSource = ctx.createBufferSource();
+    game.audioSource.buffer = song.audioBuffer;
+    game.audioSource.connect(ctx.destination);
+    const offsetIntoSong = ctx.currentTime - game.audioStartTime;
+    if (offsetIntoSong >= 0) {
+      game.audioSource.start(0, offsetIntoSong);
+    } else {
+      game.audioSource.start(ctx.currentTime - offsetIntoSong);
+    }
+  }
+}
+function resumeGame() { if (isPaused) togglePause(); }
+function quitGame() {
+  if (game && game.audioSource) try { game.audioSource.stop(); } catch(e){}
+  if (rafId) cancelAnimationFrame(rafId);
+  game = null;
+  document.getElementById('game-screen').classList.remove('active');
+  document.getElementById('setup-screen').classList.remove('hidden');
+}
+
+// ============================================================================
+//                          HIT DETECTION
+// ============================================================================
+// Match rule (Clone Hero anchor para single notes):
+//   - note.frets = [a, b, ...] (sorted ascending)
+//   - max chord fret M = note.frets[length-1]
+//   - todos los frets de la nota DEBEN estar pulsados
+//   - ningún fret > M debe estar pulsado
+//   - Para chords (>1 fret): match estricto (no anchoring entre frets)
+//     Para single (1 fret): frets < M pueden estar pulsados (anchor)
+
+function fretsMatchNote(noteFrets, fretsHeld) {
+  const M = noteFrets[noteFrets.length - 1];
+  if (noteFrets.length === 1) {
+    // Single note: anchor — debe estar pulsado el target Y nada más alto
+    if (!fretsHeld[M]) return false;
+    for (let i = M + 1; i < 5; i++) if (fretsHeld[i]) return false;
+    return true;
+  }
+  // Chord: match estricto, todos los frets de la nota pulsados Y ningún otro
+  for (let i = 0; i < 5; i++) {
+    const inChord = noteFrets.includes(i);
+    if (inChord && !fretsHeld[i]) return false;
+    if (!inChord && fretsHeld[i]) return false;
+  }
+  return true;
+}
+
+function processInput(t) {
+  // Buscar la próxima nota no juzgada en ventana Bad
+  let target = null, targetIdx = -1;
+  for (let i = game.nextNoteIdx; i < game.notes.length; i++) {
+    const n = game.notes[i];
+    if (n.judged) continue;
+    const dt = n.time - t;
+    if (dt > TIMING_BAD) break;       // todavía muy lejos en el futuro
+    if (dt < -TIMING_BAD) continue;   // ya pasó la ventana
+    target = n; targetIdx = i; break;
+  }
+  if (!target) return;
+
+  const isHopoOrTap = target.isHopo || target.isTap;
+  const matched = fretsMatchNote(target.frets, inputState.fretsHeld);
+
+  // Ruta 1: strum — siempre puede activar la nota si frets matchean
+  if (inputState.strumDownEdge || inputState.strumUpEdge) {
+    if (matched) {
+      judgeHit(target, targetIdx, t);
+    } else {
+      // Strum sin frets correctos = combo break (overstrum)
+      breakCombo();
+    }
+    return;
+  }
+
+  // Ruta 2: HOPO/Tap — sin strum, basta cambio de fret state que matchee
+  if (isHopoOrTap && matched && (game.combo > 0 || target.isTap)) {
+    // HOPOs requieren combo > 0 (vienes de hit anterior); Taps no.
+    // Solo dispara si el state cambió este frame (evita auto-fire en cada tick)
+    const stateChanged = inputState.fretsHeld.some((v, i) => v !== inputState.prevFretsHeld[i]);
+    if (stateChanged) {
+      judgeHit(target, targetIdx, t);
+    }
+  }
+}
+
+function judgeHit(note, idx, t) {
+  note.hit = true;
+  note.judged = true;
+  if (note.sustain) game.activeSustains.push(note);
+  game.hits++;
+  game.combo++;
+  if (game.combo > game.maxCombo) game.maxCombo = game.combo;
+  const dt = Math.abs(note.time - t);
+  let kind = 'bad';
+  if (dt < TIMING_PERFECT) kind = 'perfect';
+  else if (dt < TIMING_GOOD) kind = 'good';
+  game.score += SCORES[kind] * getMultiplier();
+  if (idx === game.nextNoteIdx) game.nextNoteIdx++;
+  showJudge(kind);
+  updateHud();
+}
+
+function breakCombo() {
+  if (game.combo > 0) {
+    game.combo = 0;
+    showJudge('miss');
+    updateHud();
+  }
+}
+
+function processMisses(t) {
+  for (let i = game.nextNoteIdx; i < game.notes.length; i++) {
+    const n = game.notes[i];
+    if (n.judged) { if (i === game.nextNoteIdx) game.nextNoteIdx++; continue; }
+    if (n.time + TIMING_BAD < t) {
+      n.judged = true;
+      game.misses++;
+      game.combo = 0;
+      if (i === game.nextNoteIdx) game.nextNoteIdx++;
+      showJudge('miss');
+      updateHud();
+    } else break;
+  }
+}
+
+function processSustains(t) {
+  // Para cada sustain activo: si los frets se mantienen, dar puntos.
+  // Si se sueltan, marcar broken.
+  for (const n of game.activeSustains) {
+    if (n.sustainBroken) continue;
+    if (t > n.sustainEnd) { n.sustainBroken = true; continue; }
+    if (!fretsMatchNote(n.frets, inputState.fretsHeld)) {
+      n.sustainBroken = true;
+      continue;
+    }
+    // Acumular puntos de sustain por delta de tiempo
+    const newScored = Math.min(t, n.sustainEnd) - n.time;
+    const earned = (newScored - n.sustainScored) * SUSTAIN_POINTS_PER_SEC * getMultiplier();
+    if (earned > 0) {
+      game.score += earned;
+      n.sustainScored = newScored;
+    }
+  }
+  // Limpiar los terminados
+  game.activeSustains = game.activeSustains.filter(n => !n.sustainBroken && t <= n.sustainEnd);
+}
+
+function getMultiplier() {
+  // Multiplicador clásico: x1 / x2 (10 combo) / x3 (20) / x4 (30)
+  if (game.combo >= 30) return 4;
+  if (game.combo >= 20) return 3;
+  if (game.combo >= 10) return 2;
+  return 1;
+}
+
+let judgeTimeout = null;
+function showJudge(kind) {
+  const el = document.getElementById('judgeText');
+  const text = { perfect: 'PERFECT!', good: 'GOOD', bad: 'BAD', miss: 'MISS' }[kind];
+  el.textContent = text;
+  el.className = 'judge-text show judge-' + kind.replace('bad', 'good');
+  if (judgeTimeout) clearTimeout(judgeTimeout);
+  judgeTimeout = setTimeout(() => el.classList.remove('show'), 350);
+}
+
+function updateHud() {
+  document.getElementById('hudScore').textContent = Math.round(game.score);
+  document.getElementById('hudCombo').textContent = game.combo;
+  document.getElementById('hudHit').textContent = game.hits;
+  document.getElementById('hudMult').textContent = 'x' + getMultiplier();
+}
+
+// ============================================================================
+//                          RENDER
+// ============================================================================
+function resizeCanvas() {
+  canvasW = canvas.width = window.innerWidth;
+  canvasH = canvas.height = window.innerHeight;
+}
+
+const FRET_COLORS = ['#10b981', '#ef4444', '#facc15', '#3b82f6', '#f97316'];
+
+function render(t) {
+  ctx2d.clearRect(0, 0, canvasW, canvasH);
+  // Highway: 5 carriles centrados en pantalla
+  const highwayW = Math.min(canvasW * 0.7, 600);
+  const laneW = highwayW / 5;
+  const highwayX = (canvasW - highwayW) / 2;
+  const hitY = canvasH * 0.85;          // posición del hit zone
+  const topY = canvasH * 0.05;
+
+  // Fondo highway
+  ctx2d.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx2d.fillRect(highwayX, topY, highwayW, hitY - topY);
+
+  // Líneas de carriles
+  ctx2d.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx2d.lineWidth = 1;
+  for (let i = 0; i <= 5; i++) {
+    const x = highwayX + i * laneW;
+    ctx2d.beginPath();
+    ctx2d.moveTo(x, topY); ctx2d.lineTo(x, hitY);
+    ctx2d.stroke();
+  }
+
+  // Hit zone (línea horizontal)
+  ctx2d.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx2d.lineWidth = 2;
+  ctx2d.beginPath();
+  ctx2d.moveTo(highwayX, hitY); ctx2d.lineTo(highwayX + highwayW, hitY);
+  ctx2d.stroke();
+
+  // Receptors en hit zone (5 frets)
+  const receptorRadius = laneW * 0.3;
+  for (let i = 0; i < 5; i++) {
+    const cx = highwayX + (i + 0.5) * laneW;
+    const held = inputState.fretsHeld[i];
+    ctx2d.beginPath();
+    ctx2d.arc(cx, hitY, receptorRadius, 0, Math.PI * 2);
+    ctx2d.fillStyle = held ? FRET_COLORS[i] : 'rgba(0,0,0,0.5)';
+    ctx2d.fill();
+    ctx2d.strokeStyle = FRET_COLORS[i];
+    ctx2d.lineWidth = 3;
+    ctx2d.stroke();
+    if (held) {
+      ctx2d.shadowBlur = 18;
+      ctx2d.shadowColor = FRET_COLORS[i];
+      ctx2d.beginPath();
+      ctx2d.arc(cx, hitY, receptorRadius * 0.6, 0, Math.PI * 2);
+      ctx2d.fillStyle = '#fff';
+      ctx2d.fill();
+      ctx2d.shadowBlur = 0;
+    }
+  }
+
+  // Notas: dibujar las que están entre topY y hitY
+  // y = hitY - (note.time - t) * speed
+  const speed = game.speed;
+  const lookAhead = (hitY - topY) / speed;
+  for (let i = game.nextNoteIdx; i < game.notes.length; i++) {
+    const n = game.notes[i];
+    if (n.time - t > lookAhead + 0.5) break;
+    const yCenter = hitY - (n.time - t) * speed;
+    if (yCenter < topY - 50) continue;
+    if (n.judged && !n.sustain) continue;       // notas ya hit o miss desaparecen
+    if (n.judged && n.sustain && n.sustainBroken) continue;
+
+    // Sustain tail (antes que la cabeza)
+    if (n.sustain) {
+      const yEnd = hitY - (Math.min(n.sustainEnd, n.time + (n.sustainEnd - n.time)) - t) * speed;
+      for (const f of n.frets) {
+        const cx = highwayX + (f + 0.5) * laneW;
+        ctx2d.fillStyle = FRET_COLORS[f] + 'cc';
+        ctx2d.fillRect(cx - laneW * 0.08, Math.min(yCenter, yEnd), laneW * 0.16, Math.abs(yCenter - yEnd));
+      }
+    }
+    // Cabeza de la nota
+    for (const f of n.frets) {
+      const cx = highwayX + (f + 0.5) * laneW;
+      const r = laneW * 0.32;
+      ctx2d.beginPath();
+      ctx2d.arc(cx, yCenter, r, 0, Math.PI * 2);
+      ctx2d.fillStyle = FRET_COLORS[f];
+      ctx2d.fill();
+      // HOPO: borde blanco; Tap: relleno blanco; normal: borde negro
+      if (n.isHopo) {
+        ctx2d.strokeStyle = '#fff'; ctx2d.lineWidth = 3; ctx2d.stroke();
+      } else if (n.isTap) {
+        ctx2d.fillStyle = '#fff';
+        ctx2d.beginPath();
+        ctx2d.arc(cx, yCenter, r * 0.55, 0, Math.PI * 2);
+        ctx2d.fill();
+      } else {
+        ctx2d.strokeStyle = '#000'; ctx2d.lineWidth = 2; ctx2d.stroke();
+      }
+    }
+  }
+
+  // Countdown si t < 0
+  if (t < 0) {
+    const sec = Math.ceil(-t);
+    ctx2d.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx2d.font = `bold ${canvasH * 0.18}px ${getComputedStyle(document.body).getPropertyValue('--font-display') || 'sans-serif'}`;
+    ctx2d.textAlign = 'center'; ctx2d.textBaseline = 'middle';
+    ctx2d.fillText(sec, canvasW / 2, canvasH / 2);
+  }
+}
+
+// ============================================================================
+//                          RESULTS / END
+// ============================================================================
+function finishGame() {
+  if (!game) return;
+  if (game.audioSource) try { game.audioSource.stop(); } catch(e){}
+  if (rafId) cancelAnimationFrame(rafId);
+
+  const total = game.notes.length;
+  const accuracy = total > 0 ? (game.hits / total) * 100 : 0;
+  let grade = 'F';
+  if (accuracy >= 95) grade = 'S';
+  else if (accuracy >= 85) grade = 'A';
+  else if (accuracy >= 75) grade = 'B';
+  else if (accuracy >= 60) grade = 'C';
+  else if (accuracy >= 40) grade = 'D';
+
+  document.getElementById('game-screen').classList.remove('active');
+  document.getElementById('results-screen').classList.add('active');
+  document.getElementById('resultsTitle').textContent =
+    `${grade} · ${escHtml(song.meta.Name || 'Sin título')}`;
+
+  const stats = document.getElementById('resultsStats');
+  stats.innerHTML = `
+    <div class="results-stat"><div class="label">Score</div><div class="value">${Math.round(game.score)}</div></div>
+    <div class="results-stat"><div class="label">Accuracy</div><div class="value">${accuracy.toFixed(1)}%</div></div>
+    <div class="results-stat"><div class="label">Hits</div><div class="value">${game.hits}/${total}</div></div>
+    <div class="results-stat"><div class="label">Misses</div><div class="value">${game.misses}</div></div>
+    <div class="results-stat"><div class="label">Max combo</div><div class="value">${game.maxCombo}</div></div>
+    <div class="results-stat"><div class="label">Dificultad</div><div class="value" style="font-size:1em">${game.diff.replace('Single','')}</div></div>
+  `;
+  game = null;
+}
+function returnToSetup() {
+  document.getElementById('results-screen').classList.remove('active');
+  document.getElementById('setup-screen').classList.remove('hidden');
+}
+</script>
+</body>
+</html>

@@ -128,6 +128,42 @@ Algoritmo (optimizado para música bailable: techno, dance, pop, rock):
 
 Implementa encoder ZIP propio (modo "store", sin compresión) — sin dependencias externas.
 
+### `gh-play.html`
+**Simulador Guitar Hero** en el navegador. Carga charts `.chart` (formato Feedback / Clone Hero) bien sea como ZIP del autostepper o como `notes.chart` + audio sueltos. Lee el `guitarMapping` calibrado desde `localStorage` (key `guitar-mapping`, generado por `test-pad.html`) — cero re-calibración. También soporta teclado fallback (1-5 frets, Espacio strum) para testing sin guitarra.
+
+**Motor de hit detection (regla Clone Hero estándar):**
+- **Single notes**: anchor — el target debe estar pulsado, ningún fret más alto puede estarlo, frets más bajos pueden estar pulsados o no (anchor). Ejemplo: nota Yellow puede hitearse con (Green+Yellow), no con (Yellow+Blue).
+- **Chord notes**: match estricto — exactamente esos frets, ni más ni menos.
+- **Strum-required (default)**: hit dispara solo en flanco DOWN o UP del strum bar Y match de frets. Strum sin frets correctos = combo break (overstrum).
+- **HOPOs (auto-detectados en runtime)**: si la nota tiene gap < hopoThreshold (default 170 ticks ≈ 1/12 measure a 192 res) Y es single Y distinto fret al anterior Y combo > 0, basta con cambiar a los frets correctos sin strum. Threshold ajustable en setup.
+- **Taps (fret 6 en .chart)**: se hitean sin strum desde combo 0; típicos de Expert+ marcados explícitamente.
+
+**Timing windows**: Perfect 45ms · Good 90ms · Bad 135ms (referencia: Clone Hero usa valores similares). Multiplicador clásico: x1 / x2 (10 combo) / x3 (20) / x4 (30).
+
+**Sustains**: si la nota tiene `sustain > 0`, mientras los frets se mantengan pulsados se acumulan puntos (`SUSTAIN_POINTS_PER_SEC` × multiplicador). Soltar los frets antes del final = sustainBroken (no más puntos pero el combo sobrevive). Frets distintos durante el sustain también lo rompen.
+
+**Detección de strum compartida con `test-pad.html`**: para guitarras donde el strum vive en eje (axes[1] en GH PS2 vía receptor Sony-emulado) usa el mismo algoritmo de transición desde neutro (`AXIS_STRUM_FIRE = 0.85`, `AXIS_NEUTRAL_ZONE = 0.30`). Esto evita falsos positivos del whammy que comparte el mismo eje.
+
+**Render**: canvas 2D con highway de 5 carriles centrados en pantalla. Notas caen desde arriba; receptors en hit zone (85% canvas height). HOPOs con borde blanco; Taps con relleno blanco; sustains con cola colorida del fret. Frets pulsados encienden el receptor con glow del color correspondiente.
+
+**Audio**: reproducción vía `AudioBufferSourceNode` del `AudioPipeline.ensureAudioContext()` compartido. Countdown de 2s antes del primer beat para que las primeras notas tengan tiempo de bajar. Pause con ESC re-crea el source en la posición exacta para reanudar bien.
+
+**Ajustes en setup**:
+- Dificultad: dropdown auto-poblado con las que existen en el chart cargado.
+- Velocidad de scroll (200-900 px/s).
+- Offset global ms (positivo = retrasar notas, negativo = adelantarlas).
+- HOPO threshold ticks (default 170).
+
+**Resultados**: grade S/A/B/C/D/F basado en accuracy (hits/total). Muestra score, accuracy, hits, misses, max combo.
+
+**Pendiente / mejoras futuras (v2):**
+- Star Power (acumulación + activación con tilt, timing windows ampliadas durante SP).
+- Whammy → modulación de pitch del sustain (Web Audio detune mientras axes[1] varía y hay sustain activo).
+- Open notes (fret 7 en .chart) — strum sin fret pulsado.
+- Variable BPM (parser ya soporta múltiples markers `B` en SyncTrack pero el motor solo usa el primero).
+- Notas de bombo / drums tracks.
+- Persistencia de scores en IndexedDB (compartida con play.html SM).
+
 ### `gh-autostepper.html`
 Generador automático de charts **Guitar Hero (.chart Clone Hero / Feedback format)** desde MP3/WAV. Reusa `stepmania-web/js/audio-pipeline.js` (mismo análisis: bass-emphasis, ODF, BPM, offset). El output diverge: en vez de `.ssc/.sm` produce `notes.chart` + `song.ini` + audio en ZIP, listo para extraer en `Clone Hero/Songs/`.
 
