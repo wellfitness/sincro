@@ -424,14 +424,6 @@
     background: rgba(249,115,22,0.10);
     transform: translateY(-1px);
   }
-  .results-stat {
-    transition: transform 0.15s, box-shadow 0.2s;
-  }
-  .results-stat:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(249,115,22,0.18);
-  }
-
   .calib-banner {
     padding: 12px 16px; border-radius: 10px;
     background: rgba(250,204,21,0.10); border-left: 4px solid var(--tulip-tree-500);
@@ -592,16 +584,15 @@
     color: var(--gris-300); font-weight: normal;
     word-break: break-word;
   }
+  /* Wrapper del resumen: apila verticalmente header (grade+summary) y panel
+     de judgments. Antes era un grid auto-fit que colocaba ambos paneles
+     lado a lado en pantallas anchas, lo que aplastaba el grid 3-columnas
+     interno de .results-summary y dejaba la celda "Max Combo" solapando
+     visualmente con el panel de judgments. Flex column garantiza el
+     stacking sin sorpresas en cualquier viewport. */
   .results-stats {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px;
+    display: flex; flex-direction: column; gap: 18px;
   }
-  .results-stat {
-    background: rgba(0,0,0,0.4); padding: 16px; border-radius: 10px;
-    border: 1px solid rgba(249,115,22,0.2); text-align: center;
-  }
-  .results-stat .label { color: var(--gris-400); font-size: 0.85em; }
-  .results-stat .value { color: var(--fret-yellow); font-size: 1.8em; font-weight: 700; font-family: var(--font-display); margin-top: 4px; }
 
   /* ===== Resumen estilo StepMania (grade + grid judgments con barra) =====
      Grade gigante a la izquierda con glow del color del tier; a la derecha
@@ -889,11 +880,16 @@
   <a href="play.html" class="home-btn" title="Volver al menú Sincro" style="margin-left:6px">⌂</a>
 </nav>
 
-<!-- ============== TOCAR (pantalla por defecto al entrar) ============== -->
+<!-- ============== TOCAR (pantalla por defecto al entrar) ==============
+     Pantalla de PARTIDA: configurar (dificultad, speed) + elegir canción que
+     ya está en biblioteca. NO gestiona biblioteca (importar/borrar/backup
+     viven en gh-library-screen "Mis canciones"). El usuario que entra aquí
+     desde el dashboard tiene una intención clara: tocar algo. -->
 <div id="gh-songs-screen" class="gh-screen">
-  <h1>🎸 Tocar</h1>
-  <p class="subtitle">Pulsa <strong>▶ Tocar</strong> en una partitura para arrancar, o marca varias con la casilla para crear una sesión continua. Ajusta speed/offset desde <strong>⚙</strong> en la barra superior.</p>
-
+  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <h1 style="margin:0">🎸 Tocar</h1>
+  </div>
+  
   <!-- Estado de la guitarra (banner de calibración) -->
   <div class="card">
     <h2>Estado de la guitarra</h2>
@@ -907,20 +903,20 @@
       <div style="display:flex;flex-direction:column;gap:6px;min-width:160px">
         <label for="difficulty" class="field-label">Dificultad común</label>
         <select id="difficulty" class="gh-styled" onchange="onGHDiffChange()" style="min-width:160px">
-          <option value="EasySingle">Easy</option>
-          <option value="MediumSingle" selected>Medium</option>
-          <option value="HardSingle">Hard</option>
-          <option value="ExpertSingle">Expert</option>
+          <option value="EasySingle">Fácil</option>
+          <option value="MediumSingle" selected>Intermedio</option>
+          <option value="HardSingle">Difícil</option>
+          <option value="ExpertSingle">Experto</option>
         </select>
       </div>
       <div style="flex:1;min-width:240px;display:flex;flex-direction:column;gap:6px">
         <span class="field-label">Densidad de notas</span>
         <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
           <div id="ghDiffDensityBars" class="diff-density-bars" role="img" aria-label="Comparativa de densidad entre las 4 dificultades">
-            <div class="db-bar" data-tier="EasySingle"   title="Easy · ~1-1.5 notas/seg"></div>
-            <div class="db-bar" data-tier="MediumSingle" title="Medium · ~2-3 notas/seg"></div>
-            <div class="db-bar" data-tier="HardSingle"   title="Hard · ~4-5 notas/seg"></div>
-            <div class="db-bar" data-tier="ExpertSingle" title="Expert · hasta 7-8 notas/seg"></div>
+            <div class="db-bar" data-tier="EasySingle"   title="Fácil · ~1-1.5 notas/seg"></div>
+            <div class="db-bar" data-tier="MediumSingle" title="Intermedio · ~2-3 notas/seg"></div>
+            <div class="db-bar" data-tier="HardSingle"   title="Difícil · ~4-5 notas/seg"></div>
+            <div class="db-bar" data-tier="ExpertSingle" title="Experto · hasta 7-8 notas/seg"></div>
           </div>
           <span id="ghDiffDensityText" style="color:#fcd34d;font-size:0.88em;line-height:1.35;font-weight:500">—</span>
         </div>
@@ -941,24 +937,42 @@
   </div>
 
   <div class="card" id="libraryCard">
-    <h2>Tu biblioteca <span id="libraryCount" style="font-size:0.55em;color:var(--gris-500);font-weight:400;font-family:var(--font-sans)"></span></h2>
-    <p style="margin-bottom:10px">Partituras guardadas en este navegador. ¿Vacío? Importa un ZIP desde <a href="#" onclick="goto('library');return false" style="color:var(--gh-accent)">📚 Mis canciones</a> o genera nuevas en <a href="gh-autostepper.html" style="color:var(--gh-accent)">Crear partituras</a>.</p>
+    <h2>Elige una canción <span id="libraryCount" style="font-size:0.55em;color:var(--gris-500);font-weight:400;font-family:var(--font-sans)"></span></h2>
+    <p style="margin-bottom:10px">Las canciones guardadas se tocan con la dificultad y el speed elegidos arriba. ¿Vacío? Genera nuevas en <a href="gh-autostepper.html" style="color:var(--gh-accent)">🎼 Crear partituras</a> o importa un ZIP desde <a href="#" onclick="goto('library');return false" style="color:var(--gh-accent)">📚 Mis canciones</a>.</p>
     <div id="libraryList"></div>
-  </div>
-
-  <div style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-    <button class="action-btn secondary" onclick="goto('library')">📚 Gestionar mis canciones</button>    
   </div>
 </div>
 
-<!-- ============== MIS CANCIONES (gestión + importación) ============== -->
+<!-- ============== MIS CANCIONES (gestión PURA: importar + borrar + backup) ==
+     Pantalla de GESTIÓN: importar nuevos charts y borrar los que sobran. NO
+     se toca aquí. El botón ▶ Tocar vive solo en gh-songs-screen porque allí
+     está visible el selector de dificultad. Esto evita la duplicación
+     "lista A para tocar / lista B para gestionar" que confundía al usuario
+     (dos listas casi idénticas en pantallas distintas). -->
 <div id="gh-library-screen" class="gh-screen hidden">
-  <h1>Mis canciones</h1>
-  <p class="subtitle">Importa nuevas partituras y gestiona las guardadas en este navegador</p>
+  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <h1 style="margin:0">📚 Mis canciones</h1>
+  </div>
+  
+  <!-- Barra "Eliminar seleccionados" sticky-top. Se activa al marcar ≥1 partitura. -->
+  <div class="playlist-bar" id="manageBar">
+    <div class="count">
+      <span id="manageSelCount">Marca canciones con la casilla para eliminar varias a la vez</span>
+      <small>O usa el 🗑 Eliminar individual de cada fila si solo quieres borrar una</small>
+    </div>
+    <button class="action-btn secondary" id="manageClearBtn" onclick="clearManageSelection()" disabled>Limpiar</button>
+    <button class="action-btn" id="manageDeleteBtn" onclick="bulkDeleteFromManage()" disabled style="background:linear-gradient(90deg,var(--color-error),#9f1239)">🗑 Eliminar seleccionadas</button>
+  </div>
+
+  <div class="card">
+    <h2>Canciones en biblioteca <span id="manageCount" style="font-size:0.55em;color:var(--gris-500);font-weight:400;font-family:var(--font-sans)"></span></h2>
+    <p style="margin-bottom:10px">Marca con la casilla para eliminar varias a la vez, o pulsa 🗑 Eliminar en una fila para borrarla.</p>
+    <div id="manageList"></div>
+  </div>
 
   <div class="card">
     <h2>📥 Importar nueva canción</h2>
-    <p>Sube el ZIP que generó <a href="gh-autostepper.html" style="color:var(--gh-accent)">Crear partituras</a>, o un <code>.chart</code> + audio por separado. Tras cargar, arranca directo el juego.</p>
+    <p>Sube el ZIP que generó <a href="gh-autostepper.html" style="color:var(--gh-accent)">🎼 Crear partituras</a>, o un <code>.chart</code> + audio por separado. Tras importar, la canción aparece en <a href="#" onclick="goto('songs');return false" style="color:var(--gh-accent)">🎸 Tocar</a> lista para jugar.</p>
 
     <div class="files-grid" style="margin-top:14px">
       <label class="drop-zone" id="zipDrop">
@@ -988,26 +1002,8 @@
     <div id="songInfo" class="info-grid" style="display:none"></div>
   </div>
 
-  <!-- Barra "Eliminar seleccionados" sticky-top. Se activa al marcar ≥1 partitura.
-       Patrón análogo al de la playlist en "Tocar", pero aquí la acción es
-       borrar en bulk en lugar de crear sesión. -->
-  <div class="playlist-bar" id="manageBar">
-    <div class="count">
-      <span id="manageSelCount">Marca partituras con la casilla para eliminar varias a la vez</span>
-      <small>O usa el 🗑 individual de cada fila si solo quieres borrar uno</small>
-    </div>
-    <button class="action-btn secondary" id="manageClearBtn" onclick="clearManageSelection()" disabled>Limpiar</button>
-    <button class="action-btn" id="manageDeleteBtn" onclick="bulkDeleteFromManage()" disabled style="background:linear-gradient(90deg,var(--color-error),#9f1239)">🗑 Eliminar seleccionados</button>
-  </div>
-
-  <div class="card">
-    <h2>Partituras en biblioteca <span id="manageCount" style="font-size:0.55em;color:var(--gris-500);font-weight:400;font-family:var(--font-sans)"></span></h2>
-    <p style="margin-bottom:10px">Aquí puedes <strong>borrar</strong> partituras guardadas o tocarlas directamente. Para crear sesiones con varias, usa <a href="#" onclick="goto('songs');return false" style="color:var(--gh-accent)">▶ Tocar</a>.</p>
-    <div id="manageList"></div>
-  </div>
-
   <div style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-    <button class="action-btn secondary" onclick="goto('songs')">▶ Ir a Tocar</button>
+    <button class="action-btn" onclick="goto('songs')">▶ Ir a Tocar</button>
     <button class="action-btn secondary" onclick="window.location.href='test-pad.html'">🎸 Calibrar guitarra</button>
   </div>
 </div>
@@ -1201,30 +1197,31 @@ async function refreshLibraryList() {
         <div style="color:var(--gris-400);font-size:0.85em">${escHtml(e.artist || 'Unknown')} · ${e.bpm ? e.bpm.toFixed(1) + ' BPM' : ''} · ${dur} · ${e.totalNotes || 0} notas</div>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="action-btn" style="padding:8px 16px;font-size:0.95em" onclick="loadFromLibrary(${e.id})">▶ Tocar</button>
-        <button class="action-btn secondary" style="padding:8px 12px;font-size:0.95em" onclick="deleteFromLibrary(${e.id})" title="Eliminar de biblioteca">🗑</button>
+        <button class="action-btn" style="padding:8px 16px;font-size:0.95em" onclick="playFromLibrary(${e.id})">▶ Tocar</button>
       </div>
     </div>`;
   }
   el.innerHTML = html;
   updatePlaylistBar();
 }
-async function loadFromLibrary(id) {
+// Único entry point para tocar una canción de la biblioteca. Vive solo en la
+// pantalla "Tocar" (gh-songs-screen), donde el usuario YA tiene el selector
+// global #difficulty visible — no abrimos modal de elección porque la
+// dificultad está a la vista. "Mis canciones" (gh-library-screen) es pura
+// gestión y NO tiene botón de jugar.
+async function playFromLibrary(id) {
   if (!window.GHLibrary) return;
   const entry = await window.GHLibrary.get(id);
   if (!entry) { alert('Partitura no encontrada en biblioteca'); return; }
   try {
     const audioBytes = new Uint8Array(await entry.audioBlob.arrayBuffer());
-    // loadSong arranca el juego automáticamente (vía applyGlobalConfigAndPlay).
-    // No hay paso intermedio; el chart se parsea y el highway aparece directo.
     await loadSong(entry.chartText, audioBytes, entry.audioName || 'song.mp3');
-    // Reset drop zone visual feedback (por si el usuario vuelve a setup)
-    document.getElementById('zipDrop').classList.remove('loaded');
-    document.getElementById('chartDrop').classList.remove('loaded');
-    document.getElementById('audioDrop').classList.remove('loaded');
-    document.getElementById('zipName').textContent = '';
-    document.getElementById('chartName').textContent = '';
-    document.getElementById('audioName').textContent = '';
+    document.getElementById('zipDrop')?.classList.remove('loaded');
+    document.getElementById('chartDrop')?.classList.remove('loaded');
+    document.getElementById('audioDrop')?.classList.remove('loaded');
+    const zn = document.getElementById('zipName'); if (zn) zn.textContent = '';
+    const cn = document.getElementById('chartName'); if (cn) cn.textContent = '';
+    const an = document.getElementById('audioName'); if (an) an.textContent = '';
   } catch (err) {
     alert('Error cargando de biblioteca: ' + err.message);
   }
@@ -1407,7 +1404,7 @@ function updateResultsForSession(lastResult) {
   if (!playSession) return;
   if (lastResult) playSession.scores.push({
     title: song?.meta?.Name || '?',
-    diff: (game?.diff || '').replace('Single', ''),
+    diff: game?.diff || '',
     ...lastResult
   });
   const isLast = playSession.index >= playSession.queue.length - 1;
@@ -1420,7 +1417,7 @@ function updateResultsForSession(lastResult) {
     const totalScore = playSession.scores.reduce((s, r) => s + (r.score || 0), 0);
     const avgAcc = playSession.scores.reduce((s, r) => s + (r.accuracy || 0), 0) / playSession.scores.length;
     const summary = playSession.scores.map(r =>
-      `<div class="row"><span>${escHtml(r.title)} <small style="color:var(--gris-500)">· ${r.diff}</small></span>` +
+      `<div class="row"><span>${escHtml(r.title)} <small style="color:var(--gris-500)">· ${escHtml(ghDiffLabel(r.diff))}</small></span>` +
       `<span style="color:var(--fret-yellow)"><strong>${r.grade}</strong> ${(r.accuracy||0).toFixed(0)}%</span></div>`
     ).join('');
     const summaryEl = document.createElement('div');
@@ -1676,9 +1673,8 @@ async function loadSong(chartText, audioBytes, audioFilename) {
   }
 }
 
-// Resuelve la dificultad efectiva (la global o la más cercana disponible) y
-// arranca el juego inmediatamente. Es el "puente" entre loadSong y startGame
-// en el flow nuevo: ya no hay un botón intermedio "Tocar canción".
+// Resuelve la dificultad efectiva (selector global #difficulty) y arranca el
+// juego inmediatamente. Es el "puente" entre loadSong y startGame.
 function applyGlobalConfigAndPlay() {
   if (!song) return;
   const target = document.getElementById('difficulty').value;
@@ -1703,6 +1699,17 @@ const _GH_DIFF_LEGEND = {
   HardSingle:   { rate: '~4-5 notas/seg',    mood: 'ritmo rápido, los 5 trastes y chords' },
   ExpertSingle: { rate: 'hasta 7-8 notas/seg', mood: 'sin descanso, HOPOs y chords frecuentes' }
 };
+
+// Traducción de claves de sección .chart al castellano. Las claves
+// (EasySingle, MediumSingle, HardSingle, ExpertSingle) son del formato
+// Clone Hero / Feedback y NO se traducen — solo se usan al renderizar.
+const _GH_DIFF_LABELS_ES = {
+  EasySingle:   'Fácil',
+  MediumSingle: 'Intermedio',
+  HardSingle:   'Difícil',
+  ExpertSingle: 'Experto'
+};
+function ghDiffLabel(key) { return _GH_DIFF_LABELS_ES[key] || key; }
 
 // Caché de notas por dificultad por chart-id. Se rellena en refreshLibraryList
 // para evitar parsear el chartText cada vez que cambia el dropdown.
@@ -1761,7 +1768,7 @@ function renderSongInfo() {
     <div class="info-item"><div class="key">Artista</div><div class="val">${escHtml(song.meta.Artist || '?')}</div></div>
     <div class="info-item"><div class="key">BPM</div><div class="val">${song.bpm.toFixed(1)}</div></div>
     <div class="info-item"><div class="key">Duración</div><div class="val">${Math.floor(dur/60)}:${('0'+Math.floor(dur%60)).slice(-2)}</div></div>
-    <div class="info-item"><div class="key">Dificultades</div><div class="val">${Object.keys(song.charts).map(k => k.replace('Single','')).join(' · ')}</div></div>
+    <div class="info-item"><div class="key">Dificultades</div><div class="val">${Object.keys(song.charts).map(ghDiffLabel).join(' · ')}</div></div>
     <div class="info-item"><div class="key">Notas totales</div><div class="val">${totalNotes}</div></div>
   `;
   // El dropdown del config-card NO se repuebla con las dificultades de la
@@ -1866,6 +1873,30 @@ const FRET_ROLES = ['fretGreen','fretRed','fretYellow','fretBlue','fretOrange'];
 const lastAxisValue = {};                    // axis idx → last value (para detección de strum)
 const prevAxisStrum = { down: false, up: false };
 
+// Algunos dispositivos HID (cascos USB con botones, micrófonos, etc.) son
+// expuestos por Chrome como Gamepad. La Gamepad API asigna el `index` por
+// orden de "primer despertar en la pestaña" — no determinista entre sesiones.
+// Filtramos por nombre y por perfil de hardware antes de aceptar; fallback al
+// primer connected si nada pasa el filtro (preserva comportamiento exótico).
+const NON_CONTROLLER_PATTERN = /USB Audio|Audio Device|Headset|Headphone|Microphone|Speaker|Webcam|Camera/i;
+function pickGuitarGamepad(pads) {
+  // 1ª pasada — guitarra viable: GH PS2 vía receptor Sony-emulado tiene
+  // 13 btns + 10 ejes. Mínimos suficientes para descartar alfombras (0-2 ejes)
+  // y dispositivos de audio.
+  for (const p of pads) {
+    if (!p || !p.connected) continue;
+    if (NON_CONTROLLER_PATTERN.test(p.id)) continue;
+    if (p.axes.length < 2 || p.buttons.length < 5) continue;
+    return p;
+  }
+  // 2ª pasada — cualquier no-audio. Si la guitarra está enchufada con drivers
+  // raros que reportan menos ejes, preferimos darle eso antes que un casco USB.
+  for (const p of pads) if (p && p.connected && !NON_CONTROLLER_PATTERN.test(p.id)) return p;
+  // 3ª pasada (último recurso) — primer conectado, sin filtro.
+  for (const p of pads) if (p && p.connected) return p;
+  return null;
+}
+
 function readGamepad() {
   // Reset edges
   inputState.strumDownEdge = false;
@@ -1875,8 +1906,7 @@ function readGamepad() {
 
   if (!guitarMapping) return;
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-  let gp = null;
-  for (const p of pads) if (p && p.connected) { gp = p; break; }
+  const gp = pickGuitarGamepad(pads);
   if (!gp) return;
 
   // Leer trastes (siempre buttons)
@@ -2045,7 +2075,7 @@ function startGame(diffOverride) {
   // Título canción + dificultad en el footer (truncado por CSS si no cabe).
   const songTitle = (song.meta && (song.meta.Name || song.meta.Title)) || 'Sin título';
   const songArtist = (song.meta && song.meta.Artist) ? ' — ' + song.meta.Artist : '';
-  const diffShort = diff.replace('Single', '').trim();
+  const diffShort = ghDiffLabel(diff);
   document.getElementById('hudSong').textContent =
     `${songTitle}${songArtist}${diffShort ? '  ·  ' + diffShort : ''}`;
 
@@ -2562,37 +2592,106 @@ function render(t) {
     if (n.time - t > lookAhead + 0.5) break;
     const yCenter = hitY - (n.time - t) * speed;
     if (yCenter < topY - 50) continue;
-    if (n.judged && !n.sustain) continue;       // notas ya hit o miss desaparecen
-    if (n.judged && n.sustain && n.sustainBroken) continue;
+    if (n.judged && !n.sustain) continue;       // notas no-sustain ya juzgadas desaparecen
 
-    // Sustain tail (antes que la cabeza) — barra al 24% del lane (antes 16%)
+    // Estados del sustain — mismo lenguaje visual que DDR (game.js:976-997):
+    //   activo = ya hiteado, frets bien mantenidos → tail clampeado a hitY,
+    //            color full + glow pulsante, cabeza ANCLADA al receptor.
+    //   broken = se soltó antes de tiempo → tail en gris translúcido, sin
+    //            cabeza. Señaliza "lo perdiste" hasta que pase el sustainEnd.
+    const sustainActive = n.judged && n.sustain && !n.sustainBroken;
+    const sustainReleased = n.judged && n.sustain && n.sustainBroken;
+
     if (n.sustain) {
-      const yEnd = hitY - (Math.min(n.sustainEnd, n.time + (n.sustainEnd - n.time)) - t) * speed;
-      for (const f of n.frets) {
-        const cx = highwayX + (f + 0.5) * laneW;
-        ctx2d.fillStyle = FRET_COLORS[f] + 'cc';
-        ctx2d.fillRect(cx - laneW * 0.12, Math.min(yCenter, yEnd), laneW * 0.24, Math.abs(yCenter - yEnd));
+      const yEnd = hitY - (n.sustainEnd - t) * speed;
+      const yBottom = (sustainActive || sustainReleased) ? hitY : yCenter;
+      if (yEnd < yBottom) {
+        for (const f of n.frets) {
+          const cx = highwayX + (f + 0.5) * laneW;
+          if (sustainActive) {
+            const pulse = 0.75 + 0.25 * Math.sin(t * 14);
+            ctx2d.save();
+            ctx2d.shadowBlur = 18;
+            ctx2d.shadowColor = FRET_COLORS[f];
+            ctx2d.fillStyle = FRET_COLORS[f];
+            ctx2d.globalAlpha = pulse;
+            ctx2d.fillRect(cx - laneW * 0.18, yEnd, laneW * 0.36, yBottom - yEnd);
+            ctx2d.restore();
+          } else if (sustainReleased) {
+            ctx2d.fillStyle = 'rgba(120,120,120,0.4)';
+            ctx2d.fillRect(cx - laneW * 0.12, yEnd, laneW * 0.24, yBottom - yEnd);
+          } else {
+            ctx2d.fillStyle = FRET_COLORS[f] + 'cc';
+            ctx2d.fillRect(cx - laneW * 0.12, yEnd, laneW * 0.24, yBottom - yEnd);
+          }
+        }
       }
     }
-    // Cabeza de la nota — radio 0.42 de laneW (antes 0.32) para igualar
-    // al receptor: la nota encaja visualmente en el agujero al hitear.
-    for (const f of n.frets) {
-      const cx = highwayX + (f + 0.5) * laneW;
-      const r = laneW * 0.42;
-      ctx2d.beginPath();
-      ctx2d.arc(cx, yCenter, r, 0, Math.PI * 2);
-      ctx2d.fillStyle = FRET_COLORS[f];
-      ctx2d.fill();
-      // HOPO: borde blanco; Tap: relleno blanco; normal: borde negro
-      if (n.isHopo) {
-        ctx2d.strokeStyle = '#fff'; ctx2d.lineWidth = 4; ctx2d.stroke();
-      } else if (n.isTap) {
-        ctx2d.fillStyle = '#fff';
+    // Cabeza de la nota. Casuística (siguiendo DDR game.js:1007-1009):
+    //   - No juzgada: pintar en yCenter (cae normal).
+    //   - Sustain activo: pintar ANCLADA al receptor (hitY) con un leve
+    //     halo del color para reforzar "esta es la nota que aguantas".
+    //   - Sustain broken: no pintar (la nota ya se perdió).
+    if (!n.judged || sustainActive) {
+      const yHead = sustainActive ? hitY : yCenter;
+      for (const f of n.frets) {
+        const cx = highwayX + (f + 0.5) * laneW;
+        const r = laneW * 0.42;
+        ctx2d.save();
+        if (sustainActive) {
+          ctx2d.shadowBlur = 22;
+          ctx2d.shadowColor = FRET_COLORS[f];
+        }
         ctx2d.beginPath();
-        ctx2d.arc(cx, yCenter, r * 0.55, 0, Math.PI * 2);
+        ctx2d.arc(cx, yHead, r, 0, Math.PI * 2);
+        ctx2d.fillStyle = FRET_COLORS[f];
         ctx2d.fill();
-      } else {
-        ctx2d.strokeStyle = '#000'; ctx2d.lineWidth = 3; ctx2d.stroke();
+        // HOPO: borde blanco; Tap: relleno blanco; normal: borde negro
+        if (n.isHopo) {
+          ctx2d.strokeStyle = '#fff'; ctx2d.lineWidth = 4; ctx2d.stroke();
+        } else if (n.isTap) {
+          ctx2d.fillStyle = '#fff';
+          ctx2d.beginPath();
+          ctx2d.arc(cx, yHead, r * 0.55, 0, Math.PI * 2);
+          ctx2d.fill();
+        } else {
+          ctx2d.strokeStyle = '#000'; ctx2d.lineWidth = 3; ctx2d.stroke();
+        }
+        ctx2d.restore();
+      }
+    }
+  }
+
+  // Llamas en el receptor mientras hay sustain activo en ese fret. Cue
+  // inequívoco de "estoy contando puntos extra mientras aguantas". Se dibuja
+  // después de las notas para que las llamas queden por encima del tail.
+  if (game.activeSustains && game.activeSustains.length) {
+    for (const sus of game.activeSustains) {
+      if (sus.sustainBroken) continue;
+      for (const f of sus.frets) {
+        if (f < 0 || f >= 5) continue;
+        const cx = highwayX + (f + 0.5) * laneW;
+        ctx2d.save();
+        ctx2d.shadowBlur = 28;
+        ctx2d.shadowColor = FRET_COLORS[f];
+        const pulse = 0.55 + 0.35 * Math.sin(t * 18 + f);
+        ctx2d.globalAlpha = pulse;
+        ctx2d.fillStyle = FRET_COLORS[f];
+        // 3 llamas: una central + 2 laterales con leve oscilación horizontal
+        for (let k = -1; k <= 1; k++) {
+          const sway = Math.sin(t * 10 + k * 1.7 + f) * laneW * 0.06;
+          const fx = cx + k * laneW * 0.18 + sway;
+          const baseY = hitY - receptorRadius * 0.2;
+          const tipY = baseY - (receptorRadius * (1.4 + 0.25 * Math.sin(t * 12 + k)));
+          const halfW = receptorRadius * (0.22 - Math.abs(k) * 0.06);
+          ctx2d.beginPath();
+          ctx2d.moveTo(fx - halfW, baseY);
+          ctx2d.quadraticCurveTo(fx - halfW * 0.4, (baseY + tipY) / 2, fx, tipY);
+          ctx2d.quadraticCurveTo(fx + halfW * 0.4, (baseY + tipY) / 2, fx + halfW, baseY);
+          ctx2d.closePath();
+          ctx2d.fill();
+        }
+        ctx2d.restore();
       }
     }
   }
@@ -2628,7 +2727,10 @@ function finishGame() {
   document.getElementById('results-screen').classList.add('active');
   document.body.classList.remove('playing');
   // Título: canción + dificultad. El grade se muestra grande en el resumen.
-  const diffShort = game.diff.replace('Single', '').trim();
+  // game.diff es la clave del .chart (EasySingle/MediumSingle/...); la
+  // traducimos solo al renderizar (ghDiffLabel mantiene la clave si no la
+  // reconoce, por si llegara un tier inesperado del parser).
+  const diffShort = ghDiffLabel(game.diff);
   document.getElementById('resultsTitle').textContent =
     `${song.meta.Name || 'Sin título'}${diffShort ? ' · ' + diffShort : ''}`;
 
@@ -2940,8 +3042,7 @@ async function refreshManageList() {
         <div style="color:var(--gris-400);font-size:0.85em">${escHtml(e.artist || 'Unknown')} · ${e.bpm ? e.bpm.toFixed(1) + ' BPM' : ''} · ${dur} · ${e.totalNotes || 0} notas</div>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="action-btn" style="padding:8px 16px;font-size:0.95em" onclick="loadFromLibrary(${e.id})">▶ Tocar</button>
-        <button class="action-btn secondary" style="padding:8px 12px;font-size:0.95em" onclick="deleteFromManage(${e.id})" title="Eliminar este chart">🗑</button>
+        <button class="action-btn secondary" style="padding:8px 14px;font-size:0.95em;background:linear-gradient(90deg,var(--color-error),#9f1239)" onclick="deleteFromManage(${e.id})" title="Eliminar este chart">🗑 Eliminar</button>
       </div>
     </div>`;
   }

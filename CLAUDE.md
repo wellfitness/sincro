@@ -17,8 +17,19 @@ Landing pública del producto **Sincro**. HTML semántico autocontenido (CSS emb
 - Branding: `⚡ Sincro` con gradiente turquesa→dorado (Righteous + ABeeZee, paleta MF).
 - 8 referencias DOI verificadas (PubMed/Scholar Gateway): Singh 2025 BJSM, Yoong 2024, Chen 2021, Lavigne 2025, Benzing 2019, Gong 2016, Särkämö 2013, Bentley 2022, Pasinski 2016, Zaatar 2023.
 
-### `play.html`
-Motor de juego **StepMania (DDR)** — SPA con pantallas: Menú, Jugar, Crear, Probar hardware, Mis canciones, Calibración, Tutorial, Resultados. Carga módulos clásicos desde `stepmania-web/js/`: `core` → `parser` → `autostepper` → `library` → `backup` → `song-select` → `pad-test` → `calibration` → `game` → `app`. Estilos en `stepmania-web/css/styles.css`.
+### `play.html` (dashboard)
+**Dashboard puro** — la pantalla principal con las 9 cards organizadas en 3 secciones: **StepMania** (Bailar / Crear coreografías / Mis canciones), **Guitar Hero** (Tocar / Crear partituras / Mis canciones GH), **Comunes** (Comprobar el equipo / Calibración audio / Tutorial). Cada card es un enlace directo al archivo correspondiente — NO usa SPA goto() porque ya no hay screens internas que mostrar.
+
+Hasta 2026-05-11 `play.html` era un SPA monolítico de 1021 líneas con 10 screens (menu, pad, create, library, songs, diff, play, results, calib, tutorial). La separación a archivos dedicados deja `play.html` en ~280 líneas y es solo head + topbar + settings modal + menu-screen + bindings minimales del modal. El motor DDR vive ahora en `stepmania-play.html`. Las pantallas Calibración y Tutorial son archivos propios. AutoStepper y Test pad ya vivían fuera.
+
+Carga lo mínimo: `pwa-bootstrap.js` + `core.js` (para `pollGamepad()` del padPill y el `settings` persistente del modal). NO carga parser/game/song-select/etc.
+
+Settings modal: globalOffset, scrollSpeed, timingWindow, NoteSkin PNG, fondo. El usuario abre Ajustes desde aquí y los valores se persisten a `localStorage` vía `saveSettings()`. El render real (NoteSkin aplicado a las flechas, fondo de la canción) ocurre dentro de `stepmania-play.html` que lee los mismos `localStorage` keys.
+
+### `stepmania-play.html`
+**Motor StepMania (DDR)** — SPA con pantallas: Jugar (songs-screen, selector + config + previews), Dificultad (ajustes per-song), Play (canvas), Resultados, Mis canciones (library). Carga módulos clásicos desde `stepmania-web/js/`: `core` → `parser` → `difficulty-tiers` → `library` → `backup` → `song-select` → `game` → `app`. Estilos en `stepmania-web/css/styles.css`.
+
+Hash routing: `stepmania-play.html#library` aterriza directo en la biblioteca (lo usa el dashboard desde la card "Mis canciones"). Sin hash, abre en `songs` (selector de canción). El patrón vive en `app.js` — `applyHash()` equivalente al de `gh-play.html`.
 
 Funcionalidad end-to-end:
 - Parser `.ssc/.sm` con BPMs/STOPS/DELAYS/WARPS, OFFSET, NOTES.
@@ -27,12 +38,18 @@ Funcionalidad end-to-end:
 - Librería en IndexedDB con import individual (.ssc/.sm + audio), import packs SM (carpetas), backup ZIP completo (canciones + scores + ajustes), restore. Los handlers de import en `library.js:90-220` distinguen `QuotaExceededError` del resto: cuando IndexedDB se queda sin cuota (Safari iOS ~50MB hard cap, Android con storage bajo), se PARA el bucle de import (los siguientes también fallarán), se consulta `navigator.storage.estimate()` y se muestra mensaje accionable con el `usedMB` real ("Almacenamiento lleno tras importar X canciones. Tu navegador limita la librería a Y MB. Elimina canciones antiguas o haz un backup ZIP antes de seguir.").
 - **Política unificada de carriles:** todos los charts nuevos generados por el autostepper (tanto el integrado como el standalone) son `dance-double` (8 carriles, master único). El motor decide en runtime cómo jugarlos vía `getActiveLaneConfig` en `game.js`: **default = 4 carriles (clásico)**, mod Solo = 6, mod Full = 8. El bloque de redistribución (`game.js:279-303`) hace el remap simétrico (8→4, 8→6, o el caso legacy 4→6/4→8 sobre charts antiguos). Los charts antiguos en biblioteca con `dance-single` o `dance-solo` siguen funcionando — su `nativeLanes` original se respeta como punto de partida del remap. Mods Solo y Full mutuamente excluyentes (`song-select.js:237-238`).
 - Input: alfombra USB (con calibración por roles vía `mat-mapping` en localStorage), teclado (← ↓ ↑ →) y **overlay táctil de 4 zonas en móvil** (`game.js:459-558`). El overlay aparece solo cuando el dispositivo expone touch (`'ontouchstart' in window || maxTouchPoints > 0`) y el chart se juega en modo default 4-lane. Mods Solo/Full no tienen mapeo táctil natural; en esos casos se loggea aviso en consola y el usuario debe usar teclado/alfombra. Implementado con Pointer Events (`pointerdown`/`pointerup`/`pointercancel`/`pointerleave`) + `touch-action:none` para evitar que el navegador robe gestos como scroll/zoom. El soporte de guitarra Guitar Hero vive en `gh-play.html` aparte (no se mezcla aquí — game style fundamentalmente distinto, requiere strum + chord + HOPO).
-- Settings persistentes (localStorage): globalOffset, scrollSpeed, timingWindow, NoteSkin PNG personalizado, fondo procedural por título.
-- Calibración: pantalla con metrónomo + tap para medir offset real con sugerencia automática.
+- Settings persistentes (localStorage): globalOffset, scrollSpeed, timingWindow, NoteSkin PNG personalizado, fondo procedural por título. Compartidos con el dashboard (`play.html`).
 - **Robustez de ciclo de vida (`game.js:269-417`):** `startGame()` captura `currentNavToken()` al inicio y verifica `isCurrentNav(myToken)` después de cada `await` (resume audio, arrayBuffer, decodeAudioData, runCountdown). Si el usuario navega fuera durante esos ~3s, la promesa se aborta limpiamente sin crear `gameState` huérfano. Toda la cadena async va envuelta en `try/catch` que muestra `alert()` específico para `EncodingError` (audio no decodificable — típico de OGG en iOS Safari) y devuelve a la pantalla `diff`. `stopGame()` anula `src.onended = null` antes de `src.stop()` para evitar que el `setTimeout(endGame)` huérfano se dispare 500ms después con `gameState` ya nulo.
+- **SPA navigation (`app.js`):** `goto(name)` con SCREENS dinámicas (filtradas por `document.getElementById('X-screen')` presentes en el DOM). Si se pide una screen ausente, `SCREEN_EXTERNAL[name]` la mapea a un archivo dedicado y redirige con `window.location.href`. Esto permite que código legado de `song-select.js` con `goto('create')` siga funcionando: en `stepmania-play.html` (sin `create-screen`) salta automáticamente a `autostepper.html`. El mismo `app.js` funciona en cualquier archivo que cargue el motor — la nav es agnóstica al archivo.
+
+### `tutorial.html`
+**Página estática** con el tutorial completo de la app (8 pestañas: Para empezar, Cómo jugar, Crear coreografías, Probar la alfombra, Calibración, Biblioteca, Ajustes, Otras herramientas). Carga solo `pwa-bootstrap.js` + `styles.css` — sin ningún módulo del motor. El switcher de pestañas vive en un `<script>` inline de 10 líneas. Es un archivo de un solo screen sin lógica SPA.
+
+### `calibration.html`
+**Página standalone** con el metrónomo + tap para medir el offset real del usuario. Carga `core.js` + `calibration.js` + `pwa-bootstrap.js`. Sin settings modal local — el botón "Aplicar a Ajustes" persiste a `localStorage` vía `saveSettings()`, y `applyCalibration` (en `calibration.js`) hace null-checks sobre `#globalOffset` / `#globalOffsetVal` para tolerar que el modal no exista aquí. El handler de SPACE en `calibration.js:130` detecta el modo standalone vía `typeof currentScreen === 'undefined'` y activa SPACE siempre (cuando vive en SPA seguiría exigiendo `currentScreen === 'calib'`).
 
 ### `stepmania-web/js/core.js`
-Módulo base compartido entre todas las pantallas SPA del motor SM. Carga primero (orden de scripts en `play.html`). Expone en scope global:
+Módulo base compartido por **todos los archivos del motor**: `play.html` (dashboard), `stepmania-play.html` (motor), `calibration.html`, y referenciado indirectamente por `gh-play.html`. Carga primero en cada archivo. Expone en scope global:
 
 - **`escapeHtml`, `formatTime`, `safeFn`, `getExt`, `yieldUI`** — helpers triviales.
 - **`ensureAudioCtx()`** — crea/devuelve un `AudioContext` singleton. Síncrono, NO hace `resume()`. Para callers que solo necesitan `decodeAudioData` (funciona en estado `'suspended'`).
@@ -41,6 +58,7 @@ Módulo base compartido entre todas las pantallas SPA del motor SM. Carga primer
   - **Pausa automática en `visibilitychange === 'hidden'`** para no quemar batería en background. Se rearranca solo al volver a `visible`.
   - **Cachéo lazy de `#padPill`** con sentinel `false` (vs `null` que ya significa "no inicializado"). Si la página no tiene `#padPill` (futuras páginas satellite), el polling sigue funcionando con optional chaining.
   - **`try/catch` envolviendo todo el cuerpo** para que una excepción transitoria (DOM no listo, gamepad desconectado mid-frame) NO mate el loop entero — antes una sola excepción dejaba al usuario sin input para el resto de la sesión.
+  - **Filtro `pickMatGamepad()` en 3 capas** (`core.js:59-78`) para que `play.html` no agarre dispositivos HID que no son alfombra. La Gamepad API de Chrome asigna `gamepad.index` por orden de "primer despertar dentro de la pestaña" — NO determinista entre sesiones. Sin filtro, un casco USB Audio (que Windows expone como gamepad con 0 ejes y 3-7 botones de control de volumen) podía ocupar el slot 0 antes que la alfombra y romper toda la detección. Capas: (1) **blacklist por nombre** con regex `/USB Audio|Audio Device|Headset|Headphone|Microphone|Speaker|Webcam|Camera/i`; (2) **heurística numérica** alfombra-shaped: `buttons.length >= 4 && axes.length < 6` (rechaza guitarra GH 10 ejes para no confundirla con alfombra); (3) **fallback** al primer connected no-audio, y último recurso primer connected sin filtro. El mismo patrón vive en `test-pad.html` (`findGamepad(mode)` con `isViableGamepadForMode`) y en `gh-play.html` (`pickGuitarGamepad`) — ver descripciones de esos archivos.
 - **`openDB`, `dbAdd`, `dbAll`, `dbGet`, `dbDelete`, `dbPut`, `dbScore*`** — wrappers Promise sobre IndexedDB (DB `StepManiaWebDB` v3 con stores `songs`, `scores`, `gh-songs`).
 - **`settings` + `saveSettings` + `openSettings`** — config persistente en localStorage (`globalOffset`, `scrollSpeed`, `timingWindow`).
 - **`bumpNavToken`, `isCurrentNav`, `currentNavToken`** — token de navegación incremental para cancelación de promesas en vuelo. Cada `goto()` en `app.js` bumpea; las funciones async largas (`startGame`, futuras `loadSongPreview`…) capturan el token al inicio en una const local y verifican que sigue siendo el actual después de cada `await`. Si no, abortan limpiamente. Patrón equivalente a `AbortController` pero sin la ceremonia de pasar señales por toda la cadena de funciones — basta con que cada función larga consulte el global. Sin esto, `goto('diff')` durante un `decodeAudioData` de 3s dejaba el motor creando `gameState` sobre la pantalla equivocada.
@@ -73,6 +91,13 @@ Diagnóstico de hardware en el navegador (Gamepad API). Selector inicial **Alfom
 - Auto-skip de pasos no aplicables ("Saltar paso").
 - Botón "Borrar mapping" vuelve a defaults solo del modo activo.
 - Cambiar de modo cancela cualquier calibración en curso y restaura el botón Iniciar.
+
+**Selección de gamepad en 3 capas — `findGamepad(modeOverride)` (`test-pad.html:1645-1693`):** la Gamepad API de Chrome asigna `gamepad.index` por orden de "primer despertar dentro de la pestaña" — el slot 0 puede ser la guitarra en una sesión y un dispositivo `USB Audio` (cascos HP, micrófonos con teclas) en otra. Cuando el slot 0 era un USB Audio, la usuaria no podía calibrar nada porque el polling leía botones de un dispositivo sin ejes ni botones útiles. Solución:
+1. **Estricta** — `isViableGamepadForMode(gp, mode)`: para `guitar` exige `axes.length >= 2 && buttons.length >= 5` (GH PS2 tiene 10 y 13); para `mat` exige `buttons.length >= 4 && axes.length < 6` (rechaza guitarra para no confundirla con alfombra). Ambos modos pasan por blacklist `/USB Audio|Audio Device|Headset|Headphone|Microphone|Speaker|Webcam|Camera/i` que rechaza dispositivos audio antes de mirar perfil numérico.
+2. **No-audio** — si la 1ª pasada no encuentra nada que encaje en el modo, devolver cualquier connected que no esté en la blacklist. Cubre "solo guitarra enchufada y usuaria en modo mat": preferible darle la guitarra (botones reales) que un casco audio (cero ejes).
+3. **Fallback** — último recurso, primer connected sin filtro. Preserva el comportamiento previo para hardware exótico (alfombras chinas con pocos botones, drivers raros). Imposible empeorar la selección de ningún usuario.
+
+El mismo patrón con la misma regex y la misma lógica vive en `gh-play.html` (función `pickGuitarGamepad` para el motor de juego) y en `stepmania-web/js/core.js` (función `pickMatGamepad` para `play.html` DDR). Si descubres un nuevo dispositivo que Chrome enumere como gamepad sin ser controlador real, **añade el patrón a las TRES regex simultáneamente** o el bug volverá solo en ese flujo.
 
 **Mapping físico alfombra via Gamepad API** — defaults; calibrables (alineados con `padMap` de `game.js`):
 - `button[0]` = IZQUIERDA · `button[1]` = ABAJO · `button[2]` = ARRIBA · `button[3]` = DERECHA
@@ -112,12 +137,13 @@ Generador automático de charts **StepMania (.ssc/.sm)** desde MP3/WAV. Equivale
 
 **Pipeline de detección compartida** — vive en `stepmania-web/js/audio-pipeline.js`, expuesta como `window.AudioPipeline.{decodeFile, toMono, bassEmphasize, computeEnergyEnvelope, computeODF, pickPeaks, detectBPM, detectOffset, ensureAudioContext, audioBufferToWav}`. La usan tanto `autostepper.html` (output `.ssc/.sm`) como `gh-autostepper.html` (output `.chart`). El análisis es agnóstico al juego — solo cambia cómo se traduce el resultado a notas.
 
-**Cap de duración (Completa / 90s / 120s / 180s)** — selector en el paso "Estilo" de ambos autosteppers SM (integrado en `play.html` y standalone `autostepper.html`). Cuando se elige un cap menor que la duración de la canción:
-- Filtra los onsets a `t < effectiveDuration` (no se generan pasos en sección recortada).
-- Recalcula `totalUnits`, `sampleStart`, `estimateMeter`, `calculateRadarValues` con `effectiveDuration` en lugar de `buffer.duration`.
-- Llama a `AudioPipeline.audioBufferToWav(buffer, effectiveDuration, 1.5)` para producir un WAV PCM 16-bit recortado con fade-out lineal de 1.5s (evita clicks de truncación).
-- Guarda el blob en `q.result.croppedAudio` y nombre en `q.result.croppedAudioName` (extensión `.wav`).
-- `saveAllToLibrary`, `downloadAllZip`, `buildSscForSong` y `buildSmForSong` consumen `croppedAudio || q.file` y `croppedAudioName || q.file.name` con la misma lógica — coherencia del `#MUSIC` field con el archivo realmente empaquetado.
+**Cap de duración (Completa / 90s / 120s / 180s)** — selector en el paso "Estilo" de los **tres** autosteppers: SM integrado en `play.html`, SM standalone `autostepper.html` y GH standalone `gh-autostepper.html`. Cuando se elige un cap menor que la duración de la canción:
+- **SM:** filtra los onsets a `t < effectiveDuration`; recalcula `totalUnits`, `sampleStart`, `estimateMeter`, `calculateRadarValues` con `effectiveDuration`.
+- **GH (`gh-autostepper.html`):** filtra los `peakFrames` a `f/framesPerSec < effectiveDuration` ANTES de la conversión a ticks, así `DifficultyTiers.filterTicks` ve un universo ya recortado y el NPS por ventana sigue siendo correcto en el segmento mantenido. `meta.duration = effectiveDuration` se propaga a `song.ini` (`song_length`) y al `#MusicStream` del `.chart`.
+- Todos llaman a `AudioPipeline.audioBufferToWav(buffer, effectiveDuration, 1.5)` para producir un WAV PCM 16-bit recortado con fade-out lineal de 1.5s (evita clicks de truncación).
+- SM guarda blob en `q.result.croppedAudio` + nombre en `q.result.croppedAudioName`. GH guarda blob en `q.result.croppedAudio` + extensión final en `q.result.audioExt` (`'wav'` si hubo recorte, original en caso contrario) — fuente única de verdad consumida por `processOne`, `downloadAllZip` y `saveOneToLibrary` para no recalcular la extensión 3 veces.
+- En GH el `Blob` que entra a IndexedDB lleva MIME `audio/wav` cuando viene del WAV cropeado (importante para Safari, que es estricto con MIMEs en `<audio>`).
+- `saveAllToLibrary`, `downloadAllZip`, `buildSscForSong` y `buildSmForSong` (SM) consumen `croppedAudio || q.file` con la misma lógica — coherencia del `#MUSIC` field con el archivo empaquetado.
 - Si se elige "Completa", el archivo original (MP3/WAV/etc.) se conserva sin re-codificar.
 
 Algoritmo (optimizado para música bailable: techno, dance, pop, rock):
@@ -199,6 +225,8 @@ Lo cargan tanto `gh-autostepper.html` (para el botón "Guardar en biblioteca") c
 **Sustains**: si la nota tiene `sustain > 0`, mientras los frets se mantengan pulsados se acumulan puntos (`SUSTAIN_POINTS_PER_SEC` × multiplicador). Soltar los frets antes del final = sustainBroken (no más puntos pero el combo sobrevive). Frets distintos durante el sustain también lo rompen.
 
 **Detección de strum compartida con `test-pad.html`**: para guitarras donde el strum vive en eje (axes[1] en GH PS2 vía receptor Sony-emulado) usa el mismo algoritmo de transición desde neutro (`AXIS_STRUM_FIRE = 0.85`, `AXIS_NEUTRAL_ZONE = 0.30`). Esto evita falsos positivos del whammy que comparte el mismo eje.
+
+**Selección de gamepad — `pickGuitarGamepad(pads)` (`gh-play.html:1869-1888`):** mismo patrón en 3 capas que `test-pad.html` (ver descripción detallada allí). 1ª pasada exige `axes.length >= 2 && buttons.length >= 5` y rechaza la blacklist de dispositivos audio. 2ª pasada acepta cualquier no-audio. 3ª pasada (último recurso) el primer connected. Necesario porque sin filtro, un casco `USB Audio` enumerado por Chrome como gamepad antes que la guitarra rompía la lectura de frets/strum.
 
 **Render**: canvas 2D con highway de 5 carriles centrados en pantalla. Notas caen desde arriba; receptors en hit zone (85% canvas height). HOPOs con borde blanco; Taps con relleno blanco; sustains con cola colorida del fret. Frets pulsados encienden el receptor con glow del color correspondiente.
 
@@ -320,10 +348,17 @@ Esto es lo más fiel posible sin código fuente del original. Si en el futuro Ge
 
 Doble click sobre los `.html` los abre en el navegador por defecto. Hay dos modos de entrada:
 
-- **Web pública / SEO:** `index.html` (landing) → CTAs apuntan al shell SPA (`app.html#/play`, `#/autostepper`, `#/test-pad`). Es lo que ven crawlers y compartidores; el subdominio raíz `play.movimientofuncional.app/` sirve esto.
-- **App instalada (PWA):** el manifest abre `app.html#/play` (DDR directo). El shell SPA envuelve los 6 HTMLs clásicos vía iframe + hash routing — cero refactor del motor de juego.
+- **Web pública / SEO:** `index.html` (landing) → CTAs apuntan al shell SPA (`app.html#/stepmania-play`, `#/autostepper`, `#/test-pad`). Es lo que ven crawlers y compartidores; el subdominio raíz `play.movimientofuncional.app/` sirve esto.
+- **App instalada (PWA):** el manifest abre `app.html#/play` (dashboard). Desde ahí el usuario navega al motor o cualquier herramienta vía las cards. El shell SPA envuelve los 9 HTMLs clásicos vía iframe + hash routing — cero refactor del motor de juego.
 
-Punto de entrada para jugar sin shell (debug, link directo, lo que la PWA no usa por defecto): `play.html`.
+Puntos de entrada sin shell (debug, link directo, lo que la PWA no usa por defecto):
+- `play.html` → dashboard con 9 cards (StepMania / Guitar Hero / Comunes).
+- `stepmania-play.html` → motor DDR directo (con hash `#library` para abrir biblioteca).
+- `gh-play.html` → simulador Guitar Hero (con hash `#library`).
+- `autostepper.html` / `gh-autostepper.html` → generadores standalone.
+- `test-pad.html` → diagnóstico hardware (alfombra y guitarra).
+- `tutorial.html` → tutorial completo.
+- `calibration.html` → metrónomo + tap para offset.
 
 Para los Python: `python test_pad.py` desde PowerShell. Requiere Python 3.x estándar (sin paquetes adicionales).
 
@@ -331,7 +366,7 @@ Para tests automatizados: `pnpm install` (instala Vitest, una sola dep) → `pnp
 
 ### `app.html` — shell SPA
 
-Topbar persistente con marca Sincro + nav de 6 rutas (DDR · GH · Crear DDR · Crear GH · Equipo · Sincro/landing). Un único `<iframe name="sincro-shell-frame">` carga la vista activa. El router escucha `hashchange` y solo cambia `iframe.src` cuando cambia la ruta — no recarga la página activa al hacer click sobre la ruta ya activa.
+Topbar persistente con marca Sincro + nav de 7 rutas visibles (**Inicio** dashboard, **🦶 Bailar** motor DDR, **🎸 Tocar** motor GH, **🪄 Crear DDR**, **🎼 Crear GH**, **🛠️ Equipo**, **ℹ️ Sincro** landing). Hay dos rutas adicionales NO promocionadas en el topbar (entran solo desde las cards del dashboard): `/tutorial`, `/calibration`. El router resuelve **9 rutas totales**: `/play` (dashboard) · `/stepmania-play` · `/gh-play` · `/autostepper` · `/gh-autostepper` · `/test-pad` · `/tutorial` · `/calibration` · `/about`. Un único `<iframe name="sincro-shell-frame">` carga la vista activa. El router escucha `hashchange` y solo cambia `iframe.src` cuando cambia la ruta — no recarga la página activa al hacer click sobre la ruta ya activa.
 
 `allow="gamepad fullscreen autoplay midi microphone clipboard-write"` desbloquea las features delegadas al iframe. La Gamepad API funciona en iframe same-origin sin permisos extra. Web Audio + fullscreen requieren gesto de usuario originado en el iframe — los handlers de cada juego ya cumplen esto (botón "Iniciar" antes de empezar).
 
@@ -343,13 +378,13 @@ Botón "Instalar app" en el shell: aparece cuando el navegador captura `beforein
 
 - **`manifest.webmanifest`** — `start_url: /app.html#/play`, `id: /app.html`, `display: standalone` con `display_override: window-controls-overlay`, `theme_color: #00bec8`, `background_color: #0f172a`, 4 shortcuts (Jugar / GH / AutoStepper / Test pad) cada uno apuntando a su ruta del shell.
 - **`sw.js`** (raíz, scope `/`) — estrategia mixta:
-  - `install`: precache del shell estático (HTMLs + CSS + JS modules + iconos + manifest). El listado vive en `PRECACHE_URLS` al inicio del fichero.
-  - `fetch HTML navigation`: network-first con fallback a precache. Un deploy nuevo se nota sin "vaciar caché". Si offline y nada cacheado, el fallback es **inteligente por ruta** (`sw.js:106-128`): rutas del shell SPA (`/`, `/app*`, `/play*`, `/gh-*`, `/autostepper*`, `/test-pad*`) caen a `/app.html` para no perder el contexto de la PWA; cualquier otra URL navegacional cae a `/index.html` (la landing pública).
+  - `install`: precache del shell estático (HTMLs + CSS + JS modules + iconos + manifest). El listado vive en `PRECACHE_URLS` al inicio del fichero. Tras la separación de archivos (2026-05-11), precache cubre `play.html` + `stepmania-play.html` + `tutorial.html` + `calibration.html` además de los demás HTMLs.
+  - `fetch HTML navigation`: network-first con fallback a precache. Un deploy nuevo se nota sin "vaciar caché". Si offline y nada cacheado, el fallback es **inteligente por ruta** (`sw.js:106-130`): rutas del shell SPA (`/`, `/app*`, `/play*`, `/stepmania-play*`, `/gh-*`, `/autostepper*`, `/test-pad*`, `/tutorial*`, `/calibration*`) caen a `/app.html` para no perder el contexto de la PWA; cualquier otra URL navegacional cae a `/index.html` (la landing pública).
   - `fetch CSS/JS/iconos same-origin`: cache-first con runtime fallback. Shell offline-ready.
   - `fetch Google Fonts`: stale-while-revalidate.
   - **Range requests passthrough** (`req.headers.has('range')`): el motor de audio carga segmentos, cachear esto los rompería.
   - **Cross-origin no same-origin passthrough**: no cacheamos blobs de audio ad-hoc; viven en IndexedDB de todas formas.
-  - `CACHE_VERSION = 'sincro-v3'` (al 2026-05-10). **Bumpear cada vez que cambien archivos del precache** para que los clientes detecten la nueva versión y purguen la antigua en `activate`. Sin bump, los clientes con SW antiguo siguen sirviendo desde caché y los fixes nunca llegan al usuario.
+  - `CACHE_VERSION = 'sincro-v4'` (al 2026-05-11). **Bumpear cada vez que cambien archivos del precache** para que los clientes detecten la nueva versión y purguen la antigua en `activate`. Sin bump, los clientes con SW antiguo siguen sirviendo desde caché y los fixes nunca llegan al usuario.
 - **`stepmania-web/js/pwa-bootstrap.js`** — registra el SW (solo https/localhost; file:// no soporta SW), expone `window.SincroPWA.{inShell, isInstalled, canInstall, promptInstall}`, captura `beforeinstallprompt` y dispara eventos custom `sincro-pwa-installable` / `sincro-pwa-installed` / `sincro-pwa-update-available`.
 - **`icons/icon.svg` + `icons/icon-maskable.svg`** — flechas DDR sobre gradiente turquesa→dorado de la marca. Maskable lleva 10% de padding interno (safe-zone) para que Android no recorte al aplicar el shape. Chrome moderno y iOS 16+ aceptan SVG en manifest.
 
@@ -368,8 +403,8 @@ Cada HTML clásico (`index.html`, `play.html`, `gh-play.html`, `autostepper.html
 - **Dominio destino:** `play.movimientofuncional.app` (subdominio del sitio principal de Movimiento Funcional). El antiguo subdominio `stepmania.movimientofuncional.app` fue retirado tras el rebrand a Sincro.
 - **Credenciales FTP del host:** en `.env.local` (raíz del proyecto). **Nunca commitear** — el archivo está ignorado por `.gitignore` (regla `.env.*`).
 - Para futuros agentes: si necesitas las claves de despliegue, léelas de `.env.local`. No las muevas a archivos versionados.
-- **Estructura desplegada:** subir todos los `.html` de la raíz (incluido `app.html`), `manifest.webmanifest`, `sw.js`, `icons/`, carpeta `stepmania-web/` (CSS + JS). Los `.py` no se despliegan (solo herramientas locales).
-- **Script de deploy:** `scripts/deploy.sh` (bash + curl, cero deps). Lee credenciales de `.env.local`, sube **26 archivos** con lista de inclusión EXPLÍCITA (intencional — evita filtrar README/CLAUDE/tests/package.json a producción si mañana añades algo a la raíz). Uso: `bash scripts/deploy.sh` desde la raíz del repo. El script hace `cd "$(dirname "$0")/.."` al inicio, así también funciona invocado desde otro cwd. Usa `--ssl-allow-beast -k` en curl para sortear el SChannel-strict OCSP de Windows. Falla con SKIP claro si un archivo de la lista no existe en local (cazaría typos como "indez.html").
+- **Estructura desplegada:** subir todos los `.html` de la raíz (`index.html`, `app.html`, `play.html`, `stepmania-play.html`, `gh-play.html`, `autostepper.html`, `gh-autostepper.html`, `test-pad.html`, `tutorial.html`, `calibration.html`), `manifest.webmanifest`, `sw.js`, `icons/`, carpeta `stepmania-web/` (CSS + JS). Los `.py` no se despliegan (solo herramientas locales).
+- **Script de deploy:** `scripts/deploy.sh` (bash + curl, cero deps). Lee credenciales de `.env.local`, sube **29 archivos** con lista de inclusión EXPLÍCITA (12 HTML/manifest/sw + 2 iconos + 1 css + 14 JS modules) — intencional — evita filtrar README/CLAUDE/tests/package.json a producción si mañana añades algo a la raíz. Uso: `bash scripts/deploy.sh` desde la raíz del repo. El script hace `cd "$(dirname "$0")/.."` al inicio, así también funciona invocado desde otro cwd. Usa `--ssl-allow-beast -k` en curl para sortear el SChannel-strict OCSP de Windows. Falla con SKIP claro si un archivo de la lista no existe en local (cazaría typos como "indez.html").
 - **Headers HTTP recomendados** (configurar en host):
   - `sw.js`: `Cache-Control: no-cache` (para que el navegador siempre revise si hay versión nueva del SW; el SW controla su propio cache versionado).
   - `manifest.webmanifest`: `Content-Type: application/manifest+json`.

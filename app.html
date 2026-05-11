@@ -175,7 +175,8 @@
   <header class="shell-topbar" role="banner">
     <a class="shell-brand" href="#/play" aria-label="Sincro · Inicio">Sincro</a>
     <nav class="shell-nav" aria-label="Navegación principal">
-      <a href="#/play"           data-route="/play">🦶 Bailar</a>
+      <a href="#/play"           data-route="/play">⌂ Inicio</a>
+      <a href="#/stepmania-play" data-route="/stepmania-play">🦶 Bailar</a>
       <a href="#/gh-play"        data-route="/gh-play">🎸 Tocar</a>
       <a href="#/autostepper"    data-route="/autostepper">🪄 Crear DDR</a>
       <a href="#/gh-autostepper" data-route="/gh-autostepper">🎼 Crear GH</a>
@@ -212,12 +213,20 @@
     // el shell funcione tanto en file:// (doble click sobre index.html) como
     // en http(s):// — los paths absolutos "/foo.html" resolverían a la raíz
     // del disco bajo file://, que no contiene los HTML.
+    // /play apunta al DASHBOARD (play.html) que ahora es solo el menú de
+    // cards. Para arrancar directamente en el motor DDR usar /stepmania-play.
+    // tutorial.html y calibration.html viven como archivos propios — accesibles
+    // desde las cards del dashboard, no se promocionan en el topbar para
+    // no inflar la nav (entran como secundarias).
     var ROUTES = {
       '/play':           'play.html',
+      '/stepmania-play': 'stepmania-play.html',
       '/gh-play':        'gh-play.html',
       '/autostepper':    'autostepper.html',
       '/gh-autostepper': 'gh-autostepper.html',
       '/test-pad':       'test-pad.html',
+      '/tutorial':       'tutorial.html',
+      '/calibration':    'calibration.html',
       '/about':          'index.html'
     };
     var DEFAULT_ROUTE = '/play';

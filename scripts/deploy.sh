@@ -79,10 +79,13 @@ ROOT_FILES=(
   index.html
   app.html
   play.html
+  stepmania-play.html
   gh-play.html
   autostepper.html
   gh-autostepper.html
   test-pad.html
+  tutorial.html
+  calibration.html
   manifest.webmanifest
   sw.js
 )

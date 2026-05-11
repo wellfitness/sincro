@@ -651,7 +651,7 @@
       </div>
       <div class="preset" data-preset="intenso">
         <div class="preset-name">🔥 Intenso</div>
-        <div class="preset-desc">Densidad alta, muchos holds, saltos frecuentes en Hard. Para canciones rápidas.</div>
+        <div class="preset-desc">Densidad alta, muchos holds, saltos frecuentes en Difícil. Para canciones rápidas.</div>
       </div>
       <div class="preset" data-preset="custom">
         <div class="preset-name">⚙️ Personalizado</div>
@@ -705,14 +705,14 @@
 
       <div class="param">
         <div class="param-header">
-          <span class="param-label">↔️ Probabilidad de salto (Hard)</span>
+          <span class="param-label">↔️ Probabilidad de salto (Difícil)</span>
           <span class="param-value" id="jumpVal">7%</span>
         </div>
         <input type="range" id="jumpProb" min="0" max="0.25" step="0.01" value="0.07">
         <div class="param-scale"><span>sin saltos ←</span><span>→ muchos saltos</span></div>
         <div class="param-help">
-          Cuántos pasos en Hard se convierten en jumps (dos flechas a la vez, requiere pisar dos paneles simultáneamente).
-          <strong>0%:</strong> nunca. <strong>7%:</strong> ~1 de cada 14 pasos. <strong>25%:</strong> 1 de cada 4 pasos = salto. Easy/Medium siempre tienen menos saltos que Hard.
+          Cuántos pasos en Difícil se convierten en jumps (dos flechas a la vez, requiere pisar dos paneles simultáneamente).
+          <strong>0%:</strong> nunca. <strong>7%:</strong> ~1 de cada 14 pasos. <strong>25%:</strong> 1 de cada 4 pasos = salto. Fácil e Intermedio siempre tienen menos saltos que Difícil.
         </div>
       </div>
 
@@ -741,47 +741,24 @@
     <div class="log" id="analyzeLog"></div>
   </div>
 
-  <!-- 3. PREVIEW (single song selected) -->
-  <div class="card hidden" id="previewCard">
-    <h2><span aria-hidden="true">3️⃣</span> Preview de canción seleccionada <small style="font-size:0.7em;color:var(--gris-300);font-weight:400;font-family:var(--font-sans);margin-left:4px">— <span id="previewTitle"></span></small></h2>
-    <div class="stats-grid">
-      <div class="stat"><div class="label">BPM</div><div class="value" id="resBpm">--</div></div>
-      <div class="stat"><div class="label">Offset</div><div class="value" id="resOffset">--</div></div>
-      <div class="stat"><div class="label">Duración</div><div class="value" id="resDuration">--</div></div>
-      <div class="stat"><div class="label">Onsets</div><div class="value" id="resOnsets">--</div></div>
-    </div>
-
-    <canvas id="waveform" width="1000" height="130"></canvas>
-    <div class="audio-controls">
-      <button class="action-btn" id="playBtn" onclick="togglePlay()">▶ Reproducir</button>
-      <span class="time"><span id="curTime">0:00</span> / <span id="totalTime">0:00</span></span>
-      <label style="color:#aaa">Click en cada beat:</label>
-      <label class="switch"><input type="checkbox" id="clickToggle" checked><span class="slider"></span></label>
-    </div>
-
-    <h2 style="margin-top:16px">Coreografías generadas</h2>
-    <div id="difficultiesContainer"></div>
-
-    <details style="margin-top:14px">
-      <summary>Ver contenido del .sm</summary>
-      <pre id="smPreview" style="background:#000;padding:10px;border-radius:6px;font-size:0.75em;max-height:300px;overflow:auto;color:#0f6"></pre>
-    </details>
-  </div>
-
-  <!-- 4. EXPORTAR -->
+  <!-- 3. EXPORTAR — mismo patrón que gh-autostepper.html: dos CTAs claros.
+       "Guardar en biblioteca Sincro" mete las canciones directamente en
+       IndexedDB para tocar desde Sincro Play sin pasar por descargas.
+       "Descargar ZIP" es para llevarlas a StepMania 5 nativo en escritorio. -->
   <div class="card hidden" id="exportCard">
-    <h2><span aria-hidden="true">4️⃣</span> Exportar</h2>
+    <h2><span aria-hidden="true">3️⃣</span> Lista para jugar</h2>
     <p class="help">
-      Cada canción se empaqueta como carpeta con <strong>.ssc</strong> (formato nativo SM5),
-      <strong>.sm</strong> (compatibilidad universal) y el audio. Descomprime el ZIP dentro de
+      <strong>Guarda en biblioteca</strong> para tocar las coreografías directamente desde Sincro
+      (recomendado). O <strong>descarga el ZIP</strong> si vas a usar StepMania 5 nativo —
+      cada canción incluye <code>.ssc</code> + <code>.sm</code> + audio. Descomprime dentro de
       <code>C:\Games\StepMania 5\Songs\AutoStepper\</code>.
     </p>
     <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-      <button class="action-btn primary-cta" onclick="downloadAllZip()">⬇ Descargar todo (ZIP)</button>
-      <button class="action-btn secondary" onclick="downloadCurrentSsc()">.ssc actual</button>
-      <button class="action-btn secondary" onclick="downloadCurrentSm()">.sm actual</button>
+      <button class="action-btn primary-cta" id="saveLibraryBtn" onclick="saveAllToLibrary()">💾 Guardar TODO en biblioteca Sincro</button>
+      <button class="action-btn secondary" onclick="downloadAllZip()">⬇ Descargar TODO (ZIP)</button>
     </div>
     <div id="exportStatus" style="margin-top:12px;color:var(--gris-300);font-size:0.9em"></div>
+    <div id="librarySaveStatus" style="margin-top:10px;font-size:0.9em"></div>
   </div>
 
 </div>
@@ -894,7 +871,6 @@ function clearQueue() {
   selectedId = null;
   renderQueue();
   document.getElementById('optionsCard').style.display = 'none';
-  document.getElementById('previewCard').classList.add('hidden');
   document.getElementById('exportCard').classList.add('hidden');
   document.getElementById('analyzeLog').innerHTML = '';
   document.getElementById('analyzeProgress').style.width = '0%';
@@ -904,10 +880,7 @@ function removeFromQueue(id) {
   if (analyzing) return;
   const i = queue.findIndex(q => q.id === id);
   if (i >= 0) queue.splice(i, 1);
-  if (selectedId === id) {
-    selectedId = null;
-    document.getElementById('previewCard').classList.add('hidden');
-  }
+  if (selectedId === id) selectedId = null;
   renderQueue();
   if (queue.length === 0) {
     document.getElementById('optionsCard').style.display = 'none';
@@ -954,8 +927,9 @@ function renderQueue() {
       <div class="duration">${dur}</div>
       <div class="charts">${steps} pasos</div>
       <div class="actions">
-        ${q.result ? `<button class="icon-btn" onclick="selectSong(${q.id})">Ver</button>` : ''}
-        ${q.result ? `<button class="icon-btn" onclick="downloadOne(${q.id})">.sm</button>` : ''}
+        ${q.result && !q.savedToLibrary ? `<button class="icon-btn" onclick="saveOneToLibrary(${q.id})" title="Guardar esta canción en biblioteca Sincro">💾</button>` : ''}
+        ${q.result && q.savedToLibrary ? `<span class="icon-btn" style="background:var(--color-success);color:#000;cursor:default" title="Ya en biblioteca">✓</span>` : ''}
+        ${q.result ? `<button class="icon-btn" onclick="downloadOne(${q.id})" title="Descargar solo el .sm">.sm</button>` : ''}
         <button class="icon-btn danger" onclick="removeFromQueue(${q.id})" ${analyzing?'disabled':''}>×</button>
       </div>
     </div>`;
@@ -967,6 +941,15 @@ function renderQueue() {
 function statusLabel(s) {
   return { pending: 'pendiente', working: 'analizando…', done: 'listo', error: 'error' }[s] || s;
 }
+// Traducción de claves de dificultad SM al castellano. Las claves del formato
+// .sm/.ssc (Beginner/Easy/Medium/Hard/Challenge) NO se traducen — solo se
+// usan al renderizar (cards de previsualización). Standalone: no compartido
+// con core.js para mantener este HTML autocontenido.
+const _SM_DIFF_LABELS_ES = {
+  Beginner: 'Principiante', Easy: 'Fácil', Medium: 'Intermedio',
+  Hard: 'Difícil', Challenge: 'Experto', Edit: 'Edición'
+};
+function diffLabel(key) { return _SM_DIFF_LABELS_ES[key] || key; }
 function escapeHtml(s) { return String(s).replace(/[<>&"']/g, c => ({ '<':'&lt;', '>':'&gt;', '&':'&amp;', '"':'&quot;', "'":'&#39;' }[c])); }
 function setBpmOverride(id, v) {
   const q = queue.find(x => x.id === id);
@@ -1561,11 +1544,8 @@ async function analyzeAll() {
   document.getElementById('cancelBtn').disabled = true;
   log(`▶ Listo. ${queue.filter(q=>q.status==='done').length}/${queue.length} canciones procesadas.`, 'ok');
 
-  // Auto-select first done song for preview
-  const firstDone = queue.find(q => q.status === 'done');
-  if (firstDone) selectSong(firstDone.id);
-
-  // Show export card if at least one is done
+  // Show export card if at least one is done. Sin preview de canción: el
+  // usuario va directo al CTA de Guardar en biblioteca / Descargar ZIP.
   if (queue.some(q => q.status === 'done')) {
     document.getElementById('exportCard').classList.remove('hidden');
   }
@@ -1579,37 +1559,19 @@ function cancelAnalysis() {
 function yieldUI() { return new Promise(r => setTimeout(r, 0)); }
 
 // ============================================================
-//                  PREVIEW (single song)
+//                  PREVIEW (legacy — el card de preview fue retirado)
 // ============================================================
+// La pantalla de Preview verbose (BPM/Offset/Onsets/waveform/play/etc.) se
+// eliminó porque añadía fricción sin ayudar al jugador: el usuario quiere
+// "subir canción → ajustar estilo → guardar/descargar", como en
+// gh-autostepper.html. selectSong() se queda como no-op defensivo por si
+// algún handler legacy la llama (no debería) — guard temprano si los
+// elementos del preview no están en el DOM.
 async function selectSong(id) {
-  const q = queue.find(x => x.id === id);
-  if (!q || !q.result) return;
+  if (!document.getElementById('previewCard')) return;
+  // Cuerpo conservado por si en el futuro se restaura un preview opcional.
   selectedId = id;
   renderQueue();
-  stopPlay();
-
-  // Decode the audio for waveform + playback (on demand)
-  try {
-    previewBuffer = await decodeFile(q.file);
-  } catch (e) {
-    log('No se pudo cargar el preview: ' + e.message, 'bad');
-    return;
-  }
-
-  document.getElementById('previewCard').classList.remove('hidden');
-  document.getElementById('previewTitle').textContent = q.title;
-  const r = q.result;
-  document.getElementById('resBpm').textContent = r.bpm.toFixed(1);
-  document.getElementById('resOffset').textContent = r.offsetSec.toFixed(3) + 's';
-  document.getElementById('resDuration').textContent = formatTime(r.duration);
-  document.getElementById('resOnsets').textContent = r.onsetTimesSec.length;
-  document.getElementById('totalTime').textContent = formatTime(r.duration);
-
-  drawWaveform();
-  renderDifficulties();
-
-  const sm = buildSmForSong(q);
-  document.getElementById('smPreview').textContent = sm.slice(0, 4000) + (sm.length > 4000 ? '\n... (truncado)' : '');
 }
 
 function renderDifficulties() {
@@ -1627,7 +1589,7 @@ function renderDifficulties() {
     el.className = 'difficulty-card';
     el.innerHTML = `
       <div class="info">
-        <span class="name">${ch.name} <span style="color:#ffbe0b">★ ${ch.rating}</span></span>
+        <span class="name">${diffLabel(ch.name)} <span style="color:#ffbe0b">★ ${ch.rating}</span></span>
         <span class="meta">${ch.count} pasos · ${heads} holds${rolls?` (${rolls} rolls)`:''} · ${jumps} jumps</span>
       </div>
     `;
@@ -1844,6 +1806,135 @@ function downloadOne(id) {
   const sm = buildSmForSong(q);
   const fn = safeFilename(q.title) + '.sm';
   downloadBlob(new Blob([sm], { type: 'text/plain' }), fn);
+}
+
+// ============================================================
+//                  GUARDAR EN BIBLIOTECA SINCRO
+// ============================================================
+// IndexedDB helper local (autostepper.html no carga core.js para evitar el
+// loop rAF de gamepad polling). DB compartida con core.js / gh-db.js:
+// `StepManiaWebDB` v3 con store `songs` (autoincrement id). El schema del
+// entry debe COINCIDIR con el que escribe library.js al importar archivos
+// — si divergen, stepmania-play.html no encontrará el chart correcto.
+const SM_DB_NAME = 'StepManiaWebDB';
+const SM_DB_VERSION = 3;
+let _smDbPromise = null;
+function _smOpenDB() {
+  if (_smDbPromise) return _smDbPromise;
+  _smDbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(SM_DB_NAME, SM_DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      // Idempotente — si stepmania-play.html ya abrió la DB, estos stores
+      // ya existen; si entramos aquí primero, los creamos.
+      if (!db.objectStoreNames.contains('songs')) {
+        db.createObjectStore('songs', { keyPath: 'id', autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains('scores')) {
+        const ss = db.createObjectStore('scores', { keyPath: 'key' });
+        ss.createIndex('songId', 'songId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('gh-songs')) {
+        db.createObjectStore('gh-songs', { keyPath: 'id', autoIncrement: true });
+      }
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror  = e => reject(e.target.error);
+  });
+  return _smDbPromise;
+}
+async function _smDbAdd(entry) {
+  const db = await _smOpenDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('songs', 'readwrite');
+    const req = tx.objectStore('songs').add(entry);
+    req.onsuccess = () => res(req.result);
+    req.onerror  = () => rej(req.error);
+  });
+}
+
+async function saveOneToLibrary(id) {
+  const q = queue.find(x => x.id === id);
+  if (!q || !q.result || q.savedToLibrary) return;
+  const status = document.getElementById('librarySaveStatus');
+  try {
+    const ssc = buildSscForSong(q);
+    const sourceBlob = q.result.croppedAudio || q.file;
+    const audioName  = q.result.croppedAudioName || q.file.name;
+    // El audio se persiste como Blob nuevo (audio/* MIME) para desacoplar
+    // de la referencia al File original — que se invalida si el usuario
+    // recarga la pestaña. Lo mismo hace library.js al importar.
+    const audioBlob  = sourceBlob instanceof Blob && sourceBlob.type
+      ? sourceBlob
+      : new Blob([await sourceBlob.arrayBuffer()], { type: sourceBlob.type || 'audio/mpeg' });
+    // Política unificada 8-lane: todos los charts generados son dance-double.
+    // Ver CLAUDE.md "Política unificada de carriles". El motor en runtime
+    // decide 4/6/8 vía mods (default 4) y hace el remap.
+    const charts = q.result.charts.map(c => ({
+      name: c.name,
+      key:  c.key,
+      rating: c.rating,
+      count: c.count,
+      stepType: 'dance-double',
+      numLanes: 8,
+    }));
+    const dbId = await _smDbAdd({
+      title:  q.title || q.file.name.replace(/\.[^.]+$/, ''),
+      artist: q.artist || 'Unknown',
+      audioBlob,
+      audioName,
+      sscText: ssc,
+      bpm:        q.result.bpm,
+      offsetSec:  q.result.offsetSec,
+      duration:   q.result.duration,
+      sampleStart: q.result.sampleStart,
+      charts,
+      tags: [],
+      addedAt: Date.now(),
+    });
+    q.savedToLibrary = true;
+    q.dbId = dbId;
+    renderQueue();
+    status.innerHTML = `<span style="color:#00ff64">✓ "${escapeHtml(q.title || q.file.name)}" guardada en biblioteca.</span>`;
+  } catch (err) {
+    const reason = err && err.name === 'QuotaExceededError'
+      ? 'almacenamiento lleno — libera espacio o haz backup antes de seguir'
+      : (err && err.message) || String(err);
+    status.innerHTML = `<span style="color:#ff3366">✗ Error guardando "${escapeHtml(q.title || q.file.name)}": ${escapeHtml(reason)}</span>`;
+    console.error('saveOneToLibrary:', err);
+    // En QuotaExceeded propagamos para que saveAllToLibrary detenga el bucle.
+    if (err && err.name === 'QuotaExceededError') throw err;
+  }
+}
+
+async function saveAllToLibrary() {
+  const done = queue.filter(q => q.status === 'done' && !q.savedToLibrary);
+  if (done.length === 0) {
+    document.getElementById('librarySaveStatus').innerHTML =
+      `<span style="color:var(--gris-300)">No hay canciones nuevas para guardar (¿ya las añadiste todas?)</span>`;
+    return;
+  }
+  const btn = document.getElementById('saveLibraryBtn');
+  btn.disabled = true;
+  let saved = 0, errors = 0, quotaHit = false;
+  for (const q of done) {
+    if (quotaHit) break;
+    try {
+      await saveOneToLibrary(q.id);
+      saved++;
+    } catch (e) {
+      errors++;
+      if (e && e.name === 'QuotaExceededError') quotaHit = true;
+    }
+  }
+  btn.disabled = false;
+  const status = document.getElementById('librarySaveStatus');
+  if (quotaHit) {
+    status.innerHTML = `<span style="color:#facc15">⚠ ${saved} guardadas antes de quedarte sin espacio. Elimina canciones viejas en la biblioteca o haz backup ZIP antes de seguir.</span>`;
+  } else {
+    const link = `<a href="stepmania-play.html#library" style="color:var(--turquesa-400);font-weight:600">→ Ver biblioteca</a>`;
+    status.innerHTML = `<span style="color:#00ff64">✓ ${saved} canciones guardadas en biblioteca${errors ? ` · ${errors} con error` : ''}.</span> ${link}`;
+  }
 }
 
 async function downloadAllZip() {

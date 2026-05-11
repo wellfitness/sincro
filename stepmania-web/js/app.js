@@ -1,16 +1,51 @@
 // ============================================================================
 //  APP — top-level navigation, settings modal bindings, app kickoff.
 //  Loaded LAST: depends on every other module being defined.
+//
+//  Reorganización 2026-05-11: el SPA antes tenía 10 screens (menu, pad, create,
+//  library, songs, diff, play, results, calib, tutorial) viviendo todos dentro
+//  de play.html. Ahora play.html es SOLO el dashboard de cards, y el motor
+//  vive en stepmania-play.html con un subset (library, songs, diff, play,
+//  results). Las otras pantallas tienen archivos dedicados: tutorial.html,
+//  calibration.html, autostepper.html, test-pad.html.
+//
+//  app.js es agnóstico al archivo donde se carga: descubre dinámicamente qué
+//  screens existen en el DOM y arma SCREENS en runtime. Si goto('X') pide un
+//  screen ausente, redirige al archivo correspondiente vía SCREEN_EXTERNAL.
 // ============================================================================
 
-const SCREENS = ['menu', 'pad', 'create', 'library', 'songs', 'diff', 'play', 'results', 'calib', 'tutorial'];
+// Nombres canónicos de todas las screens conocidas por el SPA, en cualquier
+// archivo que cargue este módulo. SCREENS se filtra abajo según las que
+// realmente existen en el DOM de la página actual.
+const SCREEN_NAMES = ['menu', 'pad', 'create', 'library', 'songs', 'diff', 'play', 'results', 'calib', 'tutorial'];
+
+// Tras la separación de archivos, las screens que NO están en el archivo
+// actual se redirigen aquí. play.html (dashboard) tiene solo `menu`, así
+// que cualquier goto('songs') desde código antiguo te lleva al motor.
+// stepmania-play.html tiene library/songs/diff/play/results pero NO tiene
+// menu/calib/tutorial/create/pad, así que goto('menu') te devuelve al
+// dashboard, goto('calib') a calibration.html, etc.
+const SCREEN_EXTERNAL = {
+  menu:     'play.html',
+  songs:    'stepmania-play.html',
+  library:  'stepmania-play.html#library',
+  diff:     'stepmania-play.html',
+  play:     'stepmania-play.html',
+  results:  'stepmania-play.html',
+  calib:    'calibration.html',
+  tutorial: 'tutorial.html',
+  create:   'autostepper.html',
+  pad:      'test-pad.html'
+};
+
+const SCREENS = SCREEN_NAMES.filter(s => document.getElementById(s + '-screen'));
 const CRUMBS = {
   menu: '', pad: 'Test de alfombra', create: 'Crear coreografías',
   library: 'Librería', songs: 'Jugar', diff: 'Dificultad',
   play: 'Jugando', results: 'Resultados', calib: 'Calibración',
   tutorial: 'Tutorial'
 };
-let currentScreen = 'menu';
+let currentScreen = SCREENS[0] || 'menu';
 
 function goto(name) {
   // Bump del token de navegación: cualquier promesa async en vuelo capturada
@@ -24,11 +59,24 @@ function goto(name) {
     // Cancelar el preview-loop al salir de songs-screen para no quemar GPU
     if (typeof _stopPreviewLoop === 'function') _stopPreviewLoop();
   }
+
+  // Screen no presente en el DOM actual → redirigir al archivo dedicado.
+  // Esto cubre los goto('menu') / goto('create') / goto('calib') / etc. que
+  // sobreviven en módulos antiguos (song-select.js, library.js, etc.) tras
+  // la separación de archivos. Una llamada en stepmania-play.html a
+  // goto('menu') te devuelve al dashboard, en lugar de fallar silenciosa.
+  if (!SCREENS.includes(name)) {
+    const target = SCREEN_EXTERNAL[name];
+    if (target) window.location.href = target;
+    return;
+  }
+
   for (const s of SCREENS) {
     document.getElementById(s + '-screen').classList.toggle('hidden', s !== name);
   }
   currentScreen = name;
-  document.getElementById('crumb').textContent = CRUMBS[name] ? '· ' + CRUMBS[name] : '';
+  const crumbEl = document.getElementById('crumb');
+  if (crumbEl) crumbEl.textContent = CRUMBS[name] ? '· ' + CRUMBS[name] : '';
   if (name === 'library') refreshLibrary();
   if (name === 'songs')   {
     refreshSongs();
@@ -64,26 +112,30 @@ function goto(name) {
 // ----- NoteSkin upload (PNG) ------------------------------------------------
 function clearNoteskinUi() {
   if (typeof clearNoteskin === 'function') clearNoteskin();
-  document.getElementById('noteskinStatus').textContent = 'por defecto';
+  const el = document.getElementById('noteskinStatus');
+  if (el) el.textContent = 'por defecto';
 }
 document.getElementById('noteskinInput')?.addEventListener('change', e => {
   const f = e.target.files[0];
   if (!f) return;
   if (typeof setNoteskinFromFile === 'function') setNoteskinFromFile(f);
-  document.getElementById('noteskinStatus').textContent = f.name.length > 18 ? f.name.slice(0,18)+'...' : f.name;
+  const el = document.getElementById('noteskinStatus');
+  if (el) el.textContent = f.name.length > 18 ? f.name.slice(0,18)+'...' : f.name;
   e.target.value = '';
 });
 
 // ----- Background upload (image or video) -----------------------------------
 function clearBgUi() {
   if (typeof clearBg === 'function') clearBg();
-  document.getElementById('bgStatus').textContent = 'procedural';
+  const el = document.getElementById('bgStatus');
+  if (el) el.textContent = 'procedural';
 }
 document.getElementById('bgInput')?.addEventListener('change', e => {
   const f = e.target.files[0];
   if (!f) return;
   if (typeof setBgFromFile === 'function') setBgFromFile(f);
-  document.getElementById('bgStatus').textContent = f.name.length > 18 ? f.name.slice(0,18)+'...' : f.name;
+  const el = document.getElementById('bgStatus');
+  if (el) el.textContent = f.name.length > 18 ? f.name.slice(0,18)+'...' : f.name;
   e.target.value = '';
 });
 
@@ -114,13 +166,29 @@ function autoDetectLatency() {
 
 // ----- Kickoff ---------------------------------------------------------------
 pollGamepad();   // start gamepad RAF loop (defined in core.js)
-padTestLoop();   // start pad-test RAF loop (defined in pad-test.js)
+if (typeof padTestLoop === 'function') padTestLoop(); // solo si pad-test.js está cargado
 
-// Si la URL incluye ?screen=tutorial (o cualquier screen válida), abrimos
-// directo allí. Permite a los archivos satellite (gh-play, gh-autostepper,
-// test-pad) enlazar a screens concretas del SPA con `play.html?screen=X`.
+// Pantalla inicial — se decide así:
+//   1. ?screen=X (deep-link explícito)
+//   2. #hash (compatibilidad con #library tipo gh-play.html)
+//   3. 'songs' si está disponible (es la pantalla "Crear partida", la portada
+//      natural del motor — la card "Bailar" del dashboard apunta sin hash
+//      esperando aterrizar aquí). Sin esta preferencia explícita SCREENS[0]
+//      caía en 'library' porque ese nombre va antes en SCREEN_NAMES.
+//   4. Fallback al primer screen del DOM (archivos con un solo screen).
 const _initialScreen = (() => {
   const want = new URLSearchParams(window.location.search).get('screen');
-  return SCREENS.includes(want) ? want : 'menu';
+  if (want && SCREENS.includes(want)) return want;
+  const hashName = (location.hash || '').replace(/^#/, '').toLowerCase();
+  if (hashName && SCREENS.includes(hashName)) return hashName;
+  if (SCREENS.includes('songs')) return 'songs';
+  return SCREENS[0] || 'menu';
 })();
 goto(_initialScreen);
+
+// Hash routing — permite que el dashboard linkee a `stepmania-play.html#library`
+// y aterrice directamente en la biblioteca. Igual que gh-play.html.
+window.addEventListener('hashchange', () => {
+  const h = (location.hash || '').replace(/^#/, '').toLowerCase();
+  if (h && SCREENS.includes(h) && h !== currentScreen) goto(h);
+});

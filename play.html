@@ -2,9 +2,10 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Sincro — Juega y crea coreografías</title>
+<title>Sincro — Suite rítmica</title>
 <meta name="theme-color" content="#00bec8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Sincro: suite de juego rítmico para alfombra de baile y guitarra Guitar Hero. Juega, crea coreografías y prueba tu hardware.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 <link rel="apple-touch-icon" href="icons/icon.svg">
@@ -14,21 +15,19 @@
 <body>
 
 <nav id="topbar">
-  <div class="logo" onclick="goto('menu')">⚡ Sincro</div>
-  <div class="crumb" id="crumb"></div>
+  <div class="logo">⚡ Sincro</div>
+  <div class="crumb"></div>
   <div class="spacer"></div>
   <div class="topbar-nav">
-    <button class="topbar-link" onclick="goto('songs')" title="Bailar con alfombra">🦶 Bailar</button>
+    <button class="topbar-link" onclick="window.location.href='stepmania-play.html'" title="Bailar con alfombra">🦶 Bailar</button>
     <button class="topbar-link" onclick="window.location.href='gh-play.html'" title="Tocar guitarra">🎸 Tocar</button>
-    <button class="topbar-link" onclick="window.open('test-pad.html','_blank')" title="Probar hardware">🛠️ Equipo</button>
-    <button class="topbar-link" onclick="goto('tutorial')" title="Tutorial">📖 Tutorial</button>
+    <button class="topbar-link" onclick="window.location.href='test-pad.html'" title="Probar hardware">🛠️ Equipo</button>
+    <button class="topbar-link" onclick="window.location.href='tutorial.html'" title="Tutorial">📖 Tutorial</button>
   </div>
   <div class="pill off" id="padPill">alfombra: no detectada</div>
   <button class="icon-btn" onclick="openSettings()" id="settingsBtn" style="margin-left:10px" title="Ajustes">⚙</button>
-  <button class="icon-btn" onclick="goto('menu')" id="homeBtn" style="margin-left:6px" title="Menú principal">⌂</button>
 </nav>
 
-<!-- SETTINGS MODAL -->
 <div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettings()">
   <div class="modal">
     <h2>⚙ Ajustes</h2>
@@ -99,53 +98,27 @@
   </div>
 </div>
 
-<!-- BPM/OFFSET EDIT MODAL -->
-<div class="modal-overlay" id="bpmEditModal" onclick="if(event.target===this)closeBpmEdit()">
-  <div class="modal">
-    <h2>✏ Ajustar BPM y offset</h2>
-    <div id="bpmEditWarn" style="margin-bottom:12px"></div>
-    <div class="param">
-      <div class="param-header">
-        <span class="param-label">🎵 BPM</span>
-        <span class="param-value" id="bpmEditVal">120.0</span>
-      </div>
-      <input type="number" id="bpmEditInput" min="40" max="300" step="0.1" style="width:100%;background:rgba(0,0,0,0.4);border:1px solid rgba(0,190,200,0.3);color:#fff;padding:8px 12px;border-radius:6px;font-family:var(--font-mono);font-size:1em">
-    </div>
-    <div class="param">
-      <div class="param-header">
-        <span class="param-label">⏱ Offset (segundos)</span>
-        <span class="param-value" id="offsetEditVal">0.000</span>
-      </div>
-      <input type="number" id="offsetEditInput" step="0.001" style="width:100%;background:rgba(0,0,0,0.4);border:1px solid rgba(0,190,200,0.3);color:#fff;padding:8px 12px;border-radius:6px;font-family:var(--font-mono);font-size:1em">
-      <div class="param-help">Positivo = el primer beat suena después del segundo 0. Negativo = empieza antes (raro).</div>
-    </div>
-    <div class="close-row" style="gap:8px">
-      <button class="action-btn secondary" onclick="closeBpmEdit()">Cancelar</button>
-      <button class="action-btn" onclick="saveBpmEdit()">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MAIN MENU -->
+<!-- MAIN MENU (dashboard) -->
 <div class="screen" id="menu-screen">
   <div class="container">
     <h1>Sincro</h1>
     <p class="subtitle">Crea, comprueba y juega coreografías directamente en el navegador</p>
+
     <!-- ===== SECCIÓN STEPMANIA (alfombra) ===== -->
     <section class="dashboard-section sm-section">
       <h2 class="section-title">🦶 StepMania <span class="section-subtitle">— alfombra de baile</span></h2>
       <div class="menu-grid">
-        <div class="menu-card" onclick="goto('songs')">
-          <div class="icon">▶</div>
+        <div class="menu-card" onclick="window.location.href='stepmania-play.html'">
+          <div class="icon">&#9654;</div>
           <div class="title">Bailar</div>
-          <div class="desc">Elige una coreografía de tu biblioteca y juégala con la alfombra o teclado (← ↓ ↑ →).</div>
+          <div class="desc">Elige una coreografía de tu biblioteca y juégala con la alfombra o teclado.</div>
         </div>
-        <div class="menu-card" onclick="goto('create')">
+        <div class="menu-card" onclick="window.location.href='autostepper.html'">
           <div class="icon">🎵</div>
           <div class="title">Crear coreografías</div>
           <div class="desc">AutoStepper: convierte cualquier MP3 en una coreografía DDR con cinco dificultades.</div>
         </div>
-        <div class="menu-card" onclick="goto('library')">
+        <div class="menu-card" onclick="window.location.href='stepmania-play.html#library'">
           <div class="icon">📚</div>
           <div class="title">Mis canciones</div>
           <div class="desc">Gestiona tu biblioteca: añade canciones (.ssc o .sm + audio) o paquetes ZIP del AutoStepper.</div>
@@ -153,24 +126,24 @@
       </div>
     </section>
 
-    <!-- ===== SECCIÓN GUITAR HERO (guitarra) ===== -->
+    <!-- ===== SECCIÓN GUITAR HERO ===== -->
     <section class="dashboard-section gh-section">
       <h2 class="section-title">🎸 Guitar Hero <span class="section-subtitle">— guitarra</span></h2>
       <div class="menu-grid">
         <div class="menu-card" onclick="window.location.href='gh-play.html'">
-          <div class="icon">▶</div>
+          <div class="icon">&#9654;</div>
           <div class="title">Tocar</div>
-          <div class="desc">Partituras estilo Guitar Hero: 5 trastes + strum + sustains + HOPOs. Lee tu calibración del test de hardware.</div>
+          <div class="desc">Configura tu partida (dificultad, anticipación) y elige una canción de tu biblioteca. 5 trastes + strum + HOPOs.</div>
         </div>
         <div class="menu-card" onclick="window.location.href='gh-autostepper.html'">
           <div class="icon">🎼</div>
           <div class="title">Crear partituras</div>
-          <div class="desc">Genera partituras (notes.chart) desde MP3/WAV — listas para Clone Hero o el simulador de Sincro.</div>
+          <div class="desc">Genera partituras (notes.chart) desde MP3/WAV — listas para Clone Hero o para guardar en tu biblioteca de Sincro.</div>
         </div>
         <div class="menu-card" onclick="window.location.href='gh-play.html#library'">
           <div class="icon">📚</div>
           <div class="title">Mis canciones</div>
-          <div class="desc">Biblioteca de partituras de guitarra guardadas. Tócalas sin tener que importar archivos cada vez.</div>
+          <div class="desc">Gestión de biblioteca: importa nuevos charts (ZIP o .chart+audio) y elimina los que ya no quieras.</div>
         </div>
       </div>
     </section>
@@ -179,17 +152,17 @@
     <section class="dashboard-section common-section">
       <h2 class="section-title">🛠️ Comunes <span class="section-subtitle">— para los dos</span></h2>
       <div class="menu-grid">
-        <div class="menu-card" onclick="window.open('test-pad.html','_blank')">
+        <div class="menu-card" onclick="window.location.href='test-pad.html'">
           <div class="icon">🛠️</div>
           <div class="title">Comprobar el equipo</div>
           <div class="desc">Diagnóstico de alfombra y guitarra: calibración, latencia, saltos/chords, rasgueo, palanca, sensores pegados, sync.</div>
         </div>
-        <div class="menu-card" onclick="goto('calib')">
+        <div class="menu-card" onclick="window.location.href='calibration.html'">
           <div class="icon">🎯</div>
           <div class="title">Calibración audio</div>
           <div class="desc">Mide tu desfase real con un metrónomo y aplícalo en Ajustes.</div>
         </div>
-        <div class="menu-card" onclick="goto('tutorial')">
+        <div class="menu-card" onclick="window.location.href='tutorial.html'">
           <div class="icon">📖</div>
           <div class="title">Tutorial</div>
           <div class="desc">Cómo usar cada herramienta y cada ajuste, paso a paso.</div>
@@ -203,819 +176,107 @@
   </div>
 </div>
 
-<!-- PAD TEST SCREEN -->
-<div class="screen hidden" id="pad-screen">
-  <div class="container">
-    <h1>Comprobar la alfombra</h1>
-    <p class="subtitle">Diagnóstico del dance pad (Gamepad API)</p>
-
-    <div class="card">
-      <div class="tabs">
-        <button class="tab-btn active" data-tab="visual">Visual</button>
-        <button class="tab-btn" data-tab="latency">Latencia</button>
-        <button class="tab-btn" data-tab="ghost">Ghost inputs</button>
-        <button class="tab-btn" data-tab="raw">Crudo / LEDs</button>
-      </div>
-
-      <div class="tab-content active" id="ptab-visual">
-        <div class="pad-grid" id="padGrid">
-          <div class="pad-cell empty"></div>
-          <div class="pad-cell arrow" data-button="2" id="cell-up"><span class="count">0</span><span class="arrow-icon">↑</span><span class="label">ARRIBA</span></div>
-          <div class="pad-cell empty"></div>
-          <div class="pad-cell arrow" data-button="0" id="cell-left"><span class="count">0</span><span class="arrow-icon">←</span><span class="label">IZQUIERDA</span></div>
-          <div class="pad-cell center"><div>START: B9</div><div>BACK: B10</div></div>
-          <div class="pad-cell arrow" data-button="3" id="cell-right"><span class="count">0</span><span class="arrow-icon">→</span><span class="label">DERECHA</span></div>
-          <div class="pad-cell empty"></div>
-          <div class="pad-cell arrow" data-button="1" id="cell-down"><span class="count">0</span><span class="arrow-icon">↓</span><span class="label">ABAJO</span></div>
-          <div class="pad-cell empty"></div>
-        </div>
-        <p class="help" style="text-align:center">
-          Pisa cualquier panel para activar la detección. El contador sube en cada pisada.
-        </p>
-        <div style="text-align:center;margin-top:10px">
-          <button class="action-btn secondary" onclick="resetPadCounts()">Resetear contadores</button>
-        </div>
-      </div>
-
-      <div class="tab-content" id="ptab-latency">
-        <p class="help">Reaccionar lo más rápido posible al panel iluminado en azul. Mide tu tiempo en ms (humano normal: 200-300 ms).</p>
-        <div style="text-align:center;margin:20px 0">
-          <button class="action-btn" id="latencyBtn" onclick="startLatency()">Iniciar test (8 rondas)</button>
-        </div>
-        <div style="text-align:center;font-size:3em;font-weight:800;color:#ffbe0b" id="latencyDisplay">--</div>
-        <div style="text-align:center;color:#aaa" id="latencyStatus">Pulsa "Iniciar"</div>
-        <div class="log" id="latencyLog"></div>
-      </div>
-
-      <div class="tab-content" id="ptab-ghost">
-        <p class="help"><strong>NO PISES la alfombra.</strong> Si aparece algún input es un sensor con problema.</p>
-        <div style="text-align:center;margin:20px 0">
-          <button class="action-btn" id="ghostBtn" onclick="startGhost()">Monitorear 60s</button>
-        </div>
-        <div style="text-align:center;font-size:3em;font-weight:800;color:#ff3366" id="ghostCount">0</div>
-        <div style="text-align:center;color:#aaa" id="ghostStatus">eventos detectados</div>
-        <div class="log" id="ghostLog"></div>
-      </div>
-
-      <div class="tab-content" id="ptab-raw">
-        <h2 style="margin-top:0">Botones (16 LEDs)</h2>
-        <div class="button-grid" id="btnGrid"></div>
-        <p style="margin-top:10px;color:#aaa;font-size:0.85em">
-          Bitmask: <span id="i-bits" style="color:#00ff64;font-family:monospace">0</span> ·
-          Polling: <span id="i-poll" style="color:#00ff64;font-family:monospace">-- Hz</span>
-        </p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- CREATE SCREEN (AutoStepper) -->
-<div class="screen hidden" id="create-screen">
-  <div class="container">
-    <h1>Crear coreografías</h1>
-    <p class="subtitle">AutoStepper — convierte tus canciones (MP3 o WAV) en coreografías jugables</p>
-
-    <div class="card">
-      <h2>1. Cargar audio (una o varias canciones)</h2>
-      <label class="drop-zone" id="dropZone">
-        <div class="big-icon">🎵</div>
-        <p style="color:#aaa">Arrastra MP3/WAV/OGG aquí o pincha para elegir</p>
-        <input type="file" id="fileInput" accept="audio/*" multiple>
-      </label>
-      <div id="queueContainer" style="margin-top:14px"></div>
-    </div>
-
-    <div class="card" id="optionsCard" style="display:none">
-      <h2>2. Estilo</h2>
-      <div class="preset-grid">
-        <div class="preset" data-preset="suave"><div class="preset-name">🌿 Suave</div><div class="preset-desc">Pocos pasos, sin saltos</div></div>
-        <div class="preset selected" data-preset="normal"><div class="preset-name">⚡ Normal</div><div class="preset-desc">Equilibrado, alguna nota mantenida (recomendado)</div></div>
-        <div class="preset" data-preset="intenso"><div class="preset-name">🔥 Intenso</div><div class="preset-desc">Mucha densidad, notas mantenidas, saltos</div></div>
-        <div class="preset" data-preset="custom"><div class="preset-name">⚙️ Personalizado</div><div class="preset-desc">Ajusta cada parámetro a mano</div></div>
-      </div>
-
-      <div class="param-help" style="margin-top:12px;padding:10px 12px;background:rgba(0,190,200,0.06);border-left:3px solid var(--turquesa-600);border-radius:4px;line-height:1.5">
-        🎚 Cada coreografía se genera con los <strong>8 carriles completos</strong> (cardinales + 4 diagonales) como master único. En la pantalla de Dificultad eliges cómo jugarla: <strong>Clásico (4)</strong> por defecto, o activas <strong>Solo (6)</strong> / <strong>Full (8)</strong> para jugar con diagonales.
-      </div>
-
-      <div style="margin-top:14px">
-        <div style="color:var(--gris-300);font-size:0.92em;margin-bottom:8px">⏱ Duración máxima por canción</div>
-        <div class="preset-grid" id="durationGrid">
-          <div class="preset selected" data-duration="0"><div class="preset-name">∞ Completa</div><div class="preset-desc">Audio original íntegro</div></div>
-          <div class="preset" data-duration="90"><div class="preset-name">⚡ 1:30</div><div class="preset-desc">90 segundos</div></div>
-          <div class="preset" data-duration="120"><div class="preset-name">🎵 2:00</div><div class="preset-desc">120 segundos</div></div>
-          <div class="preset" data-duration="180"><div class="preset-name">🎶 3:00</div><div class="preset-desc">180 segundos</div></div>
-        </div>
-        <div class="param-help" style="margin-top:6px">Recorta el chart Y el audio al tiempo elegido (con fade-out de 1.5s al final). Útil para canciones largas que se hacen pesadas. El audio recortado se guarda como WAV.</div>
-      </div>
-
-      <div id="customParams" style="display:none;margin-top:12px">
-        <div class="param">
-          <div class="param-header"><span class="param-label">🎯 Sensibilidad</span><span class="param-value" id="sensValue">1.7</span></div>
-          <input type="range" id="sensitivity" min="1.0" max="3.5" step="0.1" value="1.7">
-          <div class="param-help">Bajo = más pasos. Alto = solo los golpes más fuertes.</div>
-        </div>
-        <div class="param">
-          <div class="param-header"><span class="param-label">📏 Resolución</span><span class="param-value" id="subdivValue">corcheas (1/8)</span></div>
-          <select id="subdivSelect">
-            <option value="4">Negras (1/4)</option>
-            <option value="8" selected>Corcheas (1/8)</option>
-            <option value="16">Semicorcheas (1/16)</option>
-          </select>
-        </div>
-        <div class="param">
-          <div class="param-header"><span class="param-label">⏸️ Notas mantenidas</span><span class="param-value" id="holdVal">25%</span></div>
-          <input type="range" id="holdDensity" min="0" max="1" step="0.05" value="0.25">
-        </div>
-        <div class="param">
-          <div class="param-header"><span class="param-label">↔️ Probabilidad de salto (en dificultad Hard)</span><span class="param-value" id="jumpVal">7%</span></div>
-          <input type="range" id="jumpProb" min="0" max="0.25" step="0.01" value="0.07">
-        </div>
-      </div>
-
-      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="action-btn" id="analyzeBtn" onclick="analyzeAll()">▶ Analizar todo</button>
-        <button class="action-btn secondary" id="cancelBtn" onclick="cancelAnalysis()" disabled>Cancelar</button>
-        <button class="action-btn secondary" onclick="clearQueue()">Vaciar cola</button>
-      </div>
-      <div class="progress-bar"><div class="fill" id="analyzeProgress"></div></div>
-      <div class="log" id="analyzeLog"></div>
-    </div>
-
-    <div class="card hidden" id="exportCard">
-      <h2>3. Guardar o descargar</h2>
-      <p class="help">Las canciones procesadas se guardan en tu biblioteca (en este mismo navegador) y puedes jugarlas desde "Jugar".</p>
-      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="action-btn" onclick="saveAllToLibrary()">💾 Guardar en mi biblioteca</button>
-        <button class="action-btn secondary" onclick="downloadAllZip()">Descargar ZIP (.ssc + .sm + audio)</button>
-      </div>
-      <div id="exportStatus" style="margin-top:10px;color:#aaa;font-size:0.9em"></div>
-    </div>
-  </div>
-</div>
-
-<!-- CALIBRATION SCREEN -->
-<div class="screen hidden" id="calib-screen">
-  <div class="container">
-    <h1>Calibración</h1>
-    <p class="subtitle">Mide tu offset real con el metrónomo y aplícalo a Ajustes</p>
-
-    <div class="card">
-      <h2>Cómo funciona</h2>
-      <p style="color:var(--gris-300);font-size:0.9em;line-height:1.5">
-        Inicia el metrónomo y pisa cualquier panel (o pulsa <strong>ESPACIO</strong>) al ritmo del tic. Tras 20-30 pisadas, pulsa "Detener" para ver tu offset promedio. Si pisas siempre tarde, el valor sugerido será positivo; si pisas adelantado, negativo.
-      </p>
-    </div>
-
-    <div class="card">
-      <div class="param">
-        <div class="param-header">
-          <span class="param-label">🎵 BPM</span>
-          <span class="param-value" id="calibBpmDisplay">120</span>
-        </div>
-        <input type="range" id="calibBpmSlider" min="60" max="180" step="1" value="120" oninput="calibUpdateBpm(this.value)">
-      </div>
-      <div style="display:flex;justify-content:center;align-items:center;gap:24px;margin:20px 0">
-        <div id="calibPulse" style="width:120px;height:120px;border-radius:50%;background:rgba(0,190,200,0.15);border:4px solid var(--turquesa-600);display:flex;align-items:center;justify-content:center;font-size:2.5em;font-weight:800;transition:all 0.1s">●</div>
-        <div style="font-family:var(--font-mono);font-size:0.9em">
-          <div>Beats: <span id="calibBeats" style="color:var(--turquesa-400)">0</span></div>
-          <div>Pisadas: <span id="calibSteps" style="color:var(--turquesa-400)">0</span></div>
-          <div>Offset medio: <span id="calibOffset" style="color:var(--tulip-tree-500);font-size:1.2em;font-weight:700">-- ms</span></div>
-        </div>
-      </div>
-      <div style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-        <button class="action-btn" id="calibStart" onclick="startCalib()">▶ Iniciar metrónomo</button>
-        <button class="action-btn secondary" id="calibStop" onclick="stopCalib()" disabled>■ Detener y analizar</button>
-      </div>
-      <div id="calibRecommendation" style="margin-top:14px;font-size:0.9em"></div>
-    </div>
-
-    <div style="text-align:center;margin-top:14px">
-      <button class="action-btn secondary" onclick="goto('menu')">← Volver al menú</button>
-    </div>
-  </div>
-</div>
-
-<!-- LIBRARY -->
-<div class="screen hidden" id="library-screen">
-  <div class="container">
-    <h1>Mis canciones</h1>
-    <p class="subtitle">Tu biblioteca personal (guardada en este navegador)</p>
-
-    <div class="card">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-        <button class="action-btn" onclick="goto('create')">🎵 Crear nueva</button>
-        <label class="action-btn secondary" style="cursor:pointer">
-          📥 Importar archivos
-          <input type="file" id="importInput" accept=".sm,.ssc,audio/*" multiple style="display:none">
-        </label>
-        <label class="action-btn secondary" style="cursor:pointer" title="Importa un paquete completo de StepMania (una carpeta con subcarpetas que contienen .ssc + audio)">
-          📁 Importar paquete
-          <input type="file" id="importPackInput" webkitdirectory directory multiple style="display:none">
-        </label>
-        <button class="action-btn secondary" onclick="refreshLibrary()">↻ Recargar</button>
-        <button class="action-btn secondary" onclick="exportBackupZip()" title="Descarga toda tu biblioteca (canciones, puntuaciones y ajustes) en un ZIP">💾 Copia de seguridad</button>
-        <label class="action-btn secondary" style="cursor:pointer" title="Restaurar desde un ZIP de copia de seguridad">
-          📦 Restaurar
-          <input type="file" id="backupRestoreInput" accept=".zip" style="display:none">
-        </label>
-      </div>
-      <div id="backupStatus" style="margin-bottom:10px;font-size:0.85em;color:var(--gris-400)"></div>
-      <div id="libraryContainer">Cargando...</div>
-    </div>
-  </div>
-</div>
-
-<!-- SONGS (selector to play) -->
-<div class="screen hidden" id="songs-screen">
-  <div class="container">
-    <h1>Crear partida</h1>
-    <p class="subtitle" id="songsSubtitle">Cargando...</p>
-
-    <!-- ============== CONFIGURACIÓN DE PARTIDA ==============
-         Patrón arcade: PRIMERO eliges nivel y modificadores (atributos
-         globales de la próxima partida), DESPUÉS la canción/canciones.
-         Esto unifica el flow single y playlist — la config aplica igual a
-         1 o N canciones. -->
-    <div class="card config-card">
-      <h2 style="font-family:var(--font-display);color:var(--turquesa-400);font-size:1em;margin-bottom:14px;letter-spacing:0.02em">
-        ⚙ Configuración de la partida
-      </h2>
-
-      <!-- Layout: preview izquierda · variantes + dificultad/anticipación
-           DENTRO de la columna derecha. El preview queda "limpio" sin nada
-           debajo — los controles textuales viven todos pegados a las
-           variantes, que es donde el ojo ya está leyendo. -->
-      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
-        <!-- Columna izquierda: solo preview canvas, sin nada debajo -->
-        <div style="flex-shrink:0">
-          <div style="color:var(--gris-400);font-size:0.78em;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase">Vista previa</div>
-          <canvas id="previewCanvas" width="420" height="320" style="background:linear-gradient(180deg,#000,#0a0a14);border-radius:8px;border:1px solid rgba(0,190,200,0.25);display:block"></canvas>
-          <div style="color:var(--gris-500);font-size:0.74em;margin-top:4px;text-align:center">Patrón sintético · 120 BPM · ajusta speed y mods</div>
-        </div>
-        <!-- Columna derecha: variantes 3×3, dificultad + anticipación, y tip -->
-        <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:14px">
-          <div>
-            <div style="color:var(--gris-400);font-size:0.85em;margin-bottom:8px">Variantes (modificadores)</div>
-            <div class="mods-grid" id="globalModsContainer">
-              <div class="mod-toggle" data-mod="mirror"><div class="mod-name">🪞 Mirror</div><div class="mod-help">Invierte izquierda↔derecha</div></div>
-              <div class="mod-toggle" data-mod="left"><div class="mod-name">↺ Left</div><div class="mod-help">Rota carriles 90° antihorario</div></div>
-              <div class="mod-toggle" data-mod="right"><div class="mod-name">↻ Right</div><div class="mod-help">Rota carriles 90° horario</div></div>
-              <div class="mod-toggle" data-mod="shuffle"><div class="mod-name">🔀 Shuffle</div><div class="mod-help">Cambia carriles al azar</div></div>
-              <div class="mod-toggle" data-mod="hidden"><div class="mod-name">👁 Hidden</div><div class="mod-help">Flechas se ocultan antes de llegar</div></div>
-              <div class="mod-toggle" data-mod="sudden"><div class="mod-name">💨 Sudden</div><div class="mod-help">Aparecen tarde, ya cerca</div></div>
-              <div class="mod-toggle" data-mod="solo"><div class="mod-name">🎯 Solo (6)</div><div class="mod-help">↖ ↗ + 4 cardinales</div></div>
-              <div class="mod-toggle" data-mod="full"><div class="mod-name">🌟 Full (8)</div><div class="mod-help">8 carriles con diagonales</div></div>
-              <div class="mod-toggle" data-mod="randomFixed"><div class="mod-name">🎲 Aleatorio fijo</div><div class="mod-help">Mismo reparto cada vez</div></div>
-            </div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:14px;padding-top:10px;border-top:1px solid rgba(0,190,200,0.12)">
-            <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end">
-              <div style="display:flex;flex-direction:column;gap:4px;min-width:160px">
-                <label for="globalDiff" style="color:var(--gris-400);font-size:0.82em">Dificultad</label>
-                <select id="globalDiff" onchange="onGlobalDiffChange()" style="background:rgba(0,0,0,0.5);border:1px solid rgba(0,190,200,0.3);color:#fff;padding:8px 10px;border-radius:6px;font-size:0.95em">
-                  <option value="Beginner">Beginner</option>
-                  <option value="Easy">Easy</option>
-                  <option value="Medium" selected>Medium</option>
-                  <option value="Hard">Hard</option>
-                  <option value="Challenge">Challenge</option>
-                </select>
-              </div>
-              <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px">
-                <span style="color:var(--gris-400);font-size:0.82em">Densidad de pasos</span>
-                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-                  <div id="diffDensityBars" class="diff-density-bars" role="img" aria-label="Comparativa de densidad entre las 5 dificultades">
-                    <div class="db-bar" data-tier="Beginner"  title="Beginner · ~1 pisada/seg"></div>
-                    <div class="db-bar" data-tier="Easy"      title="Easy · ~2 pisadas/seg"></div>
-                    <div class="db-bar" data-tier="Medium"    title="Medium · ~3-4 pisadas/seg"></div>
-                    <div class="db-bar" data-tier="Hard"      title="Hard · ~5-6 pisadas/seg"></div>
-                    <div class="db-bar" data-tier="Challenge" title="Challenge · hasta 9 pisadas/seg"></div>
-                  </div>
-                  <span id="diffDensityText" style="color:var(--turquesa-400);font-size:0.85em;line-height:1.3">—</span>
-                </div>
-              </div>
-            </div>
-            <div>
-              <div class="param-header"><span class="param-label">⏱ Anticipación de las flechas</span><span class="param-value" id="globalChartSpeedVal">1.0x</span></div>
-              <input type="range" id="globalChartSpeed" min="0.5" max="4.0" step="0.1" value="1.0">
-            </div>
-          </div>
-          <p style="color:var(--gris-300);font-size:0.85em;line-height:1.5;margin:0">
-            <strong style="color:var(--turquesa-400)">Tip:</strong> regula con cuánta antelación aparecen las flechas — más anticipación, más tiempo para reaccionar. No cambia el ritmo de la canción.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Barra de acción: "Crear partida" se activa con ≥1 canción marcada.
-         Para partidas single (click directo en una canción), el flow no
-         necesita esta barra. -->
-    <div class="playlist-bar" id="playlistBar">
-      <div class="count">
-        <span id="playlistCount">Marca varias canciones para crear una sesión continua</span>
-        <small>O haz click en una sola para jugarla individualmente</small>
-      </div>
-      <button class="action-btn secondary" id="playlistClearBtn" onclick="clearPlaylistSelection()" disabled>Limpiar</button>
-      <button class="action-btn" id="playlistStartBtn" onclick="startPlaylistSession()" disabled>🎮 Crear partida</button>
-    </div>
-    <div class="card">
-      <div class="toolbar">
-        <input type="text" id="songSearch" placeholder="🔍 Buscar por título o artista..." autocomplete="off">
-        <select id="songSort">
-          <option value="addedAt-desc">Recién añadidas</option>
-          <option value="title-asc">Título A→Z</option>
-          <option value="artist-asc">Artista A→Z</option>
-          <option value="bpm-asc">BPM ↑</option>
-          <option value="bpm-desc">BPM ↓</option>
-          <option value="duration-asc">Duración ↑</option>
-        </select>
-      </div>
-      <div class="toolbar" style="margin-top:8px">
-        <select id="songFilterRating" title="Filtrar por la dificultad máxima de la canción">
-          <option value="">Todas las dificultades</option>
-          <option value="1-4">★ 1-4 (Fácil)</option>
-          <option value="5-8">★ 5-8 (Medio)</option>
-          <option value="9-12">★ 9-12 (Difícil)</option>
-          <option value="13-15">★ 13+ (Profesional)</option>
-        </select>
-        <select id="songFilterGrade" title="Filtrar por la nota que has obtenido">
-          <option value="">Cualquier nota</option>
-          <option value="any">Con récord personal</option>
-          <option value="none">Sin jugar</option>
-          <option value="AAA">AAA</option>
-          <option value="AA">AA o mejor</option>
-          <option value="A">A o mejor</option>
-        </select>
-        <select id="songFilterTag" title="Filtrar por etiqueta">
-          <option value="">Todas las etiquetas</option>
-        </select>
-      </div>
-      <div id="songsContainer">Cargando...</div>
-    </div>
-  </div>
-</div>
-
-<!-- DIFFICULTY SELECT — ahora "Ajustes de canción" (Tags + BPM/offset edit).
-     La selección de dificultad y mods vive en songs-screen → ya no se elige
-     aquí. Esta pantalla queda como acceso avanzado per-canción. -->
-<div class="screen hidden" id="diff-screen">
-  <div class="container">
-    <h1 id="diffTitle">--</h1>
-    <p class="subtitle" id="diffSubtitle">--</p>
-    <div class="play-cta-bar">
-      <button class="action-btn secondary" onclick="goto('songs')">← Volver</button>
-      <div class="play-cta-center">
-        <div class="play-cta-hint">Ajustes de esta canción</div>
-        <button class="play-cta-btn ready" onclick="playCurrentSongWithGlobalConfig()" aria-label="Empezar a bailar">
-          <span class="play-cta-icon">▶</span>
-          <span class="play-cta-label">Jugar</span>
-        </button>
-      </div>
-      <span style="width:90px"></span>
-    </div>
-    <div style="text-align:center;margin-bottom:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-      <button class="action-btn secondary" onclick="openBpmEdit()" style="font-size:0.85em">✏ Ajustar BPM/offset</button>
-    </div>
-    <div class="card" style="padding:12px 16px">
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <span style="color:var(--gris-400);font-size:0.85em">🏷 Etiquetas:</span>
-        <div id="tagChips" style="display:flex;gap:4px;flex-wrap:wrap;flex:1"></div>
-        <input type="text" id="tagInput" placeholder="Añadir etiqueta (Intro)" style="background:rgba(0,0,0,0.4);border:1px solid rgba(0,190,200,0.3);color:#fff;padding:4px 10px;border-radius:6px;font-size:0.85em;min-width:140px">
-      </div>
-    </div>
-    <div class="card">
-      <h2>Coreografías disponibles en esta canción</h2>
-      <p style="color:var(--gris-400);font-size:0.85em;margin-bottom:10px">
-        La dificultad y modificadores los eliges en la pantalla anterior. Aquí solo se muestra qué coreografías tiene esta canción para tu referencia.
-      </p>
-      <div id="diffsContainer"></div>
-    </div>
-  </div>
-</div>
-
-<!-- PLAY -->
-<div class="screen hidden" id="play-screen">
-  <canvas id="gameCanvas"></canvas>
-  <div class="gameHUD" id="gameHUD">
-    <!-- Footer delgado: título canción a la izquierda, métricas a la derecha.
-         El judgment vuela centrado sobre el playfield (no en el footer). -->
-    <div class="hud-song" id="hudSongInfo"></div>
-    <div class="hud-cell"><span class="lbl">Score</span><span class="score" id="hudScore">0</span></div>
-    <div class="hud-cell"><span class="lbl">Combo</span><span class="combo" id="hudCombo">0</span></div>
-    <div class="judgment" id="hudJudgment"></div>
-  </div>
-  <div id="countdown" class="hidden"></div>
-</div>
-
-<!-- TUTORIAL SCREEN -->
-<div class="screen hidden" id="tutorial-screen">
-  <div class="container">
-    <h1>Tutorial</h1>
-    <p class="subtitle">Cómo usar cada herramienta y configurar la app</p>
-
-    <div class="card">
-      <div class="tabs">
-        <button class="tab-btn active" data-ttab="start">🌱 Para empezar</button>
-        <button class="tab-btn" data-ttab="play">🎮 Cómo jugar</button>
-        <button class="tab-btn" data-ttab="create">🎵 Crear coreografías</button>
-        <button class="tab-btn" data-ttab="pad">🦶 Probar la alfombra</button>
-        <button class="tab-btn" data-ttab="calib">🎯 Calibración</button>
-        <button class="tab-btn" data-ttab="library">📚 Biblioteca</button>
-        <button class="tab-btn" data-ttab="settings">⚙ Ajustes</button>
-        <button class="tab-btn" data-ttab="extra">🔧 Otras herramientas</button>
-      </div>
-
-      <!-- TUT: START — para usuarios menos técnicos -->
-      <div class="tab-content active" id="tut-start">
-        <h2 style="font-family:var(--font-display);color:var(--turquesa-400);margin-bottom:10px">Para empezar bien</h2>
-        <p style="line-height:1.6;color:var(--gris-300)">Si es la primera vez que usas la app o no te llevas bien con la informática, sigue estos consejos. Te ahorrarás dolores de cabeza.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">📁 Crea una carpeta dedicada en tu PC</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">Antes de tocar la app, crea una carpeta en sitio fácil de recordar — por ejemplo:</p>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px;font-family:var(--font-mono);font-size:0.85em">
-          <li><code>C:\Mis canciones DDR\</code> (Windows)</li>
-          <li><code>~/Music/DDR/</code> (Mac/Linux)</li>
-        </ul>
-        <p style="line-height:1.6;color:var(--gris-300)">Dentro guarda <strong>todo lo relacionado con el juego</strong>: los MP3 que vayas a usar, los ZIPs de copia de seguridad que descargues de la aplicación, capturas o notas. Así nunca pierdes nada.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🌐 Usa siempre el mismo navegador</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">Tu biblioteca vive dentro del navegador donde la creaste. Si juegas en Chrome, sigue en Chrome. Si abres la aplicación en Edge o Firefox, verás una biblioteca <strong>vacía</strong> — no es que se haya perdido, es que cada navegador tiene su propio almacenamiento. Elige uno y quédate con él.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">💾 Haz copia de seguridad cada vez que añadas canciones</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">Cuando termines de añadir una tanda nueva de canciones:</p>
-        <ol style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li>Ve a <strong>Mis canciones</strong>.</li>
-          <li>Pulsa <strong>💾 Copia de seguridad</strong>. Se descarga un archivo ZIP.</li>
-          <li>Mueve ese ZIP a tu carpeta dedicada (<code>Mis canciones DDR/</code>).</li>
-        </ol>
-        <p style="line-height:1.6;color:var(--gris-300)">Si algún día se borra la biblioteca (limpiaste la memoria del navegador, cambiaste de ordenador, se rompió el disco), tienes el ZIP. Vuelves a abrir la aplicación, pulsas <strong>📦 Restaurar</strong>, eliges el ZIP y todo vuelve.</p>
-        <p style="margin-top:8px;padding:10px 14px;background:rgba(225,29,72,0.10);border-left:3px solid var(--rosa-500);border-radius:6px;color:var(--gris-300);font-size:0.9em">⚠ <strong>No hay ningún servidor que recupere tus datos por ti.</strong> Si pierdes la biblioteca sin tener una copia de seguridad, toca volver a añadir todas las canciones a mano. Por eso conviene hacer copia cada cierto tiempo.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🎯 Calibra una vez y olvídate</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">Antes de la primera partida real, ve a <strong>🎯 Calibración</strong>. Tarda 30 segundos. Solo necesitas calibrar de nuevo si:</p>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li>Cambias de auriculares a altavoces (o al revés).</li>
-          <li>Cambias de alfombra/teclado.</li>
-          <li>Cambias de PC.</li>
-        </ul>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">⚡ Empieza fácil y sube poco a poco</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li>Cuando crees coreografías con AutoStepper, usa el modo <strong>🌿 Suave</strong> los primeros días y luego sube a <strong>⚡ Normal</strong>.</li>
-          <li>Empieza siempre por la dificultad <strong>Beginner</strong> o <strong>Easy</strong> de cada canción nueva. Ya subirás cuando te sientas cómoda.</li>
-          <li>El nivel de precisión por defecto (<strong>J5</strong>) está bien para empezar. No lo cambies hasta que domines el juego.</li>
-        </ul>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🏷 Etiqueta las canciones</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">Cuando tengas varias canciones, ponles etiquetas en la pantalla de Dificultad: <code>favorita</code>, <code>calentamiento</code>, <code>cardio</code>, <code>lenta</code>, lo que quieras. Luego en Jugar puedes filtrar por etiqueta y encuentras lo que buscas en un solo clic.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🎯 Aprovecha las diagonales</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">Tu alfombra tiene cuatro paneles cardinales (← ↓ ↑ →) y cuatro diagonales (↖ ↗ ↙ ↘) que antes no se usaban. Activa la variante <strong>🎯 Solo (6)</strong> en la pantalla de Dificultad para añadir las dos diagonales superiores, o <strong>🌟 Full (8)</strong> para usar las cuatro. Funciona con cualquier canción de tu biblioteca: las notas se reparten al vuelo para incluir los nuevos carriles. Si juegas con teclado, las teclas extra son <code>Q</code> y <code>E</code> para Solo, más <code>Z</code> y <code>C</code> para Full.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🚫 Cosas a evitar</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li><strong>No abras la aplicación en modo incógnito</strong> para "probarla". Al cerrar la ventana pierdes todo lo que hayas guardado.</li>
-          <li><strong>No uses "Borrar todos los datos del sitio"</strong> en el menú del navegador sin haber hecho copia de seguridad antes. Borra todo.</li>
-          <li><strong>No abras la aplicación en cinco pestañas a la vez.</strong> Una pestaña basta. Si tienes varias abiertas y guardas cosas en cada una, se pueden sobreescribir entre ellas.</li>
-          <li><strong>No subas videos como fondo</strong>: la opción no existe a propósito porque iría con tirones y distrae del juego.</li>
-        </ul>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🆘 Si algo falla</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li><strong>Las flechas no se ven o se ven raras</strong>: pulsa F5 para recargar la pestaña.</li>
-          <li><strong>La alfombra no responde</strong>: ve a <strong>🦶 Comprobar el equipo</strong> y verifica que cada panel se ilumina al pisarlo. Si no, desconecta y vuelve a conectar el USB. Si sigue sin funcionar, abre la herramienta separada <code>test-pad.html</code> (alfombra y guitarra).</li>
-          <li><strong>El audio suena desfasado</strong>: vuelve a calibrar.</li>
-          <li><strong>"Se han perdido mis canciones"</strong>: comprueba que no abriste la aplicación en otro navegador o en modo incógnito. Si era el mismo navegador y se han borrado, restaura desde tu último ZIP de copia de seguridad.</li>
-        </ul>
-      </div>
-
-      <!-- TUT: PLAY -->
-      <div class="tab-content" id="tut-play">
-        <h2 style="font-family:var(--font-display);color:var(--turquesa-400);margin-bottom:10px">Cómo jugar</h2>
-        <p style="line-height:1.6;color:var(--gris-300)">El juego clásico al estilo DDR e ITG: las flechas suben hacia el receptor y tienes que pisarlas (o pulsar la tecla) al ritmo de la música.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Controles</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li><strong>Teclado</strong>: ← ↓ ↑ → (las cuatro flechas).</li>
-          <li><strong>Alfombra</strong>: se detecta sola al conectarla por USB. La izquierda usa el botón 1, abajo el 2, arriba el 3 y derecha el 4.</li>
-          <li><strong>Tecla Escape</strong>: sale de la canción y vuelve a la pantalla de dificultad.</li>
-        </ul>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Cómo va una partida</h3>
-        <ol style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li>Menú → <strong>🎮 Jugar</strong> → elige canción.</li>
-          <li>Pantalla de dificultad: elige Beginner, Easy, Medium, Hard o Challenge. Activa las <strong>variantes</strong> si quieres (espejo, mezcla, ocultas, etc.).</li>
-          <li>Tras una cuenta atrás 3-2-1-¡VAMOS!, empieza la canción.</li>
-          <li>Al terminar verás tu <strong>nota final</strong> (de D a AAA), tu puntuación y un desglose por tipo de pisada.</li>
-        </ol>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Cómo se valora cada pisada</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li><span style="color:#00f5d4">MARVELOUS</span>: ±22 milisegundos. Pisada perfecta.</li>
-          <li><span style="color:#ffbe0b">PERFECT</span>: ±45 milisegundos.</li>
-          <li><span style="color:#00ff64">GREAT</span>: ±90 milisegundos.</li>
-          <li><span style="color:#3a86ff">GOOD</span>: ±135 milisegundos.</li>
-          <li><span style="color:#ff006e">BAD</span>: ±180 milisegundos. Rompe la racha.</li>
-          <li><span style="color:#ff3366">MISS</span>: te has saltado la nota. Rompe la racha.</li>
-        </ul>
-        <p style="margin-top:8px;color:var(--gris-400);font-size:0.9em">Estas ventanas se ajustan en Ajustes → "Nivel de precisión" (J4 más permisivo → J7 nivel profesional).</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Tipos de notas</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li><strong>Tap (pisada simple)</strong>: pisas en el momento exacto del beat.</li>
-          <li><strong>Hold (mantenida, verde)</strong>: pisas y mantienes hasta el final del trazo.</li>
-          <li><strong>Roll (repetida, naranja)</strong>: como Hold pero tienes que pisar varias veces durante su duración.</li>
-          <li><strong>Mine (mina, M roja)</strong>: NO pises. Si tienes el panel apretado cuando pasa, pierdes 200 puntos.</li>
-          <li><strong>Lift (al soltar, anillo hueco)</strong>: se valora al <em>soltar</em> el panel en el momento del beat, no al pisar.</li>
-          <li><strong>Fake (falsa, gris tenue)</strong>: aparece en pantalla pero no suma ni resta puntos ni rompe la racha.</li>
-        </ul>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Variantes (modificadores) disponibles</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li>🪞 <strong>Mirror</strong> (espejo): invierte izquierda con derecha.</li>
-          <li>↺ <strong>Left</strong> / ↻ <strong>Right</strong>: rota los carriles 90° hacia un lado u otro.</li>
-          <li>🔀 <strong>Shuffle</strong> (mezclar): cambia los carriles de sitio al azar.</li>
-          <li>👁 <strong>Hidden</strong> (ocultas): las flechas desaparecen justo antes de llegar al receptor.</li>
-          <li>💨 <strong>Sudden</strong> (de golpe): las flechas aparecen tarde, ya cerca del receptor.</li>
-          <li>🎯 <strong>Solo (6)</strong>: añade ↖ ↗ y reparte las notas en seis carriles. Útil para entrenar todo el cuerpo aunque la canción se haya creado para cuatro carriles.</li>
-          <li>🌟 <strong>Full (8)</strong>: añade las cuatro diagonales y reparte las notas en ocho carriles para máxima actividad.</li>
-          <li>🎲 <strong>Aleatorio fijo</strong>: si usas Solo o Full, mantiene el mismo reparto cada vez que juegas esa canción (más fácil de memorizar). Sin esta opción, el reparto cambia en cada partida.</li>
-          <li>⏱ <strong>Anticipación de las flechas</strong>: ajusta cuánto antes aparecen las flechas en pantalla solo para esta canción (se suma a la anticipación global de Ajustes). No cambia el ritmo de la música ni la dificultad — solo cuánto tiempo tienes para leer cada flecha antes de pisarla.</li>
-        </ul>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Teclas según el modo</h3>
-        <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:0.88em;font-family:var(--font-mono)">
-          <thead><tr style="background:rgba(0,190,200,0.1)">
-            <th style="padding:6px 10px;text-align:left;color:var(--turquesa-400);border-bottom:1px solid rgba(0,190,200,0.2)">Modo</th>
-            <th style="padding:6px 10px;text-align:left;color:var(--turquesa-400);border-bottom:1px solid rgba(0,190,200,0.2)">Carriles y teclas</th>
-          </tr></thead>
-          <tbody style="color:var(--gris-300)">
-            <tr><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">Clásico (4 carriles)</td><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">← ↓ ↑ →</td></tr>
-            <tr><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">Solo (6 carriles)</td><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">←  Q  ↑  ↓  E  →   (Q = ↖, E = ↗)</td></tr>
-            <tr><td style="padding:5px 10px">Full (8 carriles)</td><td style="padding:5px 10px">←  Q  Z  ↑  ↓  E  C  →   (Q = ↖, Z = ↙, E = ↗, C = ↘)</td></tr>
-          </tbody>
-        </table>
-        <p style="margin-top:8px;color:var(--gris-400);font-size:0.9em">Si juegas con la alfombra, las diagonales superiores deberían responder al pisar las esquinas correspondientes. Si tu alfombra no responde, comprueba qué luz se enciende en <strong>🦶 Comprobar el equipo → Crudo / LEDs</strong> y dímelo (puede que tu alfombra use otros botones distintos a los habituales).</p>
-      </div>
-
-      <!-- TUT: CREATE -->
-      <div class="tab-content" id="tut-create">
-        <h2 style="font-family:var(--font-display);color:var(--turquesa-400);margin-bottom:10px">Crear coreografías (AutoStepper)</h2>
-        <p style="line-height:1.6;color:var(--gris-300)">Convierte cualquier MP3, WAV u OGG en una coreografía con cinco dificultades de forma automática.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Pasos</h3>
-        <ol style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li>Menú → <strong>🎵 Crear coreografías</strong>.</li>
-          <li>Arrastra los audios al área punteada (o pincha para elegirlos). El programa lee el "Artista - Título" del nombre del archivo.</li>
-          <li>Elige un <strong>modo</strong>: 🌿 Suave, ⚡ Normal, 🔥 Intenso o ⚙ Personalizado (con cada parámetro ajustable a mano).</li>
-          <li><strong>🎚 Carriles</strong>: 4 (clásico, por defecto), 6 (con diagonales superiores ↖ ↗) u 8 (con las cuatro diagonales). El selector está debajo de los modos.</li>
-          <li>Pulsa <strong>▶ Analizar todo</strong>. Cada canción tarda entre cinco y quince segundos según la duración.</li>
-          <li>Cuando termine: <strong>💾 Guardar en mi biblioteca</strong> (la canción queda accesible desde Jugar) o <strong>Descargar ZIP</strong> (con .ssc + audio para llevarla a otro ordenador o usarla en StepMania 5 nativo).</li>
-        </ol>
-
-        <p style="margin-top:8px;padding:10px 14px;background:rgba(0,190,200,0.08);border-left:3px solid var(--turquesa-600);border-radius:6px;color:var(--gris-300);font-size:0.9em">💡 <strong>4, 6 u 8 carriles</strong>: el selector decide cómo se reparten las notas <em>al generarlas</em>. Una canción de cuatro carriles también puede jugarse con diagonales activando las variantes Solo o Full en la pantalla de Dificultad: es la forma más fácil de aprovechar tus diagonales sin volver a generar nada. El selector solo importa si quieres coreografías "auténticas" de 6 u 8 carriles (por ejemplo para exportar el ZIP a StepMania 5 nativo como dance-solo o dance-double).</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Cómo detecta el ritmo</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">El programa se fija sobre todo en el bombo y el bajo de la canción para encontrar los golpes principales. Calcula la velocidad (entre 90 y 180 pulsaciones por minuto) y ajusta el inicio para que las flechas caigan en el momento exacto. Funciona bien con techno, dance, pop o rock; peor con música muy ambiental o sin un pulso claro.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Qué hace cada modo</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li>🌿 <strong>Suave</strong>: sensibilidad alta (solo golpes fuertes), notas en negras, 10 % de notas mantenidas, sin saltos.</li>
-          <li>⚡ <strong>Normal</strong> (recomendado): sensibilidad media, corcheas, 25 % de notas mantenidas, 7 % de saltos.</li>
-          <li>🔥 <strong>Intenso</strong>: sensibilidad baja (más pasos), semicorcheas, 50 % de notas mantenidas, 18 % de saltos.</li>
-          <li>⚙ <strong>Personalizado</strong>: ajusta cada parámetro con los controles deslizantes.</li>
-        </ul>
-        <p style="margin-top:8px;color:var(--gris-400);font-size:0.9em">Cada canción genera cinco dificultades: Beginner, Easy, Medium, Hard y Challenge. La densidad de notas sube en cada nivel.</p>
-
-        <p style="margin-top:14px;padding:12px;background:rgba(245,158,11,0.10);border-left:3px solid var(--color-warning);border-radius:6px;color:var(--gris-300);font-size:0.9em">⚠ Si la velocidad detectada está mal, puedes corregirla a mano desde Jugar → elige canción → <strong>✏ Ajustar BPM/desfase</strong>.</p>
-      </div>
-
-      <!-- TUT: PAD TEST -->
-      <div class="tab-content" id="tut-pad">
-        <h2 style="font-family:var(--font-display);color:var(--turquesa-400);margin-bottom:10px">Probar la alfombra</h2>
-        <p style="line-height:1.6;color:var(--gris-300)">Comprobación rápida de la alfombra. Útil para verificar que todos los sensores responden, medir tu tiempo de reacción y detectar sensores que no funcionan bien.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Pestañas</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li><strong>Visual</strong>: una cuadrícula de 3×3 con las cuatro flechas. Pisa cualquier panel — el contador sube y la flecha se enciende. Sirve para confirmar que cada sensor responde.</li>
-          <li><strong>Tiempo de respuesta</strong>: ocho rondas. Aparece una flecha al azar en azul; písala lo más rápido posible. Lo normal son entre 200 y 300 milisegundos (suma tu tiempo de reacción más el del equipo).</li>
-          <li><strong>Sensores pegados</strong>: vigila durante 60 segundos sin que pises nada. Si aparece alguna pisada, es que hay un sensor pegado o un cable con ruido.</li>
-          <li><strong>Crudo / LEDs</strong>: muestra el estado en bruto de los 16 botones de la alfombra y la velocidad de muestreo.</li>
-        </ul>
-
-        <p style="margin-top:14px;padding:12px;background:rgba(0,190,200,0.10);border-left:3px solid var(--turquesa-600);border-radius:6px;color:var(--gris-300);font-size:0.9em">💡 Para una comprobación más completa (estadísticas por panel o por traste, sincronización de audio con metrónomo, prueba al límite, sensores pegados, calibración de guitarra), usa la herramienta <code>test-pad.html</code> con su selector Alfombra + Guitarra (ver "Otras herramientas").</p>
-      </div>
-
-      <!-- TUT: CALIBRATION -->
-      <div class="tab-content" id="tut-calib">
-        <h2 style="font-family:var(--font-display);color:var(--turquesa-400);margin-bottom:10px">Calibración</h2>
-        <p style="line-height:1.6;color:var(--gris-300)">Mide tu desfase real (el tiempo que tarda en llegar el sonido y tu pisada hasta el juego) y aplica el resultado en Ajustes para que las flechas caigan en el momento exacto.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Por qué calibrar</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">Cada equipo (controladores, altavoces, alfombra, tu propio tiempo de reacción) añade un pequeño retardo. Si pisas siempre "tarde" y obtienes GOOD en lugar de PERFECT, no es falta de habilidad: es desfase. Calibrar lo corrige.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Cómo se hace</h3>
-        <ol style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li>Menú → <strong>🎯 Calibración</strong>.</li>
-          <li>Elige una velocidad entre 60 y 180 (se recomienda 120 para empezar).</li>
-          <li>Pulsa <strong>▶ Iniciar metrónomo</strong>. Empezarán a sonar los tics.</li>
-          <li>Pisa cualquier panel (o pulsa la <strong>barra espaciadora</strong>) al ritmo, intentando coincidir con cada tic.</li>
-          <li>Tras unas veinte o treinta pisadas, pulsa <strong>■ Detener y analizar</strong>.</li>
-          <li>Verás tu desfase medio. Si supera los 15 milisegundos, aparece un botón <strong>"Aplicar a Ajustes"</strong> que guarda el valor sugerido en el desfase global.</li>
-        </ol>
-
-        <p style="margin-top:14px;padding:12px;background:rgba(0,190,200,0.10);border-left:3px solid var(--turquesa-600);border-radius:6px;color:var(--gris-300);font-size:0.9em">💡 Alternativa más rápida pero menos precisa: en Ajustes → <strong>🎧 Auto-detectar</strong>, que usa el retardo que el navegador detecta en tu equipo (sin tener en cuenta tu tiempo de reacción ni el sensor de la alfombra).</p>
-      </div>
-
-      <!-- TUT: LIBRARY -->
-      <div class="tab-content" id="tut-library">
-        <h2 style="font-family:var(--font-display);color:var(--turquesa-400);margin-bottom:10px">Biblioteca</h2>
-        <p style="line-height:1.6;color:var(--gris-300)">Tu colección de canciones se guarda dentro de tu navegador, en una zona privada llamada <strong>IndexedDB</strong> (no se sube a ningún servidor ni queda en una carpeta del disco). Solo tú la ves y se mantiene entre sesiones.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">¿Dónde se guardan los MP3?</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">No hay ninguna ruta concreta del ordenador que tengas que respetar. Cuando arrastras un MP3 al AutoStepper o pulsas "Importar archivos":</p>
-        <ol style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li>El navegador <strong>lee el archivo</strong> que tú elijas (Descargas, Música, USB o donde sea).</li>
-          <li>La aplicación guarda una <strong>copia interna</strong> dentro de tu navegador, junto con la coreografía generada.</li>
-          <li>Tu MP3 original sigue donde estaba: puedes moverlo o borrarlo, la canción seguirá funcionando aquí porque hay una copia propia.</li>
-        </ol>
-        <p style="margin-top:8px;color:var(--gris-400);font-size:0.9em">Importante: el servidor (<code>play.movimientofuncional.app</code>) solo te envía el HTML, el CSS y el JavaScript. <strong>Nunca recibe ni guarda tus MP3</strong>; todo el almacenamiento ocurre en tu navegador.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">¿Qué cosas borran la biblioteca?</h3>
-        <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:0.88em">
-          <thead><tr style="background:rgba(0,190,200,0.1)"><th style="padding:6px 10px;text-align:left;color:var(--turquesa-400);border-bottom:1px solid rgba(0,190,200,0.2)">Acción</th><th style="padding:6px 10px;text-align:left;color:var(--turquesa-400);border-bottom:1px solid rgba(0,190,200,0.2)">¿Conserva?</th></tr></thead>
-          <tbody style="color:var(--gris-300)">
-            <tr><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">Cerrar y reabrir el navegador</td><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05);color:var(--color-success)">✅ Sí</td></tr>
-            <tr><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">F5 / recargar la pestaña</td><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05);color:var(--color-success)">✅ Sí</td></tr>
-            <tr><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">Reiniciar el PC</td><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05);color:var(--color-success)">✅ Sí</td></tr>
-            <tr><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">"Borrar caché" del navegador</td><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05);color:var(--tulip-tree-500)">⚠ Depende (suele preservar)</td></tr>
-            <tr><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">"Borrar datos del sitio"</td><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05);color:var(--rosa-500)">❌ NO — pierdes todo</td></tr>
-            <tr><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">Modo incógnito</td><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05);color:var(--rosa-500)">❌ Se borra al cerrar</td></tr>
-            <tr><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">Cambiar de Chrome a Edge o Firefox</td><td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05);color:var(--rosa-500)">❌ Cada navegador es independiente</td></tr>
-            <tr><td style="padding:5px 10px">Cambiar de ordenador</td><td style="padding:5px 10px;color:var(--tulip-tree-500)">⚠ Usa Copia de seguridad y Restaurar</td></tr>
-          </tbody>
-        </table>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Cuánto espacio puedes usar</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li><strong>Chrome, Edge o Firefox en ordenador</strong>: varios gigabytes (depende de tu disco libre; suele ser alrededor del 60 % del espacio disponible).</li>
-          <li><strong>Safari en iOS</strong>: límite estricto de unos 50 megabytes. Sé selectiva: pocas canciones y cortas.</li>
-          <li>El indicador "💾 Biblioteca ocupa X MB de Y MB" en la parte superior de tu lista de canciones te muestra el total real.</li>
-        </ul>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">No confundir con StepMania 5 nativo</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">El juego de escritorio <strong>StepMania 5</strong>, si lo tienes instalado en <code>C:\Games\StepMania 5</code>, lee canciones desde <code>C:\Games\StepMania 5\Songs\</code>. Si quieres jugar la misma canción en ambos sitios:</p>
-        <ol style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li>AutoStepper genera la coreografía → pulsa <strong>"Descargar ZIP"</strong>.</li>
-          <li>Descomprime el ZIP dentro de <code>C:\Games\StepMania 5\Songs\</code> (para el juego nativo).</li>
-          <li>Además puedes pulsar <strong>"Guardar en mi biblioteca"</strong> para tenerla también aquí.</li>
-        </ol>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Inspeccionar o borrar manualmente</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">Pulsa <strong>F12</strong> en cualquier navegador → pestaña <strong>Application</strong> (Chrome o Edge) o <strong>Storage</strong> (Firefox):</p>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li><strong>IndexedDB</strong> → <code>StepManiaWebDB</code> → <code>songs</code> y <code>scores</code>: aquí están las canciones (cada bloque binario es un audio) y los récords personales.</li>
-          <li><strong>Local Storage</strong> → la dirección del sitio: cuatro entradas con prefijo <code>stepmania-web-*</code> (ajustes, apariencia de las flechas, fondo).</li>
-        </ul>
-        <p style="margin-top:8px;color:var(--gris-400);font-size:0.9em">Útil si quieres limpiar todo de raíz sin tocar la aplicación, o revisar exactamente qué tienes guardado.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Acciones</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li><strong>🎵 Crear nueva</strong>: lleva al AutoStepper para generar una coreografía desde un MP3.</li>
-          <li><strong>📥 Importar archivos</strong>: elige un .ssc o .sm con el audio que le acompaña. Los empareja por nombre.</li>
-          <li><strong>📁 Importar paquete</strong>: elige una carpeta entera (al estilo de un paquete de StepMania con subcarpetas Song1/, Song2/...). Importa cada subcarpeta como una canción, emparejando el .ssc o .sm con el audio más grande de la misma carpeta (para no confundir un banner.mp3 con la canción).</li>
-          <li><strong>💾 Copia de seguridad</strong>: descarga toda tu biblioteca (canciones, puntuaciones y ajustes) en un ZIP. Útil para llevarla a otro ordenador o navegador.</li>
-          <li><strong>📦 Restaurar</strong>: importa un ZIP de copia de seguridad. Las canciones se añaden con identificadores nuevos (no sobreescribe las existentes).</li>
-          <li><strong>↻ Recargar</strong>: refresca la lista (útil tras cambios externos).</li>
-        </ul>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">En la pantalla "Jugar"</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li><strong>🔍 Buscar</strong> por título o artista.</li>
-          <li><strong>Ordenar</strong>: por recientes, título, artista, velocidad o duración.</li>
-          <li><strong>Filtros</strong>: por dificultad máxima, por nota obtenida (cualquier récord, sin jugar, AAA, AA o mejor, A o mejor) y por etiqueta.</li>
-          <li><strong>Al pasar el ratón sobre una canción</strong>: a los 250 milisegundos suena una vista previa de unos 12 segundos desde el inicio del estribillo, con aparición y desaparición suaves.</li>
-        </ul>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">En la pantalla de dificultad</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li><strong>✏ Ajustar BPM/desfase</strong>: corrige a mano si AutoStepper detectó mal el ritmo.</li>
-          <li><strong>🏷 Etiquetas</strong>: añade etiquetas libres (favoritos, cardio, calentamiento, etc.). Aparecen en el filtro de etiquetas de la pantalla "Jugar".</li>
-          <li><strong>×</strong> junto a una nota: borra ese récord personal (útil para empezar de cero).</li>
-        </ul>
-      </div>
-
-      <!-- TUT: SETTINGS -->
-      <div class="tab-content" id="tut-settings">
-        <h2 style="font-family:var(--font-display);color:var(--turquesa-400);margin-bottom:10px">Ajustes</h2>
-        <p style="line-height:1.6;color:var(--gris-300)">Accede al panel con el botón <strong>⚙</strong> de la esquina superior derecha. Todos los ajustes se guardan automáticamente dentro de tu navegador (no en el disco): lo que cambias queda registrado al momento, sin necesidad de un botón "Guardar".</p>
-
-        <p style="margin-top:8px;padding:10px 14px;background:rgba(0,190,200,0.08);border-left:3px solid var(--turquesa-600);border-radius:6px;color:var(--gris-300);font-size:0.9em">💡 La aplicación usa cuatro entradas internas: una para los ajustes (desfase, anticipación y precisión), otra para la apariencia de las flechas (si has cargado una imagen), otra para el fondo y una más para limpieza de versiones anteriores. La <strong>copia de seguridad</strong> de la biblioteca incluye también todos estos ajustes, así que con un solo ZIP migras todo de una.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🎵 Desfase global (entre −200 y +200 milisegundos)</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">Compensa el retardo entre el sonido que oyes y la pisada que da el juego. <strong>Positivo</strong> = pisas tarde (las flechas se "adelantan" al valorarse). <strong>Negativo</strong> = pisas pronto. El botón <strong>🎧 Auto-detectar</strong> aplica un primer valor según el retardo que reporta tu navegador. Para un ajuste fino, usa la pantalla de Calibración.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">⏱ Anticipación de las flechas (de 0,5x a 3,0x)</h3>
-        <p style="line-height:1.6;color:var(--gris-300)"><strong>Importante: este ajuste NO cambia el ritmo de la canción ni la dificultad.</strong> Solo cambia cuánto antes aparecen las flechas en pantalla antes de llegar al receptor. Cada flecha siempre se pisa en el mismo instante exacto del beat — la anticipación solo decide si la ves venir desde lejos (anticipación alta) o si aparece más tarde y cruza la pantalla más rápido (anticipación baja). 1.0x equivale a 600 píxeles por segundo de scroll. Una anticipación más alta te da más tiempo para leer el patrón pero ocupa más pantalla. Se combina con la anticipación específica de cada coreografía que aparece en la pantalla de dificultad.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🎯 Nivel de precisión (J4 a J7)</h3>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">
-          <li><strong>J4</strong>: el más permisivo (las ventanas son una vez y media las normales).</li>
-          <li><strong>J5</strong>: precisión estándar de StepMania 5 (recomendado para empezar).</li>
-          <li><strong>J6</strong>: más estricto (×0,84).</li>
-          <li><strong>J7</strong>: nivel profesional al estilo ITG (×0,66, exige mucha precisión).</li>
-        </ul>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🎨 Apariencia de las flechas (imagen PNG)</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">Por defecto las flechas se dibujan con polígonos. Puedes cargar una imagen PNG cuadrada con la flecha apuntando hacia arriba (al estilo de las flechas de ITG): el juego la rotará para cada carril y la pintará con el color que corresponde al ritmo de cada nota. Queda guardada en el navegador. El botón <strong>Restaurar</strong> vuelve a los polígonos por defecto.</p>
-
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🖼 Fondo (imagen)</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">Por defecto cada canción tiene un fondo único generado a partir de su título. Puedes cargar una imagen para que se use como fondo común en todas las canciones. Se guarda dentro del navegador.</p>
-      </div>
-
-      <!-- TUT: EXTRA -->
-      <div class="tab-content" id="tut-extra">
-        <h2 style="font-family:var(--font-display);color:var(--turquesa-400);margin-bottom:10px">Otras herramientas</h2>
-        <p style="line-height:1.6;color:var(--gris-300)">Hay dos herramientas hermanas que viven en archivos separados pero comparten el mismo sitio.</p>
-
-        <div class="card" style="margin-top:14px;background:rgba(0,190,200,0.06);border:1px solid rgba(0,190,200,0.2)">
-          <h3 style="color:var(--turquesa-400);font-family:var(--font-display);margin-bottom:8px">🦶🎸 test-pad.html</h3>
-          <p style="line-height:1.6;color:var(--gris-300);margin-bottom:10px">Comprobación del equipo, con selector <strong>Alfombra | Guitarra</strong>. En modo alfombra: ocho paneles (cuatro cardinales y cuatro diagonales para los modos Solo y Full), tiempo de respuesta, saltos, sincronización, prueba al límite, sensores pegados, secuencia, ejes. En modo guitarra: calibración de los botones (cinco trastes, rasgueo, inclinación, palanca), tiempo de respuesta por traste, prueba del rasgueo, prueba de la palanca, acordes a varios trastes, sincronización, prueba al límite y sensores pegados.</p>
-          <a href="test-pad.html" target="_blank" class="action-btn" style="display:inline-block;text-decoration:none;font-size:0.9em">Abrir test-pad.html →</a>
-        </div>
-
-        <div class="card" style="margin-top:14px;background:rgba(234,179,8,0.06);border:1px solid rgba(234,179,8,0.2)">
-          <h3 style="color:var(--tulip-tree-500);font-family:var(--font-display);margin-bottom:8px">🎵 autostepper.html</h3>
-          <p style="line-height:1.6;color:var(--gris-300);margin-bottom:10px">El AutoStepper como herramienta independiente, idéntico al integrado dentro de "Crear coreografías". Útil si solo quieres generar coreografías sin tocar la biblioteca ni el motor de juego.</p>
-          <a href="autostepper.html" target="_blank" class="action-btn secondary" style="display:inline-block;text-decoration:none;font-size:0.9em">Abrir autostepper.html →</a>
-        </div>
-
-        <h3 style="margin-top:22px;color:var(--tulip-tree-500);font-size:1em">Programas en Python (para cuando el navegador no detecta la alfombra)</h3>
-        <p style="line-height:1.6;color:var(--gris-300)">Si tu navegador no detecta la alfombra, prueba estos programas en Python que la leen directamente desde Windows. Solo necesitas Python 3 estándar (sin instalar nada extra). En PowerShell:</p>
-        <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px;font-family:var(--font-mono);font-size:0.85em">
-          <li><code>python test_pad.py</code> — detección + 20 segundos leyendo pisadas en consola.</li>
-          <li><code>python test_pad_raw.py</code> — 20 segundos mostrando el estado en bruto (botones y ejes).</li>
-          <li><code>python test_pad_all.py</code> — secuencia de 30 segundos para verificar los seis paneles principales.</li>
-        </ul>
-      </div>
-    </div>
-
-    <div style="text-align:center;margin-top:14px">
-      <button class="action-btn secondary" onclick="goto('menu')">← Volver al menú</button>
-    </div>
-  </div>
-</div>
-
-<!-- Tutorial tab switcher (independent of pad-screen tabs to avoid collision) -->
-<script>
-  document.querySelectorAll('#tutorial-screen .tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#tutorial-screen .tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('#tutorial-screen .tab-content').forEach(t => t.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('tut-' + btn.dataset.ttab).classList.add('active');
-    });
-  });
-</script>
-
-<!-- RESULTS -->
-<div class="screen hidden" id="results-screen">
-  <div class="container">
-    <div class="results">
-      <h2 id="resultsTitle">Resultados</h2>
-      <div id="resultsContent"></div>
-      <div style="margin-top:18px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap" id="resultsActions">
-        <button class="action-btn" onclick="goto('diff')">↻ Reintentar</button>
-        <button class="action-btn secondary" onclick="goto('songs')">← Otra canción</button>
-        <button class="action-btn secondary" onclick="goto('menu')">⌂ Menú</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!--
-  Module load order matters — classic <script> tags share global scope, so
-  later modules depend on earlier ones being fully evaluated:
-    core         → utils, audioCtx, gamepad, IndexedDB, settings
-    parser       → parseSscOrSm, buildTimingEngine, parseNotesToEvents
-    autostepper  → onset detection + chart generation + ZIP encoder (makeZip)
-    library      → list/import UI (uses dbAll, parseSscOrSm)
-    backup       → export/import full DB as ZIP (uses makeZip + dbAdd)
-    song-select  → song list, diff screen, mods (uses dbScoresForSong)
-    pad-test     → padTestLoop + latency/ghost (uses gamepadButtonState)
-    game         → player, render, scoring (uses everything above)
-    app          → goto(), settings bindings, kickoff
+  Dashboard puro: el motor SM vive en stepmania-play.html, el tutorial en
+  tutorial.html, la calibración en calibration.html, AutoStepper en
+  autostepper.html, test pad en test-pad.html, GH en gh-play.html. Aquí solo
+  cargamos lo mínimo: core.js para gamepad pill + settings modal.
 -->
 <script src="stepmania-web/js/core.js"></script>
-<script src="stepmania-web/js/parser.js"></script>
-<script src="stepmania-web/js/difficulty-tiers.js"></script>
-<script src="stepmania-web/js/autostepper.js"></script>
-<script src="stepmania-web/js/library.js"></script>
-<script src="stepmania-web/js/backup.js"></script>
-<script src="stepmania-web/js/song-select.js"></script>
-<script src="stepmania-web/js/pad-test.js"></script>
-<script src="stepmania-web/js/calibration.js"></script>
-<script src="stepmania-web/js/game.js"></script>
-<script src="stepmania-web/js/app.js"></script>
+<script>
+  // Kickoff: solo el polling de gamepad (para que el padPill se actualice
+  // cuando la alfombra esté conectada) y bindings del settings modal.
+  pollGamepad();
+
+  // Wiring del settings modal — réplica reducida de app.js sin el resto
+  // del SPA. Solo necesitamos globalOffset / scrollSpeed / timingWindow /
+  // noteskin / bg. NoteSkin y bg solo se aplican en partidas, así que aquí
+  // los exponemos pero su efecto se ve dentro del motor.
+  (function bindDashboardSettings() {
+    const go = document.getElementById('globalOffset');
+    if (!go) return;
+    go.addEventListener('input', e => {
+      settings.globalOffset = parseInt(e.target.value);
+      document.getElementById('globalOffsetVal').textContent = settings.globalOffset + ' ms';
+      saveSettings();
+    });
+    document.getElementById('scrollSpeed').addEventListener('input', e => {
+      settings.scrollSpeed = parseFloat(e.target.value);
+      document.getElementById('scrollSpeedVal').textContent = settings.scrollSpeed.toFixed(1) + 'x';
+      saveSettings();
+    });
+    document.getElementById('timingWindow').addEventListener('change', e => {
+      settings.timingWindow = e.target.value;
+      const label = (typeof TIMING_WIN_LABEL !== 'undefined' && TIMING_WIN_LABEL[settings.timingWindow]) || 'J5';
+      document.getElementById('timingWinVal').textContent = label;
+      saveSettings();
+    });
+  })();
+
+  function autoDetectLatency() {
+    const ctx = ensureAudioCtx();
+    const hint = document.getElementById('autoLatencyHint');
+    const base = (ctx.baseLatency || 0) * 1000;
+    const out  = (ctx.outputLatency || 0) * 1000;
+    const total = Math.round(base + out);
+    if (total === 0) {
+      hint.textContent = 'Tu navegador no expone outputLatency (Safari/Firefox antiguos). Usa la calibración manual.';
+      hint.style.color = 'var(--color-warning)';
+      return;
+    }
+    const clamped = Math.max(-200, Math.min(200, total));
+    settings.globalOffset = clamped;
+    document.getElementById('globalOffset').value = clamped;
+    document.getElementById('globalOffsetVal').textContent = clamped + ' ms';
+    saveSettings();
+    hint.textContent = `base ${base.toFixed(1)}ms + output ${out.toFixed(1)}ms = ${total}ms aplicado.`;
+    hint.style.color = 'var(--color-success)';
+  }
+
+  // NoteSkin y bg uploads — solo persistencia, el render real ocurre en el motor.
+  function clearNoteskinUi() {
+    try { localStorage.removeItem('stepmania-web-noteskin'); } catch (_) {}
+    document.getElementById('noteskinStatus').textContent = 'por defecto';
+  }
+  function clearBgUi() {
+    try { localStorage.removeItem('stepmania-web-bg'); } catch (_) {}
+    document.getElementById('bgStatus').textContent = 'procedural';
+  }
+  document.getElementById('noteskinInput')?.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try { localStorage.setItem('stepmania-web-noteskin', ev.target.result); } catch (_) {}
+      document.getElementById('noteskinStatus').textContent = f.name.length > 18 ? f.name.slice(0,18)+'...' : f.name;
+    };
+    reader.readAsDataURL(f);
+    e.target.value = '';
+  });
+  document.getElementById('bgInput')?.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try { localStorage.setItem('stepmania-web-bg', ev.target.result); } catch (_) {}
+      document.getElementById('bgStatus').textContent = f.name.length > 18 ? f.name.slice(0,18)+'...' : f.name;
+    };
+    reader.readAsDataURL(f);
+    e.target.value = '';
+  });
+
+  // Mostrar estado inicial del NoteSkin / bg si ya hay valores guardados:
+  (function syncInitialAssetStatus() {
+    try {
+      if (localStorage.getItem('stepmania-web-noteskin')) {
+        document.getElementById('noteskinStatus').textContent = 'PNG cargado';
+      }
+      if (localStorage.getItem('stepmania-web-bg')) {
+        document.getElementById('bgStatus').textContent = 'imagen cargada';
+      }
+    } catch (_) {}
+  })();
+</script>
+
 </body>
 </html>

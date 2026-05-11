@@ -1642,8 +1642,39 @@ function onPress(fn) { pressListeners.push(fn); return () => { const i = pressLi
 function onRelease(fn) { releaseListeners.push(fn); return () => { const i = releaseListeners.indexOf(fn); if (i>=0) releaseListeners.splice(i,1); }; }
 
 // ========== LOOP ==========
-function findGamepad() {
+// Algunos dispositivos HID (cascos USB con botones de volumen, micrófonos con
+// teclas, webcams con controles) son expuestos por Chrome como `Gamepad`. El
+// `gamepad.index` se asigna por orden de "primer despertar dentro de la pestaña"
+// — NO determinista entre sesiones. Por eso una pestaña puede dar slot 0 = guitarra
+// y otra slot 0 = USB Audio. Filtramos en capas:
+//   1) Blacklist por nombre — explícita, cubre el caso reportado deterministically.
+//   2) Heurística por modo — ejes/botones mínimos coherentes con el hardware esperado.
+//   3) Fallback al primer connected — preserva el comportamiento previo si nada pasa.
+const NON_CONTROLLER_PATTERN = /USB Audio|Audio Device|Headset|Headphone|Microphone|Speaker|Webcam|Camera/i;
+function isViableGamepadForMode(gp, mode) {
+  if (NON_CONTROLLER_PATTERN.test(gp.id)) return false;
+  if (mode === 'guitar') {
+    // GH PS2 vía receptor Sony-emulado tiene 13 btns + 10 ejes. Mando genérico
+    // y alfombra fallan por ejes (0-2). USB Audio falla por nombre y por ejes.
+    return gp.axes.length >= 2 && gp.buttons.length >= 5;
+  }
+  if (mode === 'mat') {
+    // Alfombra real: 8-12 btns, 0-2 ejes. Rechazamos `axes.length >= 6`
+    // para no aceptar una guitarra (10 ejes) cuando el usuario está en modo mat.
+    return gp.buttons.length >= 4 && gp.axes.length < 6;
+  }
+  return true;
+}
+function findGamepad(modeOverride) {
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  const mode = modeOverride || currentMode;
+  // 1ª pasada — viable para el modo activo (estricto).
+  for (const p of pads) if (p && p.connected && isViableGamepadForMode(p, mode)) return p;
+  // 2ª pasada — cualquier conectado QUE NO sea audio/HID basura. Cubre, p.ej.,
+  // "solo guitarra enchufada y usuario en modo mat": preferimos devolverle la
+  // guitarra (controlador real) que un casco USB Audio (cero ejes, inutilizable).
+  for (const p of pads) if (p && p.connected && !NON_CONTROLLER_PATTERN.test(p.id)) return p;
+  // 3ª pasada (último recurso) — primer conectado, sin filtro. Hardware exótico.
   for (const p of pads) if (p && p.connected) return p;
   return null;
 }

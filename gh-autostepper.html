@@ -567,11 +567,13 @@
       <input type="file" id="fileInput" accept="audio/*" multiple>
     </label>
 
-    <div class="queue" id="queue"></div>
+    <div id="queue"></div>
   </div>
 
-  <!-- 2. PRESET + SETTINGS -->
-  <div class="card">
+  <!-- 2. PRESET + SETTINGS — oculto hasta que la cola tenga al menos una canción.
+       Mismo patrón que autostepper.html (SM): sin canciones cargadas no tiene
+       sentido elegir estilo todavía. -->
+  <div class="card" id="optionsCard" style="display:none">
     <h2><span class="step-num" aria-hidden="true">2</span> Ajustes del estilo</h2>
     <div class="preset-row" role="radiogroup" aria-label="Preset de dificultad">
       <button class="preset-btn" type="button" data-preset="suave" role="radio" aria-checked="false">
@@ -592,6 +594,31 @@
       </button>
     </div>
 
+    <div style="margin-top:18px">
+      <div style="color:var(--gris-300);font-size:0.92em;margin-bottom:8px">⏱ Duración máxima por canción</div>
+      <div class="preset-row" id="durationRow" role="radiogroup" aria-label="Duración máxima por canción">
+        <button class="preset-btn active" type="button" data-duration="0"   role="radio" aria-checked="true">
+          <span class="preset-name">∞ Completa</span>
+          <span class="preset-desc">Audio original íntegro, sin recorte.</span>
+        </button>
+        <button class="preset-btn"        type="button" data-duration="90"  role="radio" aria-checked="false">
+          <span class="preset-name">⚡ 1:30</span>
+          <span class="preset-desc">90 segundos, ideal canciones cortas.</span>
+        </button>
+        <button class="preset-btn"        type="button" data-duration="120" role="radio" aria-checked="false">
+          <span class="preset-name">🎵 2:00</span>
+          <span class="preset-desc">120 segundos, balance recomendado.</span>
+        </button>
+        <button class="preset-btn"        type="button" data-duration="180" role="radio" aria-checked="false">
+          <span class="preset-name">🎶 3:00</span>
+          <span class="preset-desc">180 segundos, sesiones intensas.</span>
+        </button>
+      </div>
+      <div class="help" style="margin-top:6px">
+        Recorta el chart Y el audio al tiempo elegido (con fade-out de 1.5s para evitar el corte abrupto). Útil para canciones largas que se hacen pesadas. El audio recortado se exporta como WAV; el original se mantiene si eliges "Completa".
+      </div>
+    </div>
+
     <div class="form-row">
       <label>Sensibilidad onsets:</label>
       <input type="range" id="sensitivity" min="0.8" max="3.0" step="0.1" value="1.7">
@@ -600,8 +627,8 @@
     <div class="help">Más bajo = detecta más notas. Sub-1.0 puede meter ruido en canciones suaves.</div>
 
     <div class="form-row" style="margin-top:14px;align-items:center">
-      <label>Resolución máx (Expert):</label>
-      <div class="subdiv-row" role="radiogroup" aria-label="Resolución máxima de Expert">
+      <label>Resolución máx (Experto):</label>
+      <div class="subdiv-row" role="radiogroup" aria-label="Resolución máxima de Experto">
         <button class="subdiv-btn"        type="button" data-subdiv="4"  role="radio" aria-checked="false">Negras (1/4)</button>
         <button class="subdiv-btn active" type="button" data-subdiv="8"  role="radio" aria-checked="true">Corcheas (1/8)</button>
         <button class="subdiv-btn"        type="button" data-subdiv="16" role="radio" aria-checked="false">Semicorcheas (1/16)</button>
@@ -610,11 +637,11 @@
     </div>
 
     <div class="form-row">
-      <label>% chords (Hard+):</label>
+      <label>% chords (Difícil+):</label>
       <input type="range" id="chordProb" min="0" max="0.6" step="0.05" value="0.18">
       <span class="display" id="chordVal">18%</span>
     </div>
-    <div class="help">Probabilidad de que una nota se convierta en acorde de 2 trastes. Easy/Medium nunca tienen chords.</div>
+    <div class="help">Probabilidad de que una nota se convierta en acorde de 2 trastes. Fácil e Intermedio nunca tienen chords.</div>
 
     <div class="form-row">
       <label>% sustains:</label>
@@ -633,8 +660,9 @@
     </div>
   </div>
 
-  <!-- 3. PROCESS -->
-  <div class="card">
+  <!-- 3. PROCESS — también oculto hasta tener canciones en cola. Aparece a la
+       vez que el card 2 (mismo trigger). -->
+  <div class="card" id="processCard" style="display:none">
     <h2><span class="step-num" aria-hidden="true">3</span> Generar partituras <small>— se procesa toda la cola</small></h2>
     <p class="help" style="margin-top:0;margin-bottom:14px">
       Al pulsar <strong>Generar partituras</strong>, cada canción se analiza una a una (BPM, onsets, dificultades) y produce un <code>.chart</code> con sus 4 dificultades. Cuando termine, descargarás todo en un ZIP en el paso 4.
@@ -706,13 +734,31 @@ const PRESETS = {
   intenso:{ sens: 1.3, subdiv: 16, chordProb: 0.40, sustainProb: 0.10 }
 };
 let activePreset = 'normal';
+// Cap de duración seleccionado en segundos. 0 = sin recorte (audio íntegro).
+let activeMaxDurationSec = 0;
 
-document.querySelectorAll('.preset-btn').forEach(btn => {
+// Listener restringido a presets de estilo ([data-preset]) para no colisionar
+// con los botones de duración del row #durationRow, que también son .preset-btn
+// pero usan [data-duration] y se gestionan por separado (ver más abajo).
+document.querySelectorAll('.preset-btn[data-preset]').forEach(btn => {
   btn.addEventListener('click', () => {
     activePreset = btn.dataset.preset;
-    document.querySelectorAll('.preset-btn').forEach(b =>
+    document.querySelectorAll('.preset-btn[data-preset]').forEach(b =>
       b.classList.toggle('active', b === btn));
     if (activePreset !== 'custom') applyPreset(PRESETS[activePreset]);
+  });
+});
+
+// Botones de duración máxima: actualizan activeMaxDurationSec y el estado
+// visual sin tocar el preset de estilo activo.
+document.querySelectorAll('#durationRow .preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeMaxDurationSec = parseFloat(btn.dataset.duration) || 0;
+    document.querySelectorAll('#durationRow .preset-btn').forEach(b => {
+      const on = b === btn;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
   });
 });
 function applyPreset(p) {
@@ -781,13 +827,33 @@ function addFiles(files) {
     });
   }
   renderQueue();
-  document.getElementById('processBtn').disabled = queue.length === 0;
+  updateDisclosure();
+}
+
+// Centraliza el progressive disclosure de los cards 2 y 3 + el estado del CTA.
+// Se invoca desde cualquier mutación de la cola (addFiles, removeItem,
+// clearQueue). Mismo patrón conceptual que autostepper.html SM, pero unificado
+// en una sola función para no duplicar las tres líneas en cada call-site.
+function updateDisclosure() {
+  const hasItems = queue.length > 0;
+  document.getElementById('optionsCard').style.display = hasItems ? '' : 'none';
+  document.getElementById('processCard').style.display = hasItems ? '' : 'none';
+  document.getElementById('processBtn').disabled = !hasItems;
 }
 
 function renderQueue() {
   const el = document.getElementById('queue');
-  if (queue.length === 0) { el.innerHTML = ''; return; }
-  let html = `<div class="queue-row header">
+  if (queue.length === 0) {
+    // Empty-state alineado con autostepper.html: feedback visual de qué hacer
+    // a continuación cuando aún no hay canciones cargadas.
+    el.innerHTML = `
+      <div class="queue-empty">
+        <span class="empty-icon" aria-hidden="true">🎸</span>
+        Aún no has añadido canciones. Suéltalas arriba ↑ para empezar.
+      </div>`;
+    return;
+  }
+  let html = `<div class="queue"><div class="queue-row header">
     <div>Canción</div><div>BPM</div><div>Notas</div><div>Estado</div><div>Override BPM</div><div>Acciones</div>
   </div>`;
   for (const q of queue) {
@@ -812,9 +878,21 @@ function renderQueue() {
       </div>
     </div>`;
   }
+  html += `</div>`;
   el.innerHTML = html;
 }
 function escHtml(s) { return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Traducción de claves de dificultad GH al castellano. Las claves del formato
+// .chart (EasySingle/MediumSingle/HardSingle/ExpertSingle) y los nombres
+// internos (Easy/Medium/Hard/Expert) NO se traducen — solo se usan al
+// renderizar en el log de progreso. Standalone: no compartido con gh-play.html
+// para mantener este HTML autocontenido.
+const _GH_DIFF_LABELS_ES = {
+  Easy: 'Fácil', Medium: 'Intermedio', Hard: 'Difícil', Expert: 'Experto',
+  EasySingle: 'Fácil', MediumSingle: 'Intermedio',
+  HardSingle: 'Difícil', ExpertSingle: 'Experto'
+};
+function ghDiffLabel(key) { return _GH_DIFF_LABELS_ES[key] || key; }
 
 window.setBpmOverride = function(id, val) {
   const q = queue.find(x => x.id === id);
@@ -832,16 +910,21 @@ window.removeItem = function(id) {
   const i = queue.findIndex(q => q.id === id);
   if (i >= 0) queue.splice(i, 1);
   renderQueue();
-  document.getElementById('processBtn').disabled = queue.length === 0;
+  updateDisclosure();
+  // Al quedarnos sin canciones, también escondemos el panel de descargas:
+  // si vacías toda la cola, la sesión anterior queda cerrada por completo.
+  if (queue.length === 0) {
+    document.getElementById('downloadsCard').style.display = 'none';
+  }
 };
 function clearQueue() {
   if (analyzing) return;
   queue.length = 0;
   renderQueue();
+  updateDisclosure();
   document.getElementById('downloadsCard').style.display = 'none';
   document.getElementById('downloads').innerHTML = '';
   document.getElementById('log').innerHTML = '';
-  document.getElementById('processBtn').disabled = true;
 }
 
 // ---- Log ----
@@ -1117,13 +1200,28 @@ async function processOne(q, opts) {
   const offsetSec = detectOffset(odf, framesPerSec, bpm);
   log(`  Offset: ${offsetSec.toFixed(3)}s · ${peakFrames.length} onsets`);
 
-  // 4. Convertir onsets de frames → segundos → ticks
+  // 3.b. Cap de duración (Completa / 90s / 120s / 180s) — recorta el chart Y
+  // el audio. effectiveDuration manda en TODO el resto del pipeline para que
+  // song.ini, density y ZIP queden coherentes con el WAV cropeado.
+  const maxDurationSec = activeMaxDurationSec;
+  const effectiveDuration = (maxDurationSec > 0 && buffer.duration > maxDurationSec)
+    ? maxDurationSec : buffer.duration;
+  if (effectiveDuration < buffer.duration) {
+    log(`  Duración recortada: ${effectiveDuration.toFixed(1)}s / ${buffer.duration.toFixed(1)}s`);
+  }
+
+  // 4. Convertir onsets de frames → segundos → ticks. Si hay cap activo se
+  // descartan los peaks que caigan en la sección recortada antes de pasar a
+  // ticks — así DifficultyTiers.filterTicks ve un universo ya truncado y el
+  // NPS por ventana sigue siendo correcto en el segmento mantenido.
   const beatSec = 60 / bpm;
   const onsetTicks = [];
   for (const f of peakFrames) {
-    const sec = f / framesPerSec - offsetSec;
-    if (sec < 0) continue;  // descartar onsets antes del primer beat
-    const beats = sec / beatSec;
+    const sec = f / framesPerSec;
+    if (sec >= effectiveDuration) continue;  // fuera del cap, descartado
+    const relSec = sec - offsetSec;
+    if (relSec < 0) continue;  // descartar onsets antes del primer beat
+    const beats = relSec / beatSec;
     const tick = Math.round(beats * CHART_RESOLUTION);
     onsetTicks.push(tick);
   }
@@ -1151,18 +1249,28 @@ async function processOne(q, opts) {
     meter: d.meter
   }));
   for (const c of charts) {
-    log(`  ${c.name.padEnd(7)} · ${c.notes.length} notas`);
+    log(`  ${ghDiffLabel(c.name).padEnd(12)} · ${c.notes.length} notas`);
   }
 
-  // 6. Build .chart text + song.ini
-  const audioExt = (q.file.name.match(/\.([^.]+)$/) || ['', 'mp3'])[1].toLowerCase();
+  // 5.b. Si hay cap activo, recorta el audio + re-encoda a WAV con fade-out
+  // de 1.5s. El blob queda en q.result.croppedAudio y la extensión final del
+  // ZIP/biblioteca pasa a ser .wav.
+  let croppedAudio = null;
+  if (effectiveDuration < buffer.duration && window.AudioPipeline?.audioBufferToWav) {
+    croppedAudio = window.AudioPipeline.audioBufferToWav(buffer, effectiveDuration, 1.5);
+  }
+
+  // 6. Build .chart text + song.ini. La extensión del audio empaquetado
+  // depende de si hubo recorte: WAV cropeado o el original sin tocar.
+  const origAudioExt = (q.file.name.match(/\.([^.]+)$/) || ['', 'mp3'])[1].toLowerCase();
+  const audioExt = croppedAudio ? 'wav' : origAudioExt;
   const audioFilename = `song.${audioExt}`;
   const meta = {
     name: q.title || 'Untitled',
     artist: q.artist || 'Unknown',
     charter: opts.charter,
     bpm,
-    duration: buffer.duration,
+    duration: effectiveDuration,
     audioFilename,
     genre: opts.genre,
     diffGuitar: 4
@@ -1172,7 +1280,8 @@ async function processOne(q, opts) {
 
   // 7. ZIP empaquetado: <slug>/{notes.chart, song.ini, song.<ext>}
   const slug = slugify((q.artist ? q.artist + ' - ' : '') + q.title) || 'song';
-  const audioBytes = new Uint8Array(await q.file.arrayBuffer());
+  const sourceAudioBlob = croppedAudio || q.file;
+  const audioBytes = new Uint8Array(await sourceAudioBlob.arrayBuffer());
   const zipFiles = [
     { name: `${slug}/notes.chart`, data: new TextEncoder().encode(chartText) },
     { name: `${slug}/song.ini`,    data: new TextEncoder().encode(iniText) },
@@ -1181,7 +1290,13 @@ async function processOne(q, opts) {
   const zipBytes = makeZip(zipFiles);
   q.zipBlob = new Blob([zipBytes], { type: 'application/zip' });
   q.zipFilename = `${slug}.zip`;
-  q.result = { bpm, offsetSec, charts, duration: buffer.duration };
+  q.result = {
+    bpm, offsetSec, charts,
+    duration: effectiveDuration,
+    originalDuration: buffer.duration,
+    croppedAudio,
+    audioExt,
+  };
   log(`  ✓ ZIP listo: ${q.zipFilename} (${(q.zipBlob.size/1024/1024).toFixed(2)} MB)`, 'ok');
 }
 
@@ -1233,7 +1348,10 @@ async function saveOneToLibrary(id) {
   if (!q || !q.result) return;
   const status = document.getElementById('librarySaveStatus');
   try {
-    const audioExt = (q.file.name.match(/\.([^.]+)$/) || ['', 'mp3'])[1].toLowerCase();
+    // Si processOne recortó la canción, la biblioteca recibe el WAV cropeado;
+    // en caso contrario, el archivo original sin tocar.
+    const audioExt = q.result.audioExt
+      || (q.file.name.match(/\.([^.]+)$/) || ['', 'mp3'])[1].toLowerCase();
     const audioFilename = `song.${audioExt}`;
     const charterName = document.getElementById('charter').value || 'Sincro';
     const genre = document.getElementById('genre').value || '';
@@ -1246,7 +1364,11 @@ async function saveOneToLibrary(id) {
       audioFilename, genre, diffGuitar: 4
     };
     const chartText = buildChartFile(meta, q.result.charts);
-    const audioBlob = new Blob([await q.file.arrayBuffer()], { type: q.file.type || 'audio/mpeg' });
+    const sourceAudioBlob = q.result.croppedAudio || q.file;
+    const audioBlob = new Blob(
+      [await sourceAudioBlob.arrayBuffer()],
+      { type: q.result.croppedAudio ? 'audio/wav' : (q.file.type || 'audio/mpeg') }
+    );
     const totalNotes = q.result.charts.reduce((s, c) => s + c.notes.length, 0);
     const dbId = await window.GHLibrary.add({
       title: meta.name,
@@ -1288,7 +1410,11 @@ async function downloadAllZip() {
   const allFiles = [];
   for (const q of queue) {
     if (!q.zipBlob) continue;
-    const audioExt = (q.file.name.match(/\.([^.]+)$/) || ['', 'mp3'])[1].toLowerCase();
+    // Si processOne hizo recorte, q.result.audioExt ya es 'wav' y q.result
+    // .croppedAudio contiene el blob recortado. Si no, vuelve a la extensión
+    // original del fichero subido.
+    const audioExt = q.result.audioExt
+      || (q.file.name.match(/\.([^.]+)$/) || ['', 'mp3'])[1].toLowerCase();
     const slug = slugify((q.artist ? q.artist + ' - ' : '') + q.title) || `song-${q.id}`;
     const chartText = buildChartFile({
       name: q.title, artist: q.artist, charter: document.getElementById('charter').value,
@@ -1301,7 +1427,8 @@ async function downloadAllZip() {
       bpm: q.result.bpm, duration: q.result.duration, genre: document.getElementById('genre').value,
       diffGuitar: 4
     });
-    const audioBytes = new Uint8Array(await q.file.arrayBuffer());
+    const sourceAudioBlob = q.result.croppedAudio || q.file;
+    const audioBytes = new Uint8Array(await sourceAudioBlob.arrayBuffer());
     allFiles.push({ name: `${slug}/notes.chart`, data: new TextEncoder().encode(chartText) });
     allFiles.push({ name: `${slug}/song.ini`,    data: new TextEncoder().encode(iniText) });
     allFiles.push({ name: `${slug}/song.${audioExt}`, data: audioBytes });

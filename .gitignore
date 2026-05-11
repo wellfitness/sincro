@@ -23,3 +23,5 @@ coverage/
 Thumbs.db
 desktop.ini
 .DS_Store
+PLAN-versus-2-jugadores.md
+scripts/deploy.sh

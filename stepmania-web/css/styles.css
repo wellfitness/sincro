@@ -229,21 +229,27 @@ h1 {
 .menu-card .title { font-family: var(--font-display); font-size: 1.2em; font-weight: 700; margin-bottom: 6px; }
 .menu-card .desc  { color: var(--gris-400); font-size: 0.85em; line-height: 1.4; }
 
-/* BUTTONS */
-button.action-btn {
+/* BUTTONS — selector sin prefijo de tag para que la misma clase funcione en
+   <button>, <label>, <a> y cualquier elemento que actúe como botón. Antes
+   estaba `button.action-btn` y los <label class="action-btn"> (usados para
+   inputs file ocultos: Importar archivos / Importar paquete / Restaurar) no
+   recibían padding, fondo ni borde — quedaban como texto plano roto. */
+.action-btn {
+  display: inline-flex; align-items: center; gap: 6px;
   padding: 10px 22px;
   background: linear-gradient(90deg, var(--turquesa-600), var(--turquesa-700));
   border: none; color: white; border-radius: 8px;
   cursor: pointer; font-weight: 600; font-size: 0.95em;
+  text-decoration: none; line-height: 1.2; white-space: nowrap;
   transition: opacity 0.2s;
 }
-button.action-btn:hover { opacity: 0.85; }
-button.action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-button.action-btn.secondary {
+.action-btn:hover { opacity: 0.85; }
+.action-btn:disabled, .action-btn[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }
+.action-btn.secondary {
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.15);
 }
-button.action-btn.danger {
+.action-btn.danger {
   background: linear-gradient(90deg, var(--rosa-600), var(--rosa-700));
 }
 
@@ -412,59 +418,75 @@ input[type="file"] { display: none; }
 }
 .gameHUD .score { font-size: 1.5em; color: #ffbe0b; line-height: 1; }
 .gameHUD .combo { font-size: 1.2em; color: #00ff64; line-height: 1; }
-/* judgment se posiciona ENCIMA de los receptores (game.js setea style.top
-   dinámicamente al receptorY actual). En SM5 oficial el judgment vive en
-   esa franja porque los ojos del jugador están en la línea de hit; un
-   centro de pantalla queda lejos del foco visual. */
-.gameHUD .judgment {
-  position: fixed; left: 50%; transform: translate(-50%, -50%);
-  font-size: 2.4em; font-weight: 800; opacity: 0;
-  background: rgba(0,0,0,0.45); padding: 4px 18px; border-radius: 8px;
-  transition: opacity 0.15s, transform 0.15s;
-  text-shadow: 0 0 14px currentColor, 0 1px 3px rgba(0,0,0,0.9);
-  pointer-events: none; z-index: 25;
+/* Judgment text — vive como hijo de #play-screen (NO de .gameHUD) para no
+   heredar el stacking context z-index:20 del HUD. Posición fija al ~24% del
+   viewport: justo debajo de la zona de receptores SM (top ~110px en chart
+   normal, ~176px en pantalla grande) — donde el ojo del jugador ya está
+   mirando para anticipar las flechas que se acercan. z-index 1000 garantiza
+   que NUNCA quede tapado por canvas, HUD o cualquier capa de notas. */
+.judgment {
+  position: fixed; left: 50%; top: 24%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-display); font-size: 2.6em; font-weight: 800;
+  opacity: 0; pointer-events: none; z-index: 1000;
+  background: rgba(0,0,0,0.55); padding: 6px 22px; border-radius: 10px;
+  text-shadow: 0 0 16px currentColor, 0 1px 3px rgba(0,0,0,0.9);
+  transition: opacity 0.18s, transform 0.18s;
+  white-space: nowrap;
 }
-.gameHUD .judgment.show { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-/* Diferenciación por tier — además del color, modulamos size + glow + animación.
-   El cerebro recibe varios canales redundantes y clasifica el resultado sin leer.
-     marvelous → 40% más grande, glow triple + halo blanco, pop elástico
-     perfect   → 20% más grande, glow doble
-     great     → baseline (la nomenclatura "genial" sigue siendo positiva)
-     good      → ligeramente menor (acierto correcto pero sin fanfarria)
-     bad       → claramente más pequeño (acierto raspado, casi miss)
-     miss      → glow rojo intenso + shake horizontal */
-.gameHUD .judgment.show.marvelous {
-  font-size: 3.4em;
-  text-shadow: 0 0 30px currentColor, 0 0 12px currentColor, 0 0 4px #fff, 0 1px 3px rgba(0,0,0,0.9);
-  animation: smJudgmentMarvelousPop 0.45s cubic-bezier(.2,1.6,.5,1);
+.judgment.show { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+/* Tier differentiation — size + glow + animation. El cerebro lee tres canales
+   redundantes (color, tamaño, energía) y clasifica antes de leer la palabra.
+     marvelous → enorme, glow triple + halo blanco, pop elástico
+     perfect   → grande, glow doble dorado
+     great     → grande con glow verde (acierto bueno — recompensa visible)
+     good      → mediano con glow azul (acierto correcto pero sin fanfarria)
+     bad       → discreto, sin tanto brillo (acierto raspado, casi miss)
+     miss      → glow rojo + shake (oculto en runtime, ver showJudgment)
+*/
+.judgment.show.marvelous {
+  font-size: 3.8em; color: #00f5d4;
+  text-shadow: 0 0 36px currentColor, 0 0 14px currentColor, 0 0 4px #fff, 0 1px 3px rgba(0,0,0,0.9);
+  animation: smJudgmentMarvelousPop 0.5s cubic-bezier(.2,1.6,.5,1);
 }
-.gameHUD .judgment.show.perfect {
-  font-size: 2.9em;
+.judgment.show.perfect {
+  font-size: 3.2em; color: #ffbe0b;
+  text-shadow: 0 0 28px currentColor, 0 0 10px currentColor, 0 1px 3px rgba(0,0,0,0.9);
+  animation: smJudgmentPop 0.4s cubic-bezier(.2,1.6,.5,1);
+}
+.judgment.show.great {
+  font-size: 2.9em; color: #00ff64;
   text-shadow: 0 0 22px currentColor, 0 0 8px currentColor, 0 1px 3px rgba(0,0,0,0.9);
+  animation: smJudgmentPop 0.4s cubic-bezier(.2,1.6,.5,1);
 }
-.gameHUD .judgment.show.good { font-size: 2.1em; }
-.gameHUD .judgment.show.bad  { font-size: 1.8em; }
-.gameHUD .judgment.show.miss {
-  font-size: 2.3em;
+.judgment.show.good {
+  font-size: 2.5em; color: #3a86ff;
+  text-shadow: 0 0 18px currentColor, 0 0 6px currentColor, 0 1px 3px rgba(0,0,0,0.9);
+}
+.judgment.show.bad {
+  font-size: 2em; color: #ff006e;
+  text-shadow: 0 0 14px currentColor, 0 1px 3px rgba(0,0,0,0.9);
+}
+.judgment.show.miss {
+  font-size: 2.4em; color: #ff3366;
   text-shadow: 0 0 22px currentColor, 0 0 10px currentColor, 0 1px 3px rgba(0,0,0,0.9);
   animation: smJudgmentMissShake 0.30s ease-in-out;
 }
 @keyframes smJudgmentMarvelousPop {
   0%   { transform: translate(-50%, -50%) scale(0.4); }
-  35%  { transform: translate(-50%, -50%) scale(1.55); }
-  100% { transform: translate(-50%, -50%) scale(1.1); }
+  35%  { transform: translate(-50%, -50%) scale(1.6); }
+  100% { transform: translate(-50%, -50%) scale(1.15); }
+}
+@keyframes smJudgmentPop {
+  0%   { transform: translate(-50%, -50%) scale(0.6); }
+  40%  { transform: translate(-50%, -50%) scale(1.3); }
+  100% { transform: translate(-50%, -50%) scale(1.15); }
 }
 @keyframes smJudgmentMissShake {
-  0%, 100% { transform: translate(-50%, -50%) scale(1.1); }
-  25%      { transform: translate(-54%, -50%) scale(1.1); }
-  75%      { transform: translate(-46%, -50%) scale(1.1); }
+  0%, 100% { transform: translate(-50%, -50%) scale(1.15); }
+  25%      { transform: translate(-54%, -50%) scale(1.15); }
+  75%      { transform: translate(-46%, -50%) scale(1.15); }
 }
-.gameHUD .judgment.marvelous { color: #00f5d4; }
-.gameHUD .judgment.perfect   { color: #ffbe0b; }
-.gameHUD .judgment.great     { color: #00ff64; }
-.gameHUD .judgment.good      { color: #3a86ff; }
-.gameHUD .judgment.bad       { color: #ff006e; }
-.gameHUD .judgment.miss      { color: #ff3366; }
 
 .results {
   background: linear-gradient(180deg, rgba(0,190,200,0.06), rgba(0,0,0,0.85) 60%);

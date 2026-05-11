@@ -101,8 +101,15 @@ function stopCalib() {
 
 function applyCalibration(ms) {
   settings.globalOffset = ms;
-  document.getElementById('globalOffset').value = ms;
-  document.getElementById('globalOffsetVal').textContent = ms + ' ms';
+  // Settings modal solo existe en stepmania-play.html. En calibration.html
+  // standalone los elementos #globalOffset / #globalOffsetVal no están, así
+  // que actualizamos el DOM con null-checks. saveSettings() persiste a
+  // localStorage en cualquier caso — la próxima vez que el motor cargue
+  // settings los leerá ya con el valor nuevo.
+  const goInput = document.getElementById('globalOffset');
+  const goVal = document.getElementById('globalOffsetVal');
+  if (goInput) goInput.value = ms;
+  if (goVal) goVal.textContent = ms + ' ms';
   saveSettings();
   document.getElementById('calibRecommendation').innerHTML += `<div style="margin-top:6px;color:var(--color-success)">✓ Aplicado. Ya está guardado en Ajustes.</div>`;
 }
@@ -126,9 +133,15 @@ function calibRegisterPress() {
   document.getElementById('calibOffset').textContent = (avg>=0?'+':'') + Math.round(avg) + ' ms';
 }
 
-// Keyboard SPACE handler — only active while on the calib screen
+// Keyboard SPACE handler. Active cuando estamos en la pantalla de calib —
+// que detectamos como:
+//   - currentScreen === 'calib' (modo SPA dentro de stepmania-play.html, ya
+//     no se da con la nueva arquitectura pero soportado por si vuelve), o
+//   - currentScreen no definido (calibration.html standalone — la página
+//     entera ES la calibración, así que SPACE siempre cuenta).
 window.addEventListener('keydown', e => {
-  if (currentScreen === 'calib' && e.code === 'Space') {
+  const isCalibActive = (typeof currentScreen === 'undefined') || currentScreen === 'calib';
+  if (isCalibActive && e.code === 'Space') {
     e.preventDefault();
     calibRegisterPress();
   }

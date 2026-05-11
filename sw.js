@@ -18,7 +18,7 @@
 // Aviso: NO interceptamos requests POST ni con header Range (audio range
 // requests del motor son delicados — los dejamos pasar a network).
 
-const CACHE_VERSION = 'sincro-v3';
+const CACHE_VERSION = 'sincro-v5';
 const PRECACHE      = `${CACHE_VERSION}-shell`;
 const RUNTIME       = `${CACHE_VERSION}-runtime`;
 
@@ -27,10 +27,13 @@ const PRECACHE_URLS = [
   '/app.html',
   '/index.html',
   '/play.html',
+  '/stepmania-play.html',
   '/gh-play.html',
   '/autostepper.html',
   '/gh-autostepper.html',
   '/test-pad.html',
+  '/tutorial.html',
+  '/calibration.html',
   '/manifest.webmanifest',
   '/icons/icon.svg',
   '/icons/icon-maskable.svg',
@@ -120,9 +123,12 @@ function networkFirst(req) {
       const isShellRoute = url.pathname === '/' ||
                            url.pathname.startsWith('/app') ||
                            url.pathname.startsWith('/play') ||
+                           url.pathname.startsWith('/stepmania-play') ||
                            url.pathname.startsWith('/gh-') ||
                            url.pathname.startsWith('/autostepper') ||
-                           url.pathname.startsWith('/test-pad');
+                           url.pathname.startsWith('/test-pad') ||
+                           url.pathname.startsWith('/tutorial') ||
+                           url.pathname.startsWith('/calibration');
       return caches.match(isShellRoute ? '/app.html' : '/index.html');
     }));
 }

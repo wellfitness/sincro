@@ -15,6 +15,23 @@ function safeFn(s) { return String(s).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim
 function getExt(n) { const m = n.match(/\.[^.]+$/); return m ? m[0] : '.mp3'; }
 function yieldUI() { return new Promise(r => setTimeout(r, 0)); }
 
+// ----- Capa de presentación: traducción de claves de dificultad ------------
+// Los charts de StepMania persisten su nombre de tier como string del formato
+// (Beginner/Easy/Medium/Hard/Challenge) — es lo que escribe el parser y lo que
+// IndexedDB tiene guardado para charts ya importados. Esa clave NO se traduce
+// (rompería búsquedas `chart.name === key`, los `.ssc` generados y el match
+// con StepMania nativo). `diffLabel()` solo se usa al renderizar al DOM.
+// Si la clave no está mapeada (Edit u otros tiers raros) se devuelve tal cual.
+const _DIFF_LABELS_ES = {
+  Beginner:  'Principiante',
+  Easy:      'Fácil',
+  Medium:    'Intermedio',
+  Hard:      'Difícil',
+  Challenge: 'Experto',
+  Edit:      'Edición'
+};
+function diffLabel(key) { return _DIFF_LABELS_ES[key] || key; }
+
 // ----- Audio context (shared) -----------------------------------------------
 // `ensureAudioCtx` es síncrono y devuelve el contexto inmediatamente para
 // callers que NO necesitan reproducir (decodeAudioData funciona en estado
@@ -56,12 +73,38 @@ function _getPadPill() {
   return _padPillEl || null;
 }
 
+// Algunos dispositivos HID (cascos USB con botones, micrófonos con teclas,
+// webcams con controles) son expuestos por Chrome como Gamepad. La Gamepad API
+// asigna el `index` por orden de "primer despertar en la pestaña" — NO
+// determinista entre sesiones. Sin filtro, `play.html` puede acabar pollando
+// un dispositivo de audio en vez de la alfombra. Filtramos por nombre y por
+// perfil de hardware esperado; fallback al primer connected si nada pasa.
+const NON_CONTROLLER_PATTERN = /USB Audio|Audio Device|Headset|Headphone|Microphone|Speaker|Webcam|Camera/i;
+function pickMatGamepad(pads) {
+  // 1ª pasada — alfombra real: 8-12 botones, 0-2 ejes. Rechazamos `axes >= 6`
+  // para no confundir una guitarra GH (10 ejes) con alfombra cuando el usuario
+  // está en DDR.
+  for (const p of pads) {
+    if (!p || !p.connected) continue;
+    if (NON_CONTROLLER_PATTERN.test(p.id)) continue;
+    if (p.buttons.length < 4) continue;
+    if (p.axes.length >= 6) continue;
+    return p;
+  }
+  // 2ª pasada — cualquier no-audio. Si solo hay guitarra enchufada y el usuario
+  // está en DDR, preferimos darle la guitarra (al menos sus botones existen)
+  // antes que un casco USB Audio (cero ejes, inutilizable como input).
+  for (const p of pads) if (p && p.connected && !NON_CONTROLLER_PATTERN.test(p.id)) return p;
+  // 3ª pasada (último recurso) — primer conectado, sin filtro.
+  for (const p of pads) if (p && p.connected) return p;
+  return null;
+}
+
 function pollGamepad() {
   _gamepadRafId = null;
   try {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-    let gp = null;
-    for (const p of pads) if (p && p.connected) { gp = p; break; }
+    const gp = pickMatGamepad(pads);
 
     if (gp) {
       if (!gamepadConnected) {

@@ -32,7 +32,7 @@
       "name": "Jugar StepMania",
       "short_name": "Jugar",
       "description": "Abrir el motor de DDR directamente",
-      "url": "app.html#/play",
+      "url": "app.html#/stepmania-play",
       "icons": [{ "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {

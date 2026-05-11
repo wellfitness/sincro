@@ -73,6 +73,38 @@ function getActiveLaneConfig(nativeLanes) {
   return LANE_CONFIGS[4];
 }
 
+// Mapa columna→rol de calibración para cada lane count. Los roles ('left',
+// 'upLeft', etc.) son los que guarda test-pad.html en localStorage['mat-mapping'].
+// Imprescindible para que un pad recalibrado (alfombras chinas, ImpactDX,
+// Cobalt Flux…) funcione en el juego: sin esto, el motor lee `padMap` hardcoded
+// y las diagonales que el usuario asignó a botones distintos no se reconocen.
+const MAT_ROLES_BY_LANES = {
+  4: ['left', 'down', 'up', 'right'],
+  6: ['left', 'upLeft', 'up', 'down', 'upRight', 'right'],
+  8: ['left', 'upLeft', 'downLeft', 'up', 'down', 'upRight', 'downRight', 'right']
+};
+
+// Devuelve una COPIA superficial del laneConfig con `padMap` reescrito según la
+// calibración del usuario (si existe). Cualquier rol sin asignar conserva el
+// valor por defecto de LANE_CONFIGS — degrada gracefully cuando no hay
+// calibración o solo se calibraron algunos paneles.
+function applyMatCalibrationToConfig(cfg) {
+  let mapping = null;
+  try {
+    const raw = localStorage.getItem('mat-mapping');
+    if (raw) mapping = JSON.parse(raw);
+  } catch (e) { /* localStorage o JSON corruptos: cae al default */ }
+  if (!mapping) return cfg;
+  const roles = MAT_ROLES_BY_LANES[cfg.lanes];
+  if (!roles) return cfg;
+  const padMap = cfg.padMap.slice();
+  for (let i = 0; i < roles.length; i++) {
+    const btn = mapping[roles[i]];
+    if (typeof btn === 'number' && btn >= 0 && btn < 20) padMap[i] = btn;
+  }
+  return { ...cfg, padMap };
+}
+
 let gameState = null;
 const canvas = document.getElementById('gameCanvas');
 const ctx2d = canvas.getContext('2d');
@@ -296,7 +328,7 @@ async function startGame() {
   // Resolve which lane config we'll actually play with: solo/full mods override
   // the chart's native lane count by REDISTRIBUTING notes; otherwise we play
   // with whatever the chart was authored for.
-  const laneConfig = getActiveLaneConfig(nativeLanes);
+  const laneConfig = applyMatCalibrationToConfig(getActiveLaneConfig(nativeLanes));
   if (laneConfig.lanes !== nativeLanes) {
     // Redistribute notes from `nativeLanes` to `laneConfig.lanes`. Fixed mode
     // (random per song-id+noteIndex) gives memorable charts; full random mode
@@ -372,7 +404,7 @@ async function startGame() {
     // pegado al receptor — sin esto el jugador solo ve el texto MISS lejos.
     missFlashTime: new Array(N).fill(0),
     hitFx: [],   // {lane, t}
-    songInfo: `${selectedSong.title} — ${selectedChart.name} ★${selectedChart.rating}${laneConfig.lanes !== nativeLanes ? ` · ${laneConfig.label}` : ''}`,
+    songInfo: `${selectedSong.title} — ${diffLabel(selectedChart.name)} ★${selectedChart.rating}${laneConfig.lanes !== nativeLanes ? ` · ${laneConfig.label}` : ''}`,
     finished: false,
     pixelsPerSec: 600 * settings.scrollSpeed * activeMods.chartSpeed,
     timing: getTimingWindows(),
@@ -819,15 +851,23 @@ const JUDGMENT_LABELS = {
 };
 
 function showJudgment(judg) {
+  // FALLO no se muestra como texto: ya hay X+contracción del anillo sobre el
+  // receptor (render() líneas 935-947) + combo break visible. Repetir "FALLO"
+  // centrado solo añade ruido sobre el highway.
+  if (judg === 'miss') return;
   const el = document.getElementById('hudJudgment');
+  if (!el) return;
   el.textContent = JUDGMENT_LABELS[judg] || judg.toUpperCase();
+  // Re-trigger CSS animation: limpiamos la clase un frame y la re-aplicamos.
+  // Sin esto, dos PERFECTOs consecutivos no re-disparan el pop animation.
+  el.className = 'judgment';
+  // Force reflow para que el navegador "vea" el cambio de clase antes del show.
+  void el.offsetWidth;
   el.className = 'judgment show ' + judg;
-  // Posición ENCIMA del receptor — receptorY se calcula en render() con la
-  // misma fórmula. Le restamos ~55px para que quede claramente arriba sin
-  // tapar las notas que se acercan ni invadir el topbar.
-  const receptorY = Math.round(110 * uiScale);
-  el.style.top = Math.max(60, receptorY - 55) + 'px';
-  setTimeout(() => { if (el.classList) el.classList.remove('show'); }, 400);
+  // Posición la fija el CSS (top:24% del viewport) — antes este JS sobrescribía
+  // a top:60px fijo que en algunos viewports caía detrás de los receptores SM.
+  // 700ms de hold + 180ms fade = ~880ms visible total. Suficiente para leer.
+  setTimeout(() => { if (el.classList) el.classList.remove('show'); }, 700);
 }
 
 function render(audioTime) {

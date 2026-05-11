@@ -161,7 +161,34 @@ async function openSongConfig(id) {
   if (!selectedSong) return;
   goto('diff');
 }
-async function playSong(id) { return selectSong(id); }
+// playSong viene de la BIBLIOTECA (library.js). A diferencia de selectSong
+// (que se llama desde songs-screen donde el usuario ya eligió la dif global),
+// aquí no podemos asumir 'Medium' — la biblioteca es un listado limpio sin
+// selector. Llevamos al usuario a diff-screen para que elija dif explícita.
+async function playSong(id) {
+  selectedSong = await dbGet(id);
+  if (!selectedSong) return;
+  if (!selectedSong.charts || !selectedSong.charts.length) {
+    alert('Esta canción no tiene charts disponibles.');
+    return;
+  }
+  goto('diff');
+}
+
+// Helper para que cada chart-row de diff-screen sea clickable. Recibe la
+// `chart.key` (lowercase: 'beginner'/'easy'/'medium'/'hard'/'challenge') y
+// arranca la canción con esa dificultad. También actualiza _globalDiffKey
+// para que songs-screen recuerde la última preferencia del usuario.
+function selectChartAndPlay(chartKey) {
+  if (!selectedSong) return;
+  const chart = selectedSong.charts.find(c => c.key === chartKey);
+  if (!chart) return;
+  selectedChart = chart;
+  _globalDiffKey = chart.name;
+  const sel = document.getElementById('globalDiff');
+  if (sel) sel.value = _globalDiffKey;
+  goto('play');
+}
 
 // Lanza la canción actual desde diff-screen usando la configuración global.
 function playCurrentSongWithGlobalConfig() {
@@ -182,21 +209,36 @@ async function renderDiffScreen() {
   c.innerHTML = '';
   const scores = await dbScoresForSong(selectedSong.id);
   const scoreMap = Object.fromEntries(scores.map(s => [s.chartKey, s]));
-  for (const chart of selectedSong.charts) {
+  // Orden visual: Beginner → Easy → Medium → Hard → Challenge. Los charts
+  // del .ssc/.sm pueden venir en orden arbitrario; aquí imponemos el orden
+  // canónico para que el usuario lea de fácil a difícil de arriba a abajo.
+  const ordered = selectedSong.charts.slice().sort((a, b) => {
+    const ia = _DIFF_ORDER.indexOf(a.name);
+    const ib = _DIFF_ORDER.indexOf(b.name);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  for (const chart of ordered) {
     const el = document.createElement('div');
-    el.className = 'chart-row';
+    el.className = 'chart-row clickable';
     el.dataset.chartKey = chart.key;
+    el.style.cursor = 'pointer';
+    el.setAttribute('role', 'button');
+    el.setAttribute('tabindex', '0');
+    el.title = `Empezar a jugar en dificultad ${diffLabel(chart.name)}`;
+    el.onclick = () => selectChartAndPlay(chart.key);
+    el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectChartAndPlay(chart.key); } };
     const sc = scoreMap[chart.key];
     const gradeCell = sc ? `<span class="grade-pill grade-${sc.grade}">${sc.grade}</span>` : '<span class="chart-row-empty">—</span>';
     const deleteBtn = sc
       ? `<button class="icon-btn danger" title="Eliminar high score" onclick="event.stopPropagation();deleteChartScore('${chart.key}')">×</button>`
       : '';
     const ratingNum = Math.max(0, Math.min(15, chart.rating || 0));
-    // Resaltar el chart que coincide con la dificultad global elegida.
+    // Resaltar el chart que coincide con la dificultad global elegida (última
+    // jugada o seleccionada desde songs-screen).
     const isMatch = chart.name === _globalDiffKey;
     if (isMatch) el.classList.add('selected');
     el.innerHTML = `
-      <div class="chart-row-name"><strong>${chart.name}</strong>${isMatch ? ' <span style="color:var(--turquesa-400);font-size:0.78em">← global</span>' : ''}</div>
+      <div class="chart-row-name"><strong>${diffLabel(chart.name)}</strong>${isMatch ? ' <span style="color:var(--turquesa-400);font-size:0.78em">← última</span>' : ''}</div>
       <div class="chart-row-rating" title="Dificultad ${ratingNum}/15">
         <span class="chart-row-stars">★</span> ${ratingNum}
       </div>
@@ -491,7 +533,7 @@ function updatePlayCtaState() {
   if (selectedChart) {
     btn.disabled = false;
     btn.classList.add('ready');
-    if (hint) hint.textContent = `Listo: ${selectedChart.name} · ${selectedChart.count} pasos`;
+    if (hint) hint.textContent = `Listo: ${diffLabel(selectedChart.name)} · ${selectedChart.count} pasos`;
   } else {
     btn.disabled = true;
     btn.classList.remove('ready');
@@ -902,7 +944,7 @@ function updateResultsForSession(lastResult) {
     const totalScore = playSession.scores.reduce((s, r) => s + (r.score || 0), 0);
     const avgAcc = playSession.scores.reduce((s, r) => s + (r.accuracy || 0), 0) / playSession.scores.length;
     const summary = playSession.scores.map(r =>
-      `<div class="row"><span>${escapeHtml(r.title)} <small style="color:var(--gris-500)">· ${r.chartName}</small></span>` +
+      `<div class="row"><span>${escapeHtml(r.title)} <small style="color:var(--gris-500)">· ${escapeHtml(diffLabel(r.chartName))}</small></span>` +
       `<span><span class="grade-pill grade-${r.grade}">${r.grade}</span> ${(r.accuracy||0).toFixed(0)}%</span></div>`
     ).join('');
     resultsContent.insertAdjacentHTML('afterbegin',
@@ -929,7 +971,7 @@ function updateResultsForSession(lastResult) {
     <div class="label">Siguiente canción</div>
     <div class="next-title">${escapeHtml(next.songData.title)}</div>
     <div class="countdown" id="sessionCountdown">5</div>
-    <div class="progress-text">Canción ${nextIdx + 1} de ${playSession.songs.length} · ${escapeHtml(next.chartData.name)}</div>
+    <div class="progress-text">Canción ${nextIdx + 1} de ${playSession.songs.length} · ${escapeHtml(diffLabel(next.chartData.name))}</div>
     <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
       <button class="action-btn" onclick="continueSessionNow()">▶ Continuar ahora</button>
       <button class="action-btn secondary" onclick="endPlaylistSession();goto('songs')">⊘ Salir de la sesión</button>
