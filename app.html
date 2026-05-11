@@ -215,6 +215,93 @@
     }
     .shell-brand, .shell-byline, .shell-nav, .shell-actions { app-region: no-drag; }
   }
+
+  /* MODAL DE REQUISITOS (idéntico al de la landing pero con paleta del shell) */
+  .req-modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.92);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 9999;
+    padding: 20px;
+    overscroll-behavior: contain;
+  }
+  .req-modal.is-open { display: flex; }
+  .req-modal-dialog {
+    background: linear-gradient(180deg, #0f172a 0%, #1f2937 100%);
+    border: 1px solid var(--shell-border);
+    border-radius: 16px;
+    max-width: 640px; width: 100%;
+    max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.7), 0 0 60px rgba(0,190,200,0.18);
+    padding: 32px;
+    color: var(--shell-fg);
+    font-family: inherit;
+    line-height: 1.55;
+  }
+  .req-modal h2 {
+    font-family: 'Righteous', system-ui, sans-serif;
+    font-size: 1.7em;
+    margin: 0 0 8px;
+    background: linear-gradient(90deg, #18f8f6, #facc15);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+  }
+  .req-modal .lede { color: var(--shell-muted); margin-bottom: 22px; }
+  .req-modal .req-list { list-style: none; padding: 0; margin: 0 0 22px; display: grid; gap: 10px; }
+  .req-modal .req-list li {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+    border-left: 3px solid var(--shell-accent);
+    font-size: 0.95em;
+  }
+  .req-modal .req-list li strong { color: var(--shell-accent); }
+  .req-modal .req-foot {
+    font-size: 0.9em;
+    color: var(--shell-muted);
+    margin-bottom: 22px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(234,179,8,0.06);
+    border: 1px solid rgba(234,179,8,0.25);
+  }
+  .req-modal .req-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+  .req-modal .req-btn {
+    appearance: none;
+    cursor: pointer;
+    border: 0;
+    padding: 12px 22px;
+    border-radius: 10px;
+    font-family: 'Righteous', system-ui, sans-serif;
+    font-size: 0.9em;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    text-decoration: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: all .2s ease;
+  }
+  .req-modal .req-btn.primary {
+    background: linear-gradient(135deg, #00bec8, #18f8f6);
+    color: #000;
+  }
+  .req-modal .req-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(24,248,246,0.4); }
+  .req-modal .req-btn.secondary {
+    background: transparent; color: var(--shell-accent); border: 2px solid var(--shell-accent);
+  }
+  .req-modal .req-btn.secondary:hover { background: rgba(0,190,200,0.1); }
+  /* Cuando el modal está activo: ocultar shell para que no se vea el iframe vacío detrás */
+  body.shell-blocked .shell-main { display: none; }
+  body.shell-blocked .shell-nav,
+  body.shell-blocked .shell-actions { visibility: hidden; }
+
+  @media (max-width: 520px) {
+    .req-modal-dialog { padding: 22px; }
+    .req-modal h2 { font-size: 1.4em; }
+    .req-modal .req-actions { justify-content: stretch; }
+    .req-modal .req-actions .req-btn { flex: 1; }
+  }
 </style>
 </head>
 <body>
@@ -244,6 +331,59 @@
             allowfullscreen></iframe>
     <div id="shellLoading" class="shell-loading">Cargando…</div>
   </main>
+
+  <!-- Modal de requisitos: se abre automáticamente si el dispositivo no es compatible -->
+  <div id="reqModal" class="req-modal" role="dialog" aria-modal="true" aria-labelledby="reqModalTitle" hidden>
+    <div class="req-modal-dialog">
+      <h2 id="reqModalTitle">Sincro necesita un ordenador</h2>
+      <p class="lede">
+        Bailar y tocar la guitarra requieren pantalla grande, sonido decente y puertos USB para
+        conectar la alfombra o la guitarra. Por eso Sincro <strong>no funciona en móvil ni en tablet</strong>.
+      </p>
+      <ul class="req-list">
+        <li><strong>Pantalla:</strong> mínimo 14" — las flechas se ven desde 1,5-2 m al bailar.</li>
+        <li><strong>Resolución:</strong> 1024 × 600 px o superior.</li>
+        <li><strong>Sonido:</strong> altavoces o auriculares por cable (Bluetooth añade latencia).</li>
+        <li><strong>Hardware:</strong> alfombra USB y/o guitarra Guitar Hero con receptor USB.</li>
+        <li><strong>Navegador:</strong> Chrome, Edge o Firefox actualizado.</li>
+      </ul>
+      <p class="req-foot">
+        Si has llegado desde una tablet con cable OTG, la alfombra suele entrar como teclado y
+        pierde diagonales. Lo más cómodo es jugar desde un portátil, un mini-PC tipo N100 o una
+        Raspberry Pi 5.
+      </p>
+      <div class="req-actions">
+        <a href="index.html#faq" class="req-btn secondary">Ver detalles en FAQ</a>
+        <a href="index.html" class="req-btn primary">Ir a la web</a>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // Bloqueo en dispositivos no compatibles: se ejecuta ANTES del router para
+  // que el iframe no llegue a cargar el motor. Misma lógica que en index.html:
+  // viewport mínimo 1024×600 + pointer:fine.
+  (function () {
+    function isCompatibleDevice() {
+      var w = Math.max(window.innerWidth || 0, document.documentElement.clientWidth || 0);
+      var h = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
+      var hasMinResolution = (Math.max(w, h) >= 1024) && (Math.min(w, h) >= 600);
+      var hasFinePointer = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+      return hasMinResolution && hasFinePointer;
+    }
+    if (!isCompatibleDevice()) {
+      document.body.classList.add('shell-blocked');
+      var modal = document.getElementById('reqModal');
+      if (modal) {
+        modal.hidden = false;
+        modal.classList.add('is-open');
+      }
+      // Aborta la inicialización del router: lanzamos un flag global que el
+      // IIFE de abajo consulta antes de hacer nada.
+      window.__sincroShellBlocked = true;
+    }
+  })();
+</script>
 <script>
   // Shell SPA — router de hash a iframe.
   // Cada ruta carga el HTML clásico dentro del iframe; el bootstrap del HTML
@@ -257,6 +397,10 @@
   // las features delegadas al iframe.
   (function () {
     'use strict';
+    // Si el dispositivo no es compatible, el script inline previo ya mostró el
+    // modal de requisitos. NO inicializamos el router para evitar que el iframe
+    // cargue el motor (sería invisible bajo el modal pero pesaría CPU/red).
+    if (window.__sincroShellBlocked) return;
     // Targets RELATIVOS al app.html (no absolutos con "/"). Esto permite que
     // el shell funcione tanto en file:// (doble click sobre index.html) como
     // en http(s):// — los paths absolutos "/foo.html" resolverían a la raíz

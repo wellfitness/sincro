@@ -899,12 +899,126 @@ section { padding: 80px 24px; position: relative; }
   .topbar { padding: 0 16px; }
   .topbar .brand { height: 34px; gap: 8px; }
   .topbar .brand .wordmark { font-size: 24px; }
-  .topbar .primary-nav a:not(.cta-mini) { display: none; }
+  .topbar .primary-nav a:not([href="#faq"]) { display: none; }
+  .topbar .primary-nav a[href="#faq"] {
+    color: var(--turquesa-400);
+    border: 1px solid var(--turquesa-600);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.9em;
+  }
   .arrow-rain { opacity: 0.18; }
   section { padding: 60px 20px; }
   .brain-layout { grid-template-columns: 1fr; gap: 32px; }
   .site-footer .container { grid-template-columns: 1fr; gap: 24px; }
   .elena-head { flex-direction: column; align-items: flex-start; }
+}
+
+/* FAQ */
+.faq-section {
+  background: linear-gradient(180deg, transparent 0%, rgba(0,190,200,0.04) 50%, transparent 100%);
+}
+.faq-grid { display: grid; gap: 14px; max-width: 920px; margin: 0 auto; }
+.faq-item {
+  border: 1px solid rgba(24,248,246,0.18);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.02);
+  overflow: hidden;
+}
+.faq-item summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 18px 22px;
+  font-family: var(--font-display);
+  font-size: 1.05em;
+  letter-spacing: 0.4px;
+  color: var(--turquesa-400);
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  user-select: none;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after {
+  content: '+';
+  font-family: var(--font-mono);
+  font-size: 1.4em;
+  color: var(--tulip-tree-500);
+  transition: transform .2s ease;
+}
+.faq-item[open] summary::after { transform: rotate(45deg); }
+.faq-item[open] summary { background: rgba(0,190,200,0.08); border-bottom: 1px solid rgba(24,248,246,0.18); }
+.faq-body { padding: 18px 22px 22px; color: var(--gris-300); line-height: 1.65; }
+.faq-body p + p { margin-top: 12px; }
+.faq-body strong { color: #fff; }
+.faq-body ul { padding-left: 22px; margin-top: 8px; }
+.faq-body li + li { margin-top: 6px; }
+.faq-body .ok { color: var(--color-success); }
+.faq-body .warn { color: var(--color-warning); }
+.faq-body .ko { color: var(--color-error); }
+
+/* MODAL DE REQUISITOS */
+.req-modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.88);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: center; justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  overscroll-behavior: contain;
+}
+.req-modal.is-open { display: flex; }
+.req-modal-dialog {
+  background: linear-gradient(180deg, #0f172a 0%, #1f2937 100%);
+  border: 1px solid rgba(24,248,246,0.3);
+  border-radius: 16px;
+  max-width: 640px; width: 100%;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.6), 0 0 60px rgba(24,248,246,0.15);
+  padding: 32px;
+  color: #fff;
+  font-family: var(--font-sans);
+  line-height: 1.55;
+}
+.req-modal h2 {
+  font-family: var(--font-display);
+  font-size: 1.7em;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg, var(--turquesa-400), var(--tulip-tree-500));
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+.req-modal .lede {
+  color: var(--gris-300);
+  margin-bottom: 22px;
+}
+.req-modal .req-list {
+  list-style: none; padding: 0; margin: 0 0 22px;
+  display: grid; gap: 10px;
+}
+.req-modal .req-list li {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  border-left: 3px solid var(--turquesa-600);
+  font-size: 0.95em;
+}
+.req-modal .req-list li strong { color: var(--turquesa-400); }
+.req-modal .req-foot {
+  font-size: 0.9em;
+  color: var(--gris-400);
+  margin-bottom: 22px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(234,179,8,0.06);
+  border: 1px solid rgba(234,179,8,0.25);
+}
+.req-modal .req-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.req-modal .btn { font-size: 0.9em; padding: 12px 22px; }
+@media (max-width: 520px) {
+  .req-modal-dialog { padding: 22px; }
+  .req-modal h2 { font-size: 1.4em; }
+  .req-modal .req-actions { justify-content: stretch; }
+  .req-modal .req-actions .btn { flex: 1; justify-content: center; }
 }
 </style>
 </head>
@@ -923,7 +1037,7 @@ section { padding: 80px 24px; position: relative; }
       <li><a href="#cerebro">Tu cerebro</a></li>
       <li><a href="#guitarra">Guitarra</a></li>
       <li><a href="#herramientas">Herramientas</a></li>
-      <li><a href="app.html#/stepmania-play" class="cta-mini" aria-label="Ir al juego">▶ Jugar</a></li>
+      <li><a href="#faq">Requisitos</a></li>
     </ul>
   </nav>
 </header>
@@ -1390,6 +1504,142 @@ section { padding: 80px 24px; position: relative; }
     </div>
   </section>
 
+  <section id="faq" class="faq-section" aria-labelledby="faq-title">
+    <div class="container">
+      <p class="eyebrow">Antes de empezar</p>
+      <h2 id="faq-title" class="section-title">Requisitos y preguntas frecuentes</h2>
+      <p class="section-lede">
+        Sincro funciona en el navegador, sin instalar nada. Pero <strong>no en cualquier dispositivo</strong>:
+        bailar y tocar la guitarra exigen una pantalla grande, sonido decente y puertos USB para
+        el equipo. Aquí lo importante antes de empezar.
+      </p>
+
+      <div class="faq-grid">
+
+        <details class="faq-item" open>
+          <summary>¿En qué dispositivos funciona Sincro?</summary>
+          <div class="faq-body">
+            <p>
+              Sincro está pensado para <strong>ordenador</strong> — portátil de 14 pulgadas o más, sobremesa, o
+              mini-PC conectado a la tele. <span class="ko">No es compatible con móviles ni tablets</span>:
+              la pantalla se queda corta, el sonido no llega y los puertos para la alfombra o la guitarra
+              son inviables vía adaptadores.
+            </p>
+            <ul>
+              <li><span class="ok">✓ Recomendado:</span> portátil ≥ 14" con puerto USB-A nativo, altavoces o auriculares por cable.</li>
+              <li><span class="ok">✓ Viable:</span> mini-PC (tipo N100 chino o Raspberry Pi 5) conectado a TV o monitor, con USB-A.</li>
+              <li><span class="warn">! Limitado:</span> tablets Android via OTG — la alfombra suele entrar como teclado y pierde diagonales.</li>
+              <li><span class="ko">✗ No soportado:</span> iPad / iPhone — Safari restringe Web Audio en segundo plano y la cuota de almacenamiento es muy baja.</li>
+              <li><span class="ko">✗ No soportado:</span> móviles Android — la pantalla impide ver las flechas en charts intermedios y altos.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>¿Qué necesito para empezar a bailar?</summary>
+          <div class="faq-body">
+            <p>
+              Mínimo: ordenador + altavoces + <strong>una alfombra USB</strong> (RedOctane original o cualquier mat
+              genérico chino calibrable). Sirve cualquier modelo HID estándar que Windows reconozca
+              como gamepad. Si no tienes alfombra, puedes empezar con teclado (flechas ← ↓ ↑ →) para
+              probar el juego antes de comprar nada.
+            </p>
+            <p>
+              Para canciones tuyas: añade tu MP3/WAV en el AutoStepper y te genera la coreografía en
+              segundos. Para canciones ya hechas: descargas paquetes <code>.ssc/.sm</code> de StepMania
+              y los importas con un click.
+            </p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>¿Y para tocar con la guitarra de Guitar Hero?</summary>
+          <div class="faq-body">
+            <p>
+              Necesitas una <strong>guitarra de Guitar Hero (PS2 o PS3)</strong> con receptor USB. Las PS2
+              originales requieren un convertidor PS2→USB (suelen aparecer como "Sony PlayStation
+              Adapter" en el sistema, VID 054C/PID 0268). Las PS3 inalámbricas llevan su dongle USB
+              propio que suele funcionar plug-and-play.
+            </p>
+            <p>
+              Si la guitarra responde en la pestaña <strong>Comprobar el equipo</strong>, ya está lista para tocar.
+              El receptor que uses se calibra por roles (verde, rojo, amarillo, azul, naranja, strum,
+              palanca…) desde el navegador.
+            </p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>¿Por qué no funciona en móvil o tablet?</summary>
+          <div class="faq-body">
+            <p>
+              Tres motivos:
+            </p>
+            <ul>
+              <li><strong>Pantalla:</strong> las flechas caen a velocidad rápida y desde 2 metros — la distancia
+                  natural al bailar — una pantalla de 10" o menos es ilegible.</li>
+              <li><strong>Sonido:</strong> los altavoces internos de móvil/tablet no dan suficiente cuerpo para
+                  que tu cuerpo sincronice con el ritmo. Y los auriculares Bluetooth añaden 100-200 ms
+                  de latencia que rompen la jugabilidad.</li>
+              <li><strong>Conectividad:</strong> conectar alfombra o guitarra USB exige adaptadores OTG +
+                  hubs con alimentación — funciona a veces, falla muchas otras. En Android la
+                  alfombra suele entrar como teclado, sin diagonales ni botones especiales.</li>
+            </ul>
+            <p>
+              Por eso, si entras desde móvil o tablet, te enseñamos la web pero <strong>no podrás abrir el
+              juego</strong>. No es por proteger nada — es para ahorrarte una hora de frustración con cables
+              que no van a funcionar bien.
+            </p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>¿Cuánto ocupa? ¿Funciona sin internet?</summary>
+          <div class="faq-body">
+            <p>
+              Sincro instala una <strong>app web (PWA)</strong> que pesa unos 2 MB. Una vez instalada funciona
+              sin internet — tus canciones se guardan en el navegador (IndexedDB) en tu propio dispositivo.
+              <strong>Nada se sube a ningún servidor.</strong> Si cambias de equipo puedes exportar todo a un
+              ZIP de respaldo y restaurarlo después.
+            </p>
+            <p>
+              Las canciones ocupan típicamente 3-8 MB cada una (audio + chart). Con 1 GB libres
+              caben cientos.
+            </p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>¿Es gratis? ¿Tiene anuncios? ¿Hay registro?</summary>
+          <div class="faq-body">
+            <p>
+              Sí, sí y no. Sincro es <strong>gratis, sin anuncios y sin registro</strong>. No hay cuenta de usuario,
+              no hay servidor, no hay tracking. Es parte del proyecto Movimiento Funcional como
+              herramienta libre de entrenamiento cardio-cognitivo.
+            </p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>¿Qué pasa si mi alfombra es vieja o china barata?</summary>
+          <div class="faq-body">
+            <p>
+              Casi cualquier alfombra USB funciona. La herramienta <strong>Comprobar el equipo</strong> tiene
+              un asistente de calibración que te deja mapear los 10 roles físicos (cardinales, diagonales,
+              start/back) sin importar qué números de botón use tu modelo concreto. También detecta
+              sensores pegados, mide bouncing y comprueba qué saltos puedes hacer.
+            </p>
+            <p>
+              Si tu alfombra no tiene paneles diagonales, no pasa nada — el modo por defecto (4 carriles
+              cardinales) cubre el 95% de las canciones. Solo Solo/Full mode pide diagonales.
+            </p>
+          </div>
+        </details>
+
+      </div>
+    </div>
+  </section>
+
   <section class="final-cta" aria-labelledby="final-title">
     <div class="arrow-rain" aria-hidden="true">
       <div class="arrow-lane lane-1"><span>←</span></div>
@@ -1490,6 +1740,98 @@ section { padding: 80px 24px; position: relative; }
     </p>
   </div>
 </footer>
+
+<!-- Modal de requisitos: se muestra automáticamente en pantallas pequeñas o al pulsar CTAs en dispositivo no compatible -->
+<div id="req-modal" class="req-modal" role="dialog" aria-modal="true" aria-labelledby="req-modal-title" aria-describedby="req-modal-lede" hidden>
+  <div class="req-modal-dialog">
+    <h2 id="req-modal-title">Sincro necesita un ordenador</h2>
+    <p id="req-modal-lede" class="lede">
+      Bailar y tocar la guitarra requieren pantalla grande, sonido decente y puertos USB para
+      conectar la alfombra o la guitarra. Por eso Sincro <strong>no funciona en móvil ni en tablet</strong>.
+    </p>
+    <ul class="req-list">
+      <li><strong>Pantalla:</strong> mínimo 14" — las flechas se ven desde 1,5-2 m al bailar.</li>
+      <li><strong>Resolución:</strong> 1024 × 600 px o superior (laptop, sobremesa, mini-PC + TV).</li>
+      <li><strong>Sonido:</strong> altavoces o auriculares por cable (Bluetooth añade latencia).</li>
+      <li><strong>Hardware:</strong> alfombra USB y/o guitarra Guitar Hero con receptor USB.</li>
+      <li><strong>Navegador:</strong> Chrome, Edge o Firefox actualizado (Safari no soporta todo).</li>
+    </ul>
+    <p class="req-foot">
+      Si has llegado desde una tablet con cable OTG, la alfombra suele entrar como teclado y
+      pierde diagonales. No es un fallo del juego — es una limitación de hardware Android. Lo más
+      cómodo es jugar desde un portátil parado, un mini-PC chino tipo N100 o una Raspberry Pi 5.
+    </p>
+    <div class="req-actions">
+      <a href="#faq" class="btn secondary" data-req-close>Ver detalles en FAQ</a>
+      <button type="button" class="btn primary" data-req-close>Entendido</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // Detección de compatibilidad: viewport + pointer
+  function isCompatibleDevice() {
+    var w = Math.max(window.innerWidth || 0, document.documentElement.clientWidth || 0);
+    var h = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
+    // Resolución mínima jugable: 1024 × 600 (laptop básico, mini-PC + TV 720p)
+    var hasMinResolution = (Math.max(w, h) >= 1024) && (Math.min(w, h) >= 600);
+    // Puntero fino (ratón/trackpad). Touch-only dispositivos quedan fuera incluso si la pantalla es grande.
+    var hasFinePointer = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+    return hasMinResolution && hasFinePointer;
+  }
+
+  var modal = document.getElementById('req-modal');
+  if (!modal) return;
+  var compatible = isCompatibleDevice();
+  var lastFocus = null;
+
+  function openModal() {
+    lastFocus = document.activeElement;
+    modal.hidden = false;
+    modal.classList.add('is-open');
+    document.documentElement.style.overflow = 'hidden';
+    var btn = modal.querySelector('[data-req-close]');
+    if (btn) btn.focus();
+  }
+  function closeModal() {
+    modal.classList.remove('is-open');
+    modal.hidden = true;
+    document.documentElement.style.overflow = '';
+    if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+  }
+
+  // Cierre del modal (botones, click fuera, ESC)
+  modal.addEventListener('click', function(e){
+    if (e.target === modal) closeModal();
+    if (e.target.closest && e.target.closest('[data-req-close]')) {
+      // El link "Ver detalles en FAQ" cierra el modal y deja al navegador seguir el href
+      if (!e.target.closest('a[href]')) e.preventDefault();
+      closeModal();
+    }
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+  });
+
+  // Si no compatible: bloquear TODOS los enlaces al juego (app.html, play.html y demás HTML del motor)
+  if (!compatible) {
+    var GAME_SELECTORS = 'a[href^="app.html"], a[href*="play.html"], a[href*="stepmania-play.html"], a[href*="gh-play.html"], a[href*="autostepper.html"], a[href*="gh-autostepper.html"], a[href*="test-pad.html"], a[href*="tutorial.html"], a[href*="calibration.html"]';
+    document.querySelectorAll(GAME_SELECTORS).forEach(function(a){
+      a.addEventListener('click', function(e){
+        e.preventDefault();
+        openModal();
+      });
+    });
+    // Auto-popup al cargar la página
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', openModal);
+    } else {
+      openModal();
+    }
+  }
+})();
+</script>
 
 </body>
 </html>
