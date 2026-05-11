@@ -2056,14 +2056,40 @@ function stopSync() {
     let rec = '';
     if (Math.abs(avg) < 25) {
       rec = `<span style="color:#00ff64">Excelente sincronización (offset &lt; 25ms). No deberías necesitar ajustar el Global Offset.</span>`;
-    } else if (avg > 0) {
-      rec = `<span style="color:#ffaa00">Llegas <strong>tarde</strong> ${Math.round(avg)}ms en promedio. En StepMania, prueba un Global Offset de <strong>+${(avg/1000).toFixed(3)}</strong> segundos (o calibrar Machine Sync).</span>`;
     } else {
-      rec = `<span style="color:#ffaa00">Llegas <strong>temprano</strong> ${Math.round(-avg)}ms en promedio. En StepMania, prueba un Global Offset de <strong>${(avg/1000).toFixed(3)}</strong> segundos.</span>`;
+      const suggested = Math.max(-200, Math.min(200, Math.round(avg)));
+      const sign = suggested >= 0 ? '+' : '';
+      if (avg > 0) {
+        rec = `<span style="color:#ffaa00">Llegas <strong>tarde</strong> ${Math.round(avg)}ms en promedio. Sugerencia: Global Offset = <strong>${sign}${suggested} ms</strong>.</span>`;
+      } else {
+        rec = `<span style="color:#ffaa00">Llegas <strong>temprano</strong> ${Math.round(-avg)}ms en promedio. Sugerencia: Global Offset = <strong>${sign}${suggested} ms</strong>.</span>`;
+      }
+      rec += `<div style="margin-top:10px"><button class="action-btn" onclick="applySyncOffsetToSettings(${suggested})">Aplicar a Ajustes</button></div>`;
+      rec += `<div id="syncApplyHint" style="margin-top:6px;font-size:0.85em;color:#888"></div>`;
     }
     document.getElementById('syncRecommendation').innerHTML = rec;
   }
   syncState = null;
+}
+
+// Aplica el offset detectado al `settings` global persistido en localStorage.
+// Replicamos aquí la lectura/escritura para no tener que cargar core.js entero
+// en test-pad.html — el contrato (key 'stepmania-web-settings', shape
+// {globalOffset, scrollSpeed, timingWindow}) está definido en
+// stepmania-web/js/core.js:355-367. Si cambia allí, cambiar aquí también.
+function applySyncOffsetToSettings(ms) {
+  const KEY = 'stepmania-web-settings';
+  let cur = {};
+  try { cur = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { cur = {}; }
+  cur.globalOffset = ms;
+  if (cur.scrollSpeed == null) cur.scrollSpeed = 1.0;
+  if (cur.timingWindow == null) cur.timingWindow = 'j5';
+  try { localStorage.setItem(KEY, JSON.stringify(cur)); } catch (e) {}
+  const hint = document.getElementById('syncApplyHint');
+  if (hint) {
+    const sign = ms >= 0 ? '+' : '';
+    hint.innerHTML = `<span style="color:#00ff64">✓ Aplicado. Global Offset = ${sign}${ms} ms (guardado en Ajustes).</span>`;
+  }
 }
 onPress(({ bit, time }) => {
   if (!syncState || !syncState.lastBeat) return;
@@ -3089,6 +3115,31 @@ onPress(({ bit, time }) => {
 onRelease(({ bit }) => {
   if (chordsState) chordsState.currentlyHeld.delete(bit);
 });
+
+// ============================================================
+//  Deep-link al tab "Sync de audio" desde calibration.html y app.html
+//  --------------------------------------------------------------
+//  Hashes soportados al cargar:
+//    #alfombra-sync, #mat-sync, #sync   → modo mat + tab "Sync de audio"
+//    #guitarra-sync, #guitar-sync       → modo guitar + tab "Sync de audio"
+//  El antiguo calibration.html (ahora un redirect) apunta a #alfombra-sync,
+//  así que cualquier deep-link viejo aterriza directamente en el tab unificado
+//  sin que el usuario tenga que cambiar de modo ni de pestaña a mano.
+(function deepLinkSyncTab() {
+  const h = (window.location.hash || '').replace(/^#/, '').toLowerCase();
+  if (!h) return;
+  const wantMat    = (h === 'sync' || h === 'mat-sync' || h === 'alfombra-sync');
+  const wantGuitar = (h === 'guitar-sync' || h === 'guitarra-sync');
+  if (!wantMat && !wantGuitar) return;
+  const targetMode = wantGuitar ? 'guitar' : 'mat';
+  // switchMode() ya hace el toggle de view/tabs y resetea estados; lo llamamos
+  // sólo si vamos a guitar (mat es el default al cargar).
+  if (targetMode !== currentMode) switchMode(targetMode);
+  // El tab "sync" existe en ambos sets (tabs-mat y tabs-guitar). Buscamos el
+  // del modo activo y lo activamos.
+  const btn = document.querySelector(`#tabs-${targetMode} .tab-btn[data-tab="sync"]`);
+  if (btn) showTab('sync', btn);
+})();
 
 </script>
 </body>

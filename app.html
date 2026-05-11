@@ -245,9 +245,13 @@
     // del disco bajo file://, que no contiene los HTML.
     // /play apunta al DASHBOARD (play.html) que ahora es solo el menú de
     // cards. Para arrancar directamente en el motor DDR usar /stepmania-play.
-    // tutorial.html y calibration.html viven como archivos propios — accesibles
-    // desde las cards del dashboard, no se promocionan en el topbar para
-    // no inflar la nav (entran como secundarias).
+    // tutorial.html vive como archivo propio — accesible desde las cards del
+    // dashboard, no se promociona en el topbar para no inflar la nav.
+    //
+    // /calibration apunta directamente al test-pad con el hash que activa el
+    // tab "Sync de audio" (la calibración de audio se fusionó allí en
+    // 2026-05-12). Mantener la ruta preserva deep-links externos
+    // (#/calibration sigue resolviendo a una página útil).
     var ROUTES = {
       '/play':           'play.html',
       '/stepmania-play': 'stepmania-play.html',
@@ -256,7 +260,7 @@
       '/gh-autostepper': 'gh-autostepper.html',
       '/test-pad':       'test-pad.html',
       '/tutorial':       'tutorial.html',
-      '/calibration':    'calibration.html',
+      '/calibration':    'test-pad.html#alfombra-sync',
       '/about':          'index.html'
     };
     var DEFAULT_ROUTE = '/play';

@@ -33,7 +33,9 @@ async function refreshSongs() {
   document.getElementById('songsSubtitle').textContent = `${songs.length} canciones en tu librería`;
   // Attach best run a cada canción para el filtro de grade. Una sola query
   // de runs y agrupamos en memoria — evita N+1 transacciones a IndexedDB.
-  const allRuns = await dbRunsAll();
+  // Filtramos por gameType='sm' porque la DB se comparte con GH y los songIds
+  // de cada store son autoincrement independientes (pueden coincidir números).
+  const allRuns = filterRunsByGame(await dbRunsAll(), 'sm');
   const runsBySong = new Map();
   for (const r of allRuns) {
     if (!runsBySong.has(r.songId)) runsBySong.set(r.songId, []);
@@ -216,8 +218,9 @@ async function renderDiffScreen() {
   c.innerHTML = '';
   // Cargamos todos los runs de la canción y agrupamos por chartKey. Para cada
   // dificultad mostramos al CAMPEÓN (mejor score considerando todos los
-  // jugadores), no la última partida de cualquiera.
-  const allRuns = await dbRunsForSong(selectedSong.id);
+  // jugadores), no la última partida de cualquiera. Filtramos SM porque la DB
+  // se comparte con GH (mismo songId numérico puede existir en ambos juegos).
+  const allRuns = filterRunsByGame(await dbRunsForSong(selectedSong.id), 'sm');
   const championByChart = {};
   const countByChart = {};
   for (const r of allRuns) {
@@ -536,7 +539,7 @@ window._stopPreviewLoop = stopPreviewLoop;
 // `.scores-modal` (overlay flotante) — sin dependencias de framework de modales.
 async function openChartScoresModal(chartKey) {
   if (!selectedSong) return;
-  const runs = await dbRunsForChart(selectedSong.id, chartKey);
+  const runs = filterRunsByGame(await dbRunsForChart(selectedSong.id, chartKey), 'sm');
   const ranking = bestRunPerPlayer(runs); // 1 fila por jugador (su mejor)
   const allSorted = rankRuns(runs);       // todas las partidas, score desc
   const songTitle = selectedSong.title;

@@ -136,7 +136,10 @@ async function exportGHBackupZip() {
   } catch (e) { /* mapping inválido → no se incluye, sigue */ }
 
   const meta = {
-    version: 1,
+    // v2 añade el array `runs` por canción (puntuaciones arcade). Backups v1
+    // se siguen importando — `runs` queda undefined y los charts se restauran
+    // sin ranking.
+    version: 2,
     kind: 'gh-backup',
     exportedAt: new Date().toISOString(),
     guitarMapping,
@@ -151,13 +154,19 @@ async function exportGHBackupZip() {
     const audioBytes = new Uint8Array(await e.audioBlob.arrayBuffer());
     files.push({ name: audioPath, data: audioBytes });
     files.push({ name: chartPath, data: enc.encode(e.chartText || '') });
+    // Filtramos por gameType='gh' — la DB es compartida con SM y un songId
+    // numérico puede coincidir entre ambos stores (autoincrement separado).
+    const runs = filterRunsByGame(await dbRunsForSong(e.id), 'gh');
     meta.songs.push({
       title: e.title, artist: e.artist,
       bpm: e.bpm, duration: e.duration,
       audioName: e.audioName, audioPath, chartPath,
       diffs: e.diffs, totalNotes: e.totalNotes,
       genre: e.genre, charter: e.charter,
-      addedAt: e.addedAt
+      addedAt: e.addedAt,
+      // Strip campos regenerables al importar (id viene del autoincrement
+      // nuevo, chartId/playerLower se recalculan en función del nuevo songId).
+      runs: runs.map(({ id, songId, chartId, playerLower, ...rest }) => rest)
     });
   }
   files.push({ name: 'metadata.json', data: enc.encode(JSON.stringify(meta, null, 2)) });
@@ -227,7 +236,7 @@ async function importGHBackupZip(file) {
     const audioBlob = new Blob([audioEntry.data], { type: mime });
     const chartText = dec.decode(chartEntry.data);
     try {
-      await window.GHLibrary.add({
+      const newId = await window.GHLibrary.add({
         title: songMeta.title, artist: songMeta.artist,
         bpm: songMeta.bpm, duration: songMeta.duration,
         chartText, audioBlob, audioName: songMeta.audioName,
@@ -235,6 +244,21 @@ async function importGHBackupZip(file) {
         genre: songMeta.genre, charter: songMeta.charter,
         addedAt: songMeta.addedAt || Date.now()
       });
+      // Restaurar puntuaciones GH bajo el nuevo songId (autoincrement). Solo
+      // backups v2+ traen `runs`; v1 los omite.
+      if (Array.isArray(songMeta.runs)) {
+        for (const run of songMeta.runs) {
+          const playerName = run.playerName || 'Anónimo';
+          await dbRunAdd({
+            ...run,
+            gameType: 'gh',
+            songId: newId,
+            chartId: chartIdOf(newId, run.chartKey),
+            playerName,
+            playerLower: playerName.toLowerCase()
+          });
+        }
+      }
       imported++;
       setStatus(`Restaurando ${imported}/${(meta.songs||[]).length}...`);
     } catch (err) {

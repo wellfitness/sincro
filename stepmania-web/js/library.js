@@ -34,7 +34,10 @@ async function refreshLibrary() {
   // Alternativa N+1 (dbRunsForSong por cada fila) lanzaría 1 transacción de
   // IndexedDB por canción y en bibliotecas de 50+ canciones es notablemente
   // más lento (cada `transaction()` paga overhead aunque sea readonly).
-  const [songs, info, allRuns] = await Promise.all([dbAll(), getStorageInfo(), dbRunsAll()]);
+  // Filtramos por gameType='sm' porque la DB se comparte con GH y los songIds
+  // de `songs` y `gh-songs` son autoincrement independientes.
+  const [songs, info, allRunsRaw] = await Promise.all([dbAll(), getStorageInfo(), dbRunsAll()]);
+  const allRuns = filterRunsByGame(allRunsRaw, 'sm');
   const runsBySong = new Map();
   for (const r of allRuns) {
     if (!runsBySong.has(r.songId)) runsBySong.set(r.songId, []);
@@ -425,8 +428,11 @@ document.getElementById('backupRestoreInput')?.addEventListener('change', e => {
 // últimas 10 partidas. Se reusa la misma clase `.scores-modal` que el modal
 // de song-select para coherencia visual.
 async function openSongScoresModal(songId) {
-  const [song, runs] = await Promise.all([dbGet(songId), dbRunsForSong(songId)]);
+  const [song, runsRaw] = await Promise.all([dbGet(songId), dbRunsForSong(songId)]);
   if (!song) return;
+  // Filtramos por gameType='sm' — la DB se comparte con GH y los songIds
+  // pueden colisionar (autoincrement separado en cada store).
+  const runs = filterRunsByGame(runsRaw, 'sm');
   // Agrupamos runs por chartKey y ordenamos cada grupo.
   const byChart = new Map();
   for (const r of runs) {

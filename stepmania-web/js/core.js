@@ -152,11 +152,14 @@ if (typeof document !== 'undefined') {
 }
 
 // ----- IndexedDB: songs + runs + gh-songs (compartida con GH suite) ---------
-// Schema v4 reemplaza el store `scores` (1 fila por canción+chart) por `runs`
-// (autoincrement, una fila por partida). Permite ranking arcade con nombre de
-// jugador e histórico de progresión. La migración de v3 a v4 borra `scores`
-// limpiamente — decisión consciente del producto: empezar con rankings vacíos
-// en lugar de mantener entries legacy sin nombre.
+// Schema v4: store `runs` (autoincrement, una fila por partida) reemplaza al
+// antiguo `scores` (1 fila por canción+chart sin nombre de jugador). Permite
+// ranking arcade con histórico de progresión. La migración v3→v4 borra
+// `scores` limpiamente — decisión consciente del producto.
+//
+// MISMA migración vive en `scores.js`, `gh-db.js` y `autostepper.html` (4
+// entrypoints abren la DB; quien abra primero corre `onupgradeneeded`).
+// Si cambias el schema, actualízalo en los 4 sitios o tendrás VersionError.
 const DB_NAME = 'StepManiaWebDB';
 const DB_VERSION = 4;
 let dbPromise = null;
@@ -170,19 +173,13 @@ function openDB() {
       if (!db.objectStoreNames.contains('songs')) {
         db.createObjectStore('songs', { keyPath: 'id', autoIncrement: true });
       }
-      // v3→v4: wipe `scores` (no había nombre de jugador, semánticamente roto
-      // para arcade) y reemplazar por `runs` autoincrement.
       if (e.oldVersion < 4 && db.objectStoreNames.contains('scores')) {
         db.deleteObjectStore('scores');
       }
       if (!db.objectStoreNames.contains('runs')) {
         const rs = db.createObjectStore('runs', { keyPath: 'id', autoIncrement: true });
         rs.createIndex('songId',      'songId',      { unique: false });
-        // `chartId` ('songId:chartKey' como string) acelera la consulta de
-        // ranking de una dificultad concreta — el caso de uso más frecuente.
         rs.createIndex('chartId',     'chartId',     { unique: false });
-        // `playerLower` (nombre en lowercase) permite búsquedas case-insensitive
-        // de "todas las partidas de un jugador" sin tener que escanear todo.
         rs.createIndex('playerLower', 'playerLower', { unique: false });
       }
       if (!db.objectStoreNames.contains('gh-songs')) {
@@ -239,118 +236,11 @@ async function dbPut(song) {
     req.onerror = () => rej(req.error);
   });
 }
-// ----- Runs (puntuaciones arcade) -------------------------------------------
-// Cada partida acabada inserta una fila. NO se sobrescriben — el ranking se
-// calcula en JS con `bestRunPerPlayer()` / `rankRuns()`. Ver schema en
-// `onupgradeneeded`. La key compuesta `chartId` (string 'songId:chartKey') vive
-// en cada fila para que el índice del mismo nombre filtre eficientemente.
-async function dbRunAdd(run) {
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('runs', 'readwrite');
-    const req = tx.objectStore('runs').add(run);
-    req.onsuccess = () => res(req.result);
-    req.onerror = () => rej(req.error);
-  });
-}
-async function dbRunsForChart(songId, chartKey) {
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('runs', 'readonly');
-    const req = tx.objectStore('runs').index('chartId').getAll(chartIdOf(songId, chartKey));
-    req.onsuccess = () => res(req.result || []);
-    req.onerror = () => rej(req.error);
-  });
-}
-async function dbRunsForSong(songId) {
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('runs', 'readonly');
-    const req = tx.objectStore('runs').index('songId').getAll(songId);
-    req.onsuccess = () => res(req.result || []);
-    req.onerror = () => rej(req.error);
-  });
-}
-async function dbRunsAll() {
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('runs', 'readonly');
-    const req = tx.objectStore('runs').getAll();
-    req.onsuccess = () => res(req.result || []);
-    req.onerror = () => rej(req.error);
-  });
-}
-async function dbRunDelete(id) {
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('runs', 'readwrite');
-    const req = tx.objectStore('runs').delete(id);
-    req.onsuccess = () => res();
-    req.onerror = () => rej(req.error);
-  });
-}
-async function dbRunsClearForChart(songId, chartKey) {
-  const runs = await dbRunsForChart(songId, chartKey);
-  await Promise.all(runs.map(r => dbRunDelete(r.id)));
-}
-async function dbRunsClearForSong(songId) {
-  const runs = await dbRunsForSong(songId);
-  await Promise.all(runs.map(r => dbRunDelete(r.id)));
-}
-
-// ----- Helpers puros (testeables sin IndexedDB) -----------------------------
-// `chartIdOf` produce la clave compuesta tanto al insertar como al consultar.
-// Si cambia el separador, hay que cambiarlo en un solo sitio.
-function chartIdOf(songId, chartKey) { return songId + ':' + chartKey; }
-
-// Saneamiento del nombre del jugador antes de persistir. Cap 12 chars (estilo
-// arcade), strip de control chars (evita corromper el render si alguien pega
-// un  ), trim de whitespace. Si queda vacío devolvemos 'Anónimo' para que
-// el ranking sea legible y no tenga filas con string vacío.
-function sanitizePlayerName(s) {
-  const cleaned = String(s == null ? '' : s)
-    .replace(/[\x00-\x1f\x7f]/g, '')   // control chars (incluye DEL)
-    .replace(/\s+/g, ' ')              // collapse whitespace
-    .trim()
-    .slice(0, 12);
-  return cleaned || 'Anónimo';
-}
-
-// Orden arcade: score desc; ties por playedAt asc (la partida más antigua que
-// alcanzó ese score se queda con la posición). Estable cuando ambos son iguales.
-function rankRuns(runs) {
-  return runs.slice().sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return (a.playedAt || 0) - (b.playedAt || 0);
-  });
-}
-
-// Para mostrar "top de la canción" colapsamos a un run por jugador (su mejor).
-// Case-insensitive: 'Elena' y 'elena' se funden bajo el mismo playerLower, pero
-// el nombre que se renderiza es el del run ganador (preserva casing original).
-function bestRunPerPlayer(runs) {
-  const byPlayer = new Map();
-  for (const r of runs) {
-    const key = r.playerLower || (r.playerName || '').toLowerCase();
-    const prev = byPlayer.get(key);
-    if (!prev || r.score > prev.score ||
-        (r.score === prev.score && (r.playedAt || 0) < (prev.playedAt || 0))) {
-      byPlayer.set(key, r);
-    }
-  }
-  return rankRuns(Array.from(byPlayer.values()));
-}
-
-// ----- Último nombre de jugador (localStorage) ------------------------------
-// Prefill del input "tu nombre" entre sesiones. Compartido con GH si en el
-// futuro se añade el mismo sistema de runs allí.
-const LAST_PLAYER_KEY = 'sincro-last-player';
-function getLastPlayerName() {
-  try { return localStorage.getItem(LAST_PLAYER_KEY) || ''; } catch (e) { return ''; }
-}
-function setLastPlayerName(name) {
-  try { localStorage.setItem(LAST_PLAYER_KEY, name); } catch (e) {}
-}
+// El store `runs` (puntuaciones arcade) y todos sus wrappers viven en
+// `stepmania-web/js/scores.js`. Helpers puros (chartIdOf, sanitizePlayerName,
+// rankRuns, bestRunPerPlayer) y localStorage helpers (getLastPlayerName /
+// setLastPlayerName) también. Carga scores.js antes de core.js en cualquier
+// HTML que necesite ranking; los tests apuntan directamente a scores.js.
 
 // ----- Settings (localStorage) ----------------------------------------------
 const SETTINGS_KEY = 'stepmania-web-settings';
@@ -386,15 +276,3 @@ function openSettings() {
   document.getElementById('timingWinVal').textContent = TIMING_WIN_LABEL[settings.timingWindow] || 'J5';
 }
 function closeSettings() { document.getElementById('settingsModal').classList.remove('show'); }
-
-// ----- Doble export CJS para tests (Vitest) ---------------------------------
-// Solo helpers puros — las funciones de IndexedDB/localStorage no son testeables
-// en Node sin mocks pesados. Mismo patrón que parser.js y difficulty-tiers.js.
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    chartIdOf,
-    sanitizePlayerName,
-    rankRuns,
-    bestRunPerPlayer
-  };
-}

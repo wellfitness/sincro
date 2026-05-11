@@ -142,7 +142,6 @@ sincro/
 │       ├── backup.js             Backup/restore ZIP completo
 │       ├── song-select.js        Pantalla de selección de canción
 │       ├── pad-test.js           Lógica del test de hardware
-│       ├── calibration.js        Pantalla de calibración con metrónomo
 │       ├── game.js               Motor de juego (loop, render, scoring)
 │       ├── gh-db.js              Wrapper IndexedDB para charts GH
 │       ├── app.js                Router top-level + bindings de settings

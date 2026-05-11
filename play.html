@@ -155,12 +155,12 @@
         <div class="menu-card" onclick="window.location.href='test-pad.html'">
           <div class="icon">🛠️</div>
           <div class="title">Comprobar el equipo</div>
-          <div class="desc">Diagnóstico de alfombra y guitarra: calibración, latencia, saltos/chords, rasgueo, palanca, sensores pegados, sync.</div>
+          <div class="desc">Diagnóstico de alfombra y guitarra: calibración de mapping, latencia, saltos/chords, rasgueo, palanca, sensores pegados y <strong>sync de audio</strong> (mide tu desfase real con metrónomo y aplícalo a Ajustes).</div>
         </div>
-        <div class="menu-card" onclick="window.location.href='calibration.html'">
-          <div class="icon">🎯</div>
-          <div class="title">Calibración audio</div>
-          <div class="desc">Mide tu desfase real con un metrónomo y aplícalo en Ajustes.</div>
+        <div class="menu-card" onclick="window.location.href='rankings.html'">
+          <div class="icon">🏆</div>
+          <div class="title">Puntuaciones</div>
+          <div class="desc">Rankings arcade por canción y jugador (alfombra y guitarra). Exporta tu progreso en <code>.json</code> para no perderlo si borras los datos del navegador.</div>
         </div>
         <div class="menu-card" onclick="window.location.href='tutorial.html'">
           <div class="icon">📖</div>
@@ -178,10 +178,12 @@
 
 <!--
   Dashboard puro: el motor SM vive en stepmania-play.html, el tutorial en
-  tutorial.html, la calibración en calibration.html, AutoStepper en
-  autostepper.html, test pad en test-pad.html, GH en gh-play.html. Aquí solo
-  cargamos lo mínimo: core.js para gamepad pill + settings modal.
+  tutorial.html, la calibración de audio dentro del test-pad (tab "Sync de
+  audio"), AutoStepper en autostepper.html, test pad en test-pad.html, GH en
+  gh-play.html. Aquí solo cargamos lo mínimo: core.js para gamepad pill +
+  settings modal.
 -->
+<script src="stepmania-web/js/scores.js"></script>
 <script src="stepmania-web/js/core.js"></script>
 <script>
   // Kickoff: solo el polling de gamepad (para que el padPill se actualice

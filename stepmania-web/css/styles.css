@@ -1253,14 +1253,18 @@ details summary:hover { color: #fff; }
 }
 .ranking-tab:hover { color: #fff; }
 .ranking-tab.disabled { opacity: 0.4; cursor: not-allowed; }
-#rkTabTop:checked  ~ .ranking-tab[for="rkTabTop"],
-#rkTabMine:checked ~ .ranking-tab[for="rkTabMine"] {
+/* Selector agnóstico de IDs concretos (SM usa rkTabTop/rkTabMine, GH usa
+   ghRkTabTop/ghRkTabMine). Usamos :nth-of-type sobre los radios dentro de
+   .ranking-tabs para identificar 1º/2º. El label "activo" se identifica por
+   posición vía hermanos siguientes con `:nth-of-type(N)` sobre `.ranking-tab`. */
+.ranking-tabs > input[type="radio"]:nth-of-type(1):checked ~ .ranking-tab:nth-of-type(1),
+.ranking-tabs > input[type="radio"]:nth-of-type(2):checked ~ .ranking-tab:nth-of-type(2) {
   color: var(--turquesa-400);
   border-bottom-color: var(--turquesa-400);
 }
 .ranking-pane { display: none; width: 100%; padding-top: 12px; }
-#rkTabTop:checked  ~ .ranking-pane-top,
-#rkTabMine:checked ~ .ranking-pane-mine {
+.ranking-tabs > input[type="radio"]:nth-of-type(1):checked ~ .ranking-pane-top,
+.ranking-tabs > input[type="radio"]:nth-of-type(2):checked ~ .ranking-pane-mine {
   display: block;
 }
 
@@ -1271,15 +1275,24 @@ details summary:hover { color: #fff; }
   display: flex; flex-direction: column; gap: 4px;
 }
 .ranking-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
-  gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 10px;
   padding: 8px 14px;
   background: rgba(255,255,255,0.03);
   border-radius: 8px;
   font-size: 0.92em;
 }
+.ranking-row .rank-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ranking-row .rank-score { text-align: left; }
+/* Botón delete en la lista de "todas las partidas" — único elemento que se
+   alinea al final (resto del row va pegado a la izquierda). */
+.ranking-row .run-delete-btn { margin-left: auto; }
 .ranking-row.is-me { background: rgba(0,190,200,0.12); }
 .ranking-row.is-just-saved {
   animation: just-saved-pulse 1.5s ease-out;
@@ -1290,10 +1303,10 @@ details summary:hover { color: #fff; }
   100% { background: rgba(0,190,200,0.12); }
 }
 .ranking-row .rank-num   { color: var(--gris-400); font-family: 'Consolas', monospace; font-weight: 700; min-width: 28px; }
-.ranking-row .rank-name  { color: #fff; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .ranking-row .rank-date  { color: var(--gris-400); font-size: 0.86em; font-family: 'Consolas', monospace; }
 .ranking-row .rank-grade { font-family: 'Consolas', monospace; font-weight: 800; font-size: 0.85em; padding: 2px 8px; border-radius: 6px; letter-spacing: 0.05em; }
-.ranking-row .rank-score { color: #ffbe0b; font-family: 'Consolas', monospace; font-weight: 700; text-align: right; }
+.ranking-row .rank-score { color: #ffbe0b; font-family: 'Consolas', monospace; font-weight: 700; }
+.ranking-row .rank-name  { color: #fff; font-weight: 600; }
 .ranking-empty { color: var(--gris-500); padding: 12px; text-align: center; font-style: italic; }
 
 /* Coloreado de grades en las pills compactas (.rank-grade y .champ-grade).

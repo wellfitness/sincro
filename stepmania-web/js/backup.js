@@ -28,7 +28,9 @@ async function exportBackupZip() {
     const audioBytes = new Uint8Array(await s.audioBlob.arrayBuffer());
     files.push({ name: audioName, data: audioBytes });
     files.push({ name: sscName,  data: enc.encode(s.sscText) });
-    const runs = await dbRunsForSong(s.id);
+    // Solo runs SM — la DB es compartida con GH; si exportamos sin filtrar
+    // metemos runs de guitarra en el backup de stepmania.
+    const runs = filterRunsByGame(await dbRunsForSong(s.id), 'sm');
     // Strip campos regenerables al importar (id viene del autoincrement nuevo,
     // chartId y playerLower se recalculan en función del nuevo songId).
     meta.songs.push({
@@ -135,6 +137,7 @@ async function importBackupZip(file) {
         const playerName = run.playerName || 'Anónimo';
         await dbRunAdd({
           ...run,
+          gameType: 'sm',  // backup SM solo importa runs SM
           songId: newId,
           chartId: chartIdOf(newId, run.chartKey),
           playerName,

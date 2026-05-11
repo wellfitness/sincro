@@ -1096,6 +1096,7 @@
 </div>
 
 <script src="stepmania-web/js/audio-pipeline.js"></script>
+<script src="stepmania-web/js/scores.js"></script>
 <script src="stepmania-web/js/gh-db.js"></script>
 <script src="stepmania-web/js/gh-backup.js"></script>
 <script>
@@ -1178,6 +1179,14 @@ async function refreshLibraryList() {
   }
   const entries = await window.GHLibrary.all();
   countEl.textContent = entries.length ? `(${entries.length})` : '';
+  // Cargamos TODOS los runs de GH una sola vez y agrupamos por songId.
+  // Evita N+1 transacciones IndexedDB cuando la biblioteca crece.
+  const allRuns = filterRunsByGame(await dbRunsAll(), 'gh');
+  const runsBySong = new Map();
+  for (const r of allRuns) {
+    if (!runsBySong.has(r.songId)) runsBySong.set(r.songId, []);
+    runsBySong.get(r.songId).push(r);
+  }
   // Recalcular la caché de notas/diff/chart para la leyenda de densidad.
   // Se hace aquí (no en cada render del select) porque parsear chartText
   // de varias canciones tiene coste — pero solo cambia cuando la biblioteca
@@ -1209,6 +1218,25 @@ async function refreshLibraryList() {
   for (const e of entries) {
     const dur = e.duration ? `${Math.floor(e.duration/60)}:${('0'+Math.floor(e.duration%60)).slice(-2)}` : '?';
     const isMarked = selectedGHIds.has(e.id);
+    // Campeón: mejor score absoluto entre TODAS las dificultades de la canción.
+    // No filtramos por dificultad — el #1 puede haber salido en Expert y sigue
+    // siendo el top de la canción. La dificultad aparece junto al nombre.
+    const songRuns = runsBySong.get(e.id) || [];
+    let championHtml;
+    if (songRuns.length === 0) {
+      championHtml = '<div class="lib-row-champion empty">Sin puntuaciones todavía</div>';
+    } else {
+      const champ = rankRuns(songRuns)[0];
+      championHtml = `<div class="lib-row-champion" title="${songRuns.length} partida${songRuns.length === 1 ? '' : 's'} guardada${songRuns.length === 1 ? '' : 's'}">
+        👑 <strong>${escHtml(champ.playerName || 'Anónimo')}</strong>
+        <span class="champ-diff">${escHtml(ghDiffLabel(champ.chartKey))}</span>
+        <span class="champ-grade g-${(champ.grade || '').toLowerCase()}">${escHtml(champ.grade || '')}</span>
+        <span class="champ-score">${(champ.score || 0).toLocaleString()}</span>
+      </div>`;
+    }
+    const scoresBtn = songRuns.length > 0
+      ? `<button class="icon-btn" style="padding:8px 12px" onclick="openGhSongScoresModal(${e.id})" title="Ver todas las puntuaciones">🏆</button>`
+      : '';
     html += `<div class="lib-row${isMarked ? ' in-playlist' : ''}">
       <input type="checkbox" class="playlist-checkbox" ${isMarked ? 'checked' : ''}
         onchange="togglePlaylistSelection(${e.id})" title="Marcar para sesión continua"
@@ -1216,9 +1244,11 @@ async function refreshLibraryList() {
       <div style="flex:1;min-width:0">
         <div style="color:#fff;font-weight:600">${escHtml(e.title || 'Sin título')}</div>
         <div style="color:var(--gris-400);font-size:0.85em">${escHtml(e.artist || 'Unknown')} · ${e.bpm ? e.bpm.toFixed(1) + ' BPM' : ''} · ${dur} · ${e.totalNotes || 0} notas</div>
+        ${championHtml}
       </div>
       <div style="display:flex;gap:6px">
         <button class="action-btn" style="padding:8px 16px;font-size:0.95em" onclick="playFromLibrary(${e.id})">▶ Tocar</button>
+        ${scoresBtn}
       </div>
     </div>`;
   }
@@ -1236,7 +1266,7 @@ async function playFromLibrary(id) {
   if (!entry) { alert('Partitura no encontrada en biblioteca'); return; }
   try {
     const audioBytes = new Uint8Array(await entry.audioBlob.arrayBuffer());
-    await loadSong(entry.chartText, audioBytes, entry.audioName || 'song.mp3');
+    await loadSong(entry.chartText, audioBytes, entry.audioName || 'song.mp3', id);
     document.getElementById('zipDrop')?.classList.remove('loaded');
     document.getElementById('chartDrop')?.classList.remove('loaded');
     document.getElementById('audioDrop')?.classList.remove('loaded');
@@ -1665,7 +1695,13 @@ async function handleAudioFile(file) {
   }
 }
 
-async function loadSong(chartText, audioBytes, audioFilename) {
+// `libraryId` se pasa solo desde `playFromLibrary` para que `finishGame`
+// pueda construir el run con el songId correcto. Cargas manuales (ZIP suelto,
+// chart+audio drop) lo dejan en null y el run no se persiste — sin id de
+// biblioteca no hay forma de asociar el ranking a una canción concreta.
+let _currentGhSongId = null;
+async function loadSong(chartText, audioBytes, audioFilename, libraryId) {
+  _currentGhSongId = libraryId || null;
   try {
     const parsed = parseChart(chartText);
     if (Object.keys(parsed.charts).length === 0) throw new Error('La partitura no tiene secciones de notas (Easy/Medium/Hard/Expert Single)');
@@ -2788,6 +2824,34 @@ function finishGame() {
         <span class="jcount">${game.overstrums}</span>
       </div>`;
 
+  // Construimos el run pendiente — solo se persiste tras capturar el nombre.
+  // Si no hay songId de biblioteca (carga manual de ZIP suelto), no podemos
+  // asociar el run a una canción, así que omitimos el form.
+  if (_currentGhSongId != null) {
+    _pendingGhRun = {
+      gameType: 'gh',
+      songId:    _currentGhSongId,
+      chartKey:  game.diff,
+      chartId:   chartIdOf(_currentGhSongId, game.diff),
+      score:     Math.round(game.score),
+      grade,
+      accuracy:  +accuracy.toFixed(2),
+      maxCombo:  game.maxCombo,
+      judgments: { ...j, overstrums: game.overstrums },
+      mods:      {},
+      playedAt:  Date.now()
+    };
+  } else {
+    _pendingGhRun = null;
+  }
+  const lastName = escHtml(getLastPlayerName());
+  const saveFormHtml = _pendingGhRun ? `
+    <div id="ghResultsScoreSave" class="score-save-form">
+      <label for="ghPlayerNameInput">Tu nombre</label>
+      <input id="ghPlayerNameInput" type="text" maxlength="12" value="${lastName}" placeholder="Tu nombre" autocomplete="off">
+      <button id="ghSaveRunBtn" class="action-btn primary">Guardar puntuación</button>
+    </div>` : '';
+
   const stats = document.getElementById('resultsStats');
   stats.innerHTML = `
     <div class="results-header">
@@ -2799,7 +2863,19 @@ function finishGame() {
       </div>
     </div>
     <div class="results-judgments">${judgmentRows}</div>
+    ${saveFormHtml}
   `;
+  // Wire-up del form de guardar puntuación. Autofocus solo si no hay nombre
+  // prefilled (no robamos foco al texto si el usuario ya escribió antes).
+  if (_pendingGhRun) {
+    const inp = document.getElementById('ghPlayerNameInput');
+    const btn = document.getElementById('ghSaveRunBtn');
+    if (inp && btn) {
+      btn.addEventListener('click', () => { saveCurrentGhRun().catch(e => console.error('saveCurrentGhRun:', e)); });
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); btn.click(); } });
+      if (!lastName) inp.focus();
+    }
+  }
   // Hook playlist mode: si hay sesión activa, inyecta banner de siguiente o
   // resumen final. Capturamos los datos antes de game = null.
   const sessionResult = playSession ? {
@@ -2809,6 +2885,123 @@ function finishGame() {
   } : null;
   game = null;
   if (sessionResult) updateResultsForSession(sessionResult);
+}
+
+// Run "pendiente" de GH — construido en finishGame, persistido en
+// saveCurrentGhRun tras capturar el nombre. Vive a nivel de módulo porque
+// `game = null` ocurre antes de que el usuario haya pulsado Guardar.
+let _pendingGhRun = null;
+
+async function saveCurrentGhRun() {
+  if (!_pendingGhRun) return;
+  const inp = document.getElementById('ghPlayerNameInput');
+  const name = sanitizePlayerName(inp ? inp.value : '');
+  setLastPlayerName(name);
+  const run = {
+    ..._pendingGhRun,
+    playerName: name,
+    playerLower: name.toLowerCase()
+  };
+  const { songId, chartKey } = run;
+  _pendingGhRun = null;
+  let newId;
+  try {
+    newId = await dbRunAdd(run);
+  } catch (e) {
+    console.error('No se pudo guardar la puntuación:', e);
+    _pendingGhRun = run;
+    return;
+  }
+  const form = document.getElementById('ghResultsScoreSave');
+  if (!form) return;
+  const panel = document.createElement('div');
+  panel.id = 'ghResultsRankingPanel';
+  panel.className = 'ranking-panel';
+  form.replaceWith(panel);
+  await renderGhRankingPanel(panel, songId, chartKey, newId, name);
+}
+
+// Posición del run recién guardado + 2 tabs CSS-only (Top de la canción /
+// Mi progresión). Mismo formato que el panel de SM, con clases que ya tiene
+// styles.css. Filtramos por gameType='gh' para no mezclar con runs SM que
+// puedan compartir songId (los stores de canciones son autoincrement
+// independientes).
+async function renderGhRankingPanel(container, songId, chartKey, justSavedId, playerName) {
+  const allRuns = filterRunsByGame(await dbRunsForChart(songId, chartKey), 'gh');
+  const bestRanking = bestRunPerPlayer(allRuns);
+  const myRuns = allRuns
+    .filter(r => r.playerLower === playerName.toLowerCase())
+    .sort((a, b) => (b.playedAt || 0) - (a.playedAt || 0));
+
+  const myBestRow = bestRanking.find(r => r.playerLower === playerName.toLowerCase());
+  const myPos = myBestRow ? bestRanking.indexOf(myBestRow) + 1 : null;
+  const totalPlayers = bestRanking.length;
+  const justSavedIsBest = myBestRow && myBestRow.id === justSavedId;
+
+  let deltaHtml = '';
+  if (myRuns.length >= 2) {
+    const prev = myRuns.find(r => r.id !== justSavedId);
+    if (prev) {
+      const delta = (myRuns[0].score - prev.score);
+      const sign = delta >= 0 ? '+' : '−';
+      const cls = delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : 'delta-zero';
+      deltaHtml = `<span class="ranking-delta ${cls}">${sign}${Math.abs(delta).toLocaleString()} vs partida anterior</span>`;
+    }
+  }
+
+  let posPillHtml = '';
+  if (myPos === 1 && justSavedIsBest) {
+    posPillHtml = `<div class="position-pill is-top">¡Nuevo #1 en ${escHtml(ghDiffLabel(chartKey))}!</div>`;
+  } else if (myPos) {
+    posPillHtml = `<div class="position-pill">Tu posición: #${myPos} de ${totalPlayers} jugador${totalPlayers === 1 ? '' : 'es'}</div>`;
+  }
+
+  const topRows = bestRanking.slice(0, 5).map((r, i) => {
+    const isMe = r.playerLower === playerName.toLowerCase();
+    const isJust = r.id === justSavedId;
+    const cls = [isMe ? 'is-me' : '', isJust ? 'is-just-saved' : ''].filter(Boolean).join(' ');
+    return `
+      <li class="ranking-row ${cls}">
+        <span class="rank-num">#${i + 1}</span>
+        <span class="rank-name">${escHtml(r.playerName || 'Anónimo')}</span>
+        <span class="rank-grade g-${(r.grade || '').toLowerCase()}">${escHtml(r.grade || '—')}</span>
+        <span class="rank-score">${(r.score || 0).toLocaleString()}</span>
+      </li>`;
+  }).join('');
+
+  const progRows = myRuns.slice(0, 8).map((r, i, arr) => {
+    const next = arr[i + 1];
+    const delta = next ? (r.score - next.score) : null;
+    const deltaSpan = delta !== null
+      ? `<span class="ranking-delta ${delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : 'delta-zero'}">${delta >= 0 ? '+' : '−'}${Math.abs(delta).toLocaleString()}</span>`
+      : '<span class="ranking-delta"></span>';
+    const date = r.playedAt ? new Date(r.playedAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    const isJust = r.id === justSavedId ? 'is-just-saved' : '';
+    return `
+      <li class="ranking-row ${isJust}">
+        <span class="rank-date">${escHtml(date)}</span>
+        <span class="rank-grade g-${(r.grade || '').toLowerCase()}">${escHtml(r.grade || '—')}</span>
+        <span class="rank-score">${(r.score || 0).toLocaleString()}</span>
+        ${deltaSpan}
+      </li>`;
+  }).join('');
+
+  container.innerHTML = `
+    ${posPillHtml}
+    ${deltaHtml ? `<div class="ranking-delta-wrap">${deltaHtml}</div>` : ''}
+    <div class="ranking-tabs">
+      <input type="radio" name="ghRankingTab" id="ghRkTabTop" checked>
+      <label for="ghRkTabTop" class="ranking-tab">Top de la canción</label>
+      <input type="radio" name="ghRankingTab" id="ghRkTabMine"${myRuns.length < 2 ? ' disabled' : ''}>
+      <label for="ghRkTabMine" class="ranking-tab${myRuns.length < 2 ? ' disabled' : ''}" title="${myRuns.length < 2 ? 'Necesitas al menos 2 partidas en esta dificultad' : ''}">Mi progresión</label>
+      <div class="ranking-pane ranking-pane-top">
+        <ol class="ranking-list">${topRows || '<li class="ranking-empty">Sin puntuaciones todavía</li>'}</ol>
+      </div>
+      <div class="ranking-pane ranking-pane-mine">
+        <ol class="ranking-list">${progRows || '<li class="ranking-empty">Solo has jugado esta partida</li>'}</ol>
+      </div>
+    </div>
+  `;
 }
 function returnToSetup() {
   // Si volvemos al menú con una sesión activa, cancelar el countdown para
@@ -3189,6 +3382,81 @@ window.addEventListener('hashchange', applyHash);
 // Bootstrap inicial — leer hash y mostrar la pantalla correcta. El preview
 // vivo NO se arranca aquí: solo cuando el usuario abre el modal ⚙.
 applyHash();
+
+// ============================================================================
+//                         MODAL DE PUNTUACIONES POR CANCIÓN
+// ============================================================================
+// Acordeón por dificultad: cada sección muestra el ranking por jugador y un
+// botón "Limpiar dificultad". Reutiliza la clase `.scores-modal` que ya tiene
+// styles.css (originalmente del motor SM). Filtramos por gameType='gh'.
+async function openGhSongScoresModal(songId) {
+  const [entry, runsRaw] = await Promise.all([
+    window.GHLibrary.get(songId),
+    dbRunsForSong(songId)
+  ]);
+  if (!entry) return;
+  const runs = filterRunsByGame(runsRaw, 'gh');
+  const byChart = new Map();
+  for (const r of runs) {
+    if (!byChart.has(r.chartKey)) byChart.set(r.chartKey, []);
+    byChart.get(r.chartKey).push(r);
+  }
+  const _ORDER = ['EasySingle', 'MediumSingle', 'HardSingle', 'ExpertSingle'];
+  const orderedKeys = Array.from(byChart.keys()).sort((a, b) => {
+    const ia = _ORDER.indexOf(a), ib = _ORDER.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+
+  const sections = orderedKeys.map(chartKey => {
+    const chartRuns = byChart.get(chartKey);
+    const ranking = bestRunPerPlayer(chartRuns).slice(0, 10);
+    const totalPlays = chartRuns.length;
+    const rankRows = ranking.map((r, i) => `
+      <li class="ranking-row">
+        <span class="rank-num">#${i + 1}</span>
+        <span class="rank-name">${escHtml(r.playerName || 'Anónimo')}</span>
+        <span class="rank-grade g-${(r.grade || '').toLowerCase()}">${escHtml(r.grade || '—')}</span>
+        <span class="rank-score">${(r.score || 0).toLocaleString()}</span>
+      </li>`).join('');
+    return `
+      <details class="scores-modal-chart" open>
+        <summary>
+          <strong>${escHtml(ghDiffLabel(chartKey))}</strong>
+          <span class="muted">${totalPlays} partida${totalPlays === 1 ? '' : 's'} · ${ranking.length} jugador${ranking.length === 1 ? '' : 'es'}</span>
+        </summary>
+        <ol class="ranking-list">${rankRows}</ol>
+      </details>`;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'scores-modal';
+  overlay.innerHTML = `
+    <div class="scores-modal-inner">
+      <button class="scores-modal-close" aria-label="Cerrar">×</button>
+      <h2>${escHtml(entry.title || 'Sin título')}</h2>
+      <p class="scores-modal-sub">${escHtml(entry.artist || 'Unknown')} · ${runs.length} partida${runs.length === 1 ? '' : 's'} en total</p>
+      <div class="scores-modal-section">
+        ${sections || '<p class="muted">Sin puntuaciones todavía.</p>'}
+      </div>
+      <div class="scores-modal-actions">
+        <button class="action-btn danger scores-clear-btn">Limpiar todas las puntuaciones de esta canción</button>
+        <button class="action-btn scores-close-btn">Cerrar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => { overlay.remove(); refreshLibraryList(); };
+  overlay.querySelector('.scores-modal-close').addEventListener('click', close);
+  overlay.querySelector('.scores-close-btn').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  overlay.querySelector('.scores-clear-btn').addEventListener('click', async () => {
+    if (!confirm(`¿Borrar TODAS las puntuaciones de "${entry.title}"? Esto no se puede deshacer.`)) return;
+    // Como dbRunsClearForSong borra TODOS los runs con este songId (no
+    // discrimina gameType), iteramos y borramos solo los de GH.
+    for (const r of runs) await dbRunDelete(r.id);
+    close();
+  });
+}
 </script>
 </body>
 </html>

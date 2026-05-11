@@ -24,7 +24,10 @@ const SCREEN_NAMES = ['menu', 'pad', 'create', 'library', 'songs', 'diff', 'play
 // que cualquier goto('songs') desde código antiguo te lleva al motor.
 // stepmania-play.html tiene library/songs/diff/play/results pero NO tiene
 // menu/calib/tutorial/create/pad, así que goto('menu') te devuelve al
-// dashboard, goto('calib') a calibration.html, etc.
+// dashboard, goto('calib') al test-pad con el tab Sync de audio activo, etc.
+// 'calib' apunta al test-pad porque la calibración de audio se fusionó como
+// tab "Sync de audio" del test-pad (2026-05-12). El hash #alfombra-sync activa
+// directamente modo alfombra + tab sync.
 const SCREEN_EXTERNAL = {
   menu:     'play.html',
   songs:    'stepmania-play.html',
@@ -32,7 +35,7 @@ const SCREEN_EXTERNAL = {
   diff:     'stepmania-play.html',
   play:     'stepmania-play.html',
   results:  'stepmania-play.html',
-  calib:    'calibration.html',
+  calib:    'test-pad.html#alfombra-sync',
   tutorial: 'tutorial.html',
   create:   'autostepper.html',
   pad:      'test-pad.html'

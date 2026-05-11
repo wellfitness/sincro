@@ -6,7 +6,7 @@
 // requiere fake-indexeddb y eso es testear el navegador, no nuestra lógica.
 
 import { describe, it, expect } from 'vitest';
-import pkg from '../stepmania-web/js/core.js';
+import pkg from '../stepmania-web/js/scores.js';
 const { chartIdOf, sanitizePlayerName, rankRuns, bestRunPerPlayer } = pkg;
 
 describe('chartIdOf', () => {

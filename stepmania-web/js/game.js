@@ -1286,6 +1286,7 @@ async function endGame() {
   // el form de guardar no se renderiza.
   if (selectedSong && selectedChart) {
     _pendingRun = {
+      gameType: 'sm',
       songId:   selectedSong.id,
       chartKey: selectedChart.key,
       chartId:  chartIdOf(selectedSong.id, selectedChart.key),
@@ -1398,7 +1399,9 @@ async function saveCurrentRun() {
 // Renderiza la posición del run + 2 tabs (Top canción / Mi progresión).
 // Tabs son CSS-only (radio buttons ocultos + :checked + ~ selectors).
 async function renderRankingPanel(container, songId, chartKey, justSavedId, playerName) {
-  const allRuns = await dbRunsForChart(songId, chartKey);
+  // Solo runs de SM — la DB es compartida con GH, así que filtramos por
+  // gameType para no mezclar rankings de bailar y de guitarra.
+  const allRuns = filterRunsByGame(await dbRunsForChart(songId, chartKey), 'sm');
   const bestRanking = bestRunPerPlayer(allRuns);
   const myRuns = allRuns
     .filter(r => r.playerLower === playerName.toLowerCase())

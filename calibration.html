@@ -5,87 +5,41 @@
 <title>Sincro — Calibración audio</title>
 <meta name="theme-color" content="#00bec8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
-<link rel="apple-touch-icon" href="icons/icon.svg">
-<script src="stepmania-web/js/pwa-bootstrap.js"></script>
-<link rel="stylesheet" href="stepmania-web/css/styles.css">
+<meta name="description" content="Sincro: redirección a la nueva ubicación del calibrador de audio (tab Sync del test-pad).">
+<!--
+  Redirect del antiguo standalone calibration.html al tab "Sync de audio" del
+  test-pad. Hasta 2026-05-12 esta página vivía como herramienta independiente
+  (metrónomo + tap) duplicando la funcionalidad ya presente en test-pad.html.
+  La consolidación elimina la duplicidad y centraliza toda la calibración bajo
+  un único punto: Comprobar el equipo → Sync de audio.
+
+  Se mantiene la URL por compatibilidad con deep-links externos (manifest
+  shortcuts, posibles bookmarks, README antiguo). Dos escenarios:
+
+  1. Standalone (acceso directo a calibration.html): redirige el navegador
+     entero a test-pad.html#alfombra-sync vía location.replace para no
+     dejar la entrada en el history (back vuelve al referrer original, no a
+     este redirect).
+
+  2. Embebido en app.html (iframe del shell SPA): el shell carga directamente
+     test-pad.html#alfombra-sync vía la ruta /calibration en app.html, así que
+     este HTML no se renderiza en ese flujo. El redirect solo dispara en
+     accesos directos.
+-->
+<meta http-equiv="refresh" content="0; url=test-pad.html#alfombra-sync">
+<link rel="canonical" href="test-pad.html#alfombra-sync">
 <style>
-  /* Página de un solo screen — sin lógica SPA. Forzamos visibilidad
-     porque el HTML que copiamos viene con class="screen hidden". */
-  #calib-screen { display: block !important; }
-  #calib-screen.hidden { display: block !important; }
+  body { margin: 0; padding: 40px 20px; background: #0f172a; color: #e2e8f0;
+         font-family: system-ui, -apple-system, sans-serif; text-align: center; }
+  a { color: #00bec8; }
 </style>
 </head>
 <body>
-
-<nav id="topbar">
-  <div class="logo" onclick="window.location.href='play.html'">⚡ Sincro</div>
-  <div class="crumb">· Calibración audio</div>
-  <div class="spacer"></div>
-  <div class="topbar-nav">
-    <button class="topbar-link" onclick="window.location.href='play.html'" title="Volver al menú">⌂ Menú</button>
-    <button class="topbar-link" onclick="window.location.href='stepmania-play.html'" title="Bailar con alfombra">🦶 Bailar</button>
-    <button class="topbar-link" onclick="window.location.href='test-pad.html'" title="Probar hardware">🛠️ Equipo</button>
-  </div>
-  <div class="pill off" id="padPill">alfombra: no detectada</div>
-</nav>
-
-<!-- CALIBRATION SCREEN -->
-<div class="screen hidden" id="calib-screen">
-  <div class="container">
-    <h1>Calibración</h1>
-    <p class="subtitle">Mide tu offset real con el metrónomo y aplícalo a Ajustes</p>
-
-    <div class="card">
-      <h2>Cómo funciona</h2>
-      <p style="color:var(--gris-300);font-size:0.9em;line-height:1.5">
-        Inicia el metrónomo y pisa cualquier panel (o pulsa <strong>ESPACIO</strong>) al ritmo del tic. Tras 20-30 pisadas, pulsa "Detener" para ver tu offset promedio. Si pisas siempre tarde, el valor sugerido será positivo; si pisas adelantado, negativo.
-      </p>
-    </div>
-
-    <div class="card">
-      <div class="param">
-        <div class="param-header">
-          <span class="param-label">🎵 BPM</span>
-          <span class="param-value" id="calibBpmDisplay">120</span>
-        </div>
-        <input type="range" id="calibBpmSlider" min="60" max="180" step="1" value="120" oninput="calibUpdateBpm(this.value)">
-      </div>
-      <div style="display:flex;justify-content:center;align-items:center;gap:24px;margin:20px 0">
-        <div id="calibPulse" style="width:120px;height:120px;border-radius:50%;background:rgba(0,190,200,0.15);border:4px solid var(--turquesa-600);display:flex;align-items:center;justify-content:center;font-size:2.5em;font-weight:800;transition:all 0.1s">●</div>
-        <div style="font-family:var(--font-mono);font-size:0.9em">
-          <div>Beats: <span id="calibBeats" style="color:var(--turquesa-400)">0</span></div>
-          <div>Pisadas: <span id="calibSteps" style="color:var(--turquesa-400)">0</span></div>
-          <div>Offset medio: <span id="calibOffset" style="color:var(--tulip-tree-500);font-size:1.2em;font-weight:700">-- ms</span></div>
-        </div>
-      </div>
-      <div style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-        <button class="action-btn" id="calibStart" onclick="startCalib()">▶ Iniciar metrónomo</button>
-        <button class="action-btn secondary" id="calibStop" onclick="stopCalib()" disabled>■ Detener y analizar</button>
-      </div>
-      <div id="calibRecommendation" style="margin-top:14px;font-size:0.9em"></div>
-    </div>
-
-    <div style="text-align:center;margin-top:14px">
-      <button class="action-btn secondary" onclick="window.location.href='play.html'">← Volver al menú</button>
-    </div>
-  </div>
-</div>
-
-<!--
-  Módulos necesarios:
-    core         → audioCtx + gamepad polling + settings.globalOffset
-    calibration  → startCalib / stopCalib / calibUpdateBpm + metrónomo
--->
-<script src="stepmania-web/js/core.js"></script>
-<script src="stepmania-web/js/calibration.js"></script>
-<script>
-  // Kickoff: gamepad polling para que la pisada en la alfombra se registre
-  // como tap durante la calibración (calibration.js hookea spacebar y el
-  // estado del gamepad). No hay goto() — la pantalla siempre está visible.
-  pollGamepad();
-</script>
-
+  <p>Redirigiendo a <a href="test-pad.html#alfombra-sync">Comprobar el equipo · Sync de audio</a>…</p>
+  <script>
+    // Fallback JS por si <meta refresh> está bloqueado por política CSP o ad-blocker.
+    // location.replace en lugar de href para no inflar el history stack.
+    window.location.replace('test-pad.html#alfombra-sync');
+  </script>
 </body>
 </html>

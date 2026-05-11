@@ -18,7 +18,7 @@ Landing pública del producto **Sincro**. HTML semántico autocontenido (CSS emb
 - 8 referencias DOI verificadas (PubMed/Scholar Gateway): Singh 2025 BJSM, Yoong 2024, Chen 2021, Lavigne 2025, Benzing 2019, Gong 2016, Särkämö 2013, Bentley 2022, Pasinski 2016, Zaatar 2023.
 
 ### `play.html` (dashboard)
-**Dashboard puro** — la pantalla principal con las 9 cards organizadas en 3 secciones: **StepMania** (Bailar / Crear coreografías / Mis canciones), **Guitar Hero** (Tocar / Crear partituras / Mis canciones GH), **Comunes** (Comprobar el equipo / Calibración audio / Tutorial). Cada card es un enlace directo al archivo correspondiente — NO usa SPA goto() porque ya no hay screens internas que mostrar.
+**Dashboard puro** — la pantalla principal con 8 cards organizadas en 3 secciones: **StepMania** (Bailar / Crear coreografías / Mis canciones), **Guitar Hero** (Tocar / Crear partituras / Mis canciones GH), **Comunes** (Comprobar el equipo / Tutorial). Cada card es un enlace directo al archivo correspondiente — NO usa SPA goto() porque ya no hay screens internas que mostrar. Hasta 2026-05-12 había 9 cards (con una dedicada a "Calibración audio"), pero esa funcionalidad se fusionó en el tab "Sync de audio" del test-pad para eliminar el duplicado.
 
 Hasta 2026-05-11 `play.html` era un SPA monolítico de 1021 líneas con 10 screens (menu, pad, create, library, songs, diff, play, results, calib, tutorial). La separación a archivos dedicados deja `play.html` en ~280 líneas y es solo head + topbar + settings modal + menu-screen + bindings minimales del modal. El motor DDR vive ahora en `stepmania-play.html`. Las pantallas Calibración y Tutorial son archivos propios. AutoStepper y Test pad ya vivían fuera.
 
@@ -46,10 +46,12 @@ Funcionalidad end-to-end:
 **Página estática** con el tutorial completo de la app (8 pestañas: Para empezar, Cómo jugar, Crear coreografías, Probar la alfombra, Calibración, Biblioteca, Ajustes, Otras herramientas). Carga solo `pwa-bootstrap.js` + `styles.css` — sin ningún módulo del motor. El switcher de pestañas vive en un `<script>` inline de 10 líneas. Es un archivo de un solo screen sin lógica SPA.
 
 ### `calibration.html`
-**Página standalone** con el metrónomo + tap para medir el offset real del usuario. Carga `core.js` + `calibration.js` + `pwa-bootstrap.js`. Sin settings modal local — el botón "Aplicar a Ajustes" persiste a `localStorage` vía `saveSettings()`, y `applyCalibration` (en `calibration.js`) hace null-checks sobre `#globalOffset` / `#globalOffsetVal` para tolerar que el modal no exista aquí. El handler de SPACE en `calibration.js:130` detecta el modo standalone vía `typeof currentScreen === 'undefined'` y activa SPACE siempre (cuando vive en SPA seguiría exigiendo `currentScreen === 'calib'`).
+**Redirect HTML** (2026-05-12) a `test-pad.html#alfombra-sync`. Hasta esa fecha era una página standalone con metrónomo + tap que **duplicaba** funcionalidad ya presente en el tab "Sync de audio" del `test-pad.html`. La consolidación elimina la duplicidad: un único punto de calibración bajo *Comprobar el equipo → Sync de audio*. La URL se conserva por compatibilidad con deep-links externos (manifest shortcuts, posibles bookmarks). Implementado con `<meta http-equiv="refresh">` + `window.location.replace()` JS fallback. El JS original (`stepmania-web/js/calibration.js`) se eliminó en el mismo commit — su lógica de aplicar offset a `settings.globalOffset` vive ahora en `test-pad.html` como `applySyncOffsetToSettings(ms)` (mismo key `'stepmania-web-settings'` de `core.js`, sin necesidad de cargar `core.js` entero).
+
+El test-pad acepta los hashes `#alfombra-sync` / `#mat-sync` / `#sync` (modo mat) y `#guitarra-sync` / `#guitar-sync` (modo guitar) al cargar — activan automáticamente el modo y el tab correspondiente vía `deepLinkSyncTab()` al final del script.
 
 ### `stepmania-web/js/core.js`
-Módulo base compartido por **todos los archivos del motor**: `play.html` (dashboard), `stepmania-play.html` (motor), `calibration.html`, y referenciado indirectamente por `gh-play.html`. Carga primero en cada archivo. Expone en scope global:
+Módulo base compartido por **todos los archivos del motor**: `play.html` (dashboard), `stepmania-play.html` (motor), y referenciado indirectamente por `gh-play.html`. Carga primero en cada archivo. Expone en scope global:
 
 - **`escapeHtml`, `formatTime`, `safeFn`, `getExt`, `yieldUI`** — helpers triviales.
 - **`ensureAudioCtx()`** — crea/devuelve un `AudioContext` singleton. Síncrono, NO hace `resume()`. Para callers que solo necesitan `decodeAudioData` (funciona en estado `'suspended'`).
@@ -352,13 +354,13 @@ Doble click sobre los `.html` los abre en el navegador por defecto. Hay dos modo
 - **App instalada (PWA):** el manifest abre `app.html#/play` (dashboard). Desde ahí el usuario navega al motor o cualquier herramienta vía las cards. El shell SPA envuelve los 9 HTMLs clásicos vía iframe + hash routing — cero refactor del motor de juego.
 
 Puntos de entrada sin shell (debug, link directo, lo que la PWA no usa por defecto):
-- `play.html` → dashboard con 9 cards (StepMania / Guitar Hero / Comunes).
+- `play.html` → dashboard con 8 cards (StepMania / Guitar Hero / Comunes).
 - `stepmania-play.html` → motor DDR directo (con hash `#library` para abrir biblioteca).
 - `gh-play.html` → simulador Guitar Hero (con hash `#library`).
 - `autostepper.html` / `gh-autostepper.html` → generadores standalone.
 - `test-pad.html` → diagnóstico hardware (alfombra y guitarra).
 - `tutorial.html` → tutorial completo.
-- `calibration.html` → metrónomo + tap para offset.
+- `calibration.html` → redirect a `test-pad.html#alfombra-sync` (calibración de audio fusionada como tab del test-pad).
 
 Para los Python: `python test_pad.py` desde PowerShell. Requiere Python 3.x estándar (sin paquetes adicionales).
 
@@ -378,7 +380,7 @@ Botón "Instalar app" en el shell: aparece cuando el navegador captura `beforein
 
 - **`manifest.webmanifest`** — `start_url: /app.html#/play`, `id: /app.html`, `display: standalone` con `display_override: window-controls-overlay`, `theme_color: #00bec8`, `background_color: #0f172a`, 4 shortcuts (Jugar / GH / AutoStepper / Test pad) cada uno apuntando a su ruta del shell.
 - **`sw.js`** (raíz, scope `/`) — estrategia mixta:
-  - `install`: precache del shell estático (HTMLs + CSS + JS modules + iconos + manifest). El listado vive en `PRECACHE_URLS` al inicio del fichero. Tras la separación de archivos (2026-05-11), precache cubre `play.html` + `stepmania-play.html` + `tutorial.html` + `calibration.html` además de los demás HTMLs.
+  - `install`: precache del shell estático (HTMLs + CSS + JS modules + iconos + manifest). El listado vive en `PRECACHE_URLS` al inicio del fichero. Tras la separación de archivos (2026-05-11) y la consolidación de la calibración (2026-05-12), precache cubre `play.html` + `stepmania-play.html` + `tutorial.html` + `calibration.html` (redirect) + los demás HTMLs, pero **NO** incluye `calibration.js` (eliminado).
   - `fetch HTML navigation`: network-first con fallback a precache. Un deploy nuevo se nota sin "vaciar caché". Si offline y nada cacheado, el fallback es **inteligente por ruta** (`sw.js:106-130`): rutas del shell SPA (`/`, `/app*`, `/play*`, `/stepmania-play*`, `/gh-*`, `/autostepper*`, `/test-pad*`, `/tutorial*`, `/calibration*`) caen a `/app.html` para no perder el contexto de la PWA; cualquier otra URL navegacional cae a `/index.html` (la landing pública).
   - `fetch CSS/JS/iconos same-origin`: cache-first con runtime fallback. Shell offline-ready.
   - `fetch Google Fonts`: stale-while-revalidate.
