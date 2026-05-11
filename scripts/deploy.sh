@@ -1,13 +1,15 @@
 #!/bin/bash
 # Deploy Sincro a Hostinger via FTP.
-# Sube el shell estático (HTML + sw + manifest + iconos + stepmania-web/) a
-# public_html del subdominio play.movimientofuncional.app.
+# Sube TODO el shell estático (HTML + sw + manifest + iconos + imágenes +
+# stepmania-web/) a public_html del subdominio play.movimientofuncional.app.
 #
-# Diferencia con cadencia/deploy.sh: sincro es vanilla JS sin bundler — no
-# existe dist/. Subimos desde la raíz con LISTA DE INCLUSIÓN EXPLÍCITA:
-# así, un archivo nuevo en raíz (.env.local accidental, tests/, docs
-# internos, README.md, package.json, etc.) NUNCA se filtra a producción
-# si no está listado abajo.
+# Estrategia: git como fuente de verdad.
+#   - Enumeramos con `git ls-files` (no se filtran archivos sin trackear).
+#   - Excluimos sólo categorías claramente NO-prod (docs/.md, scripts dev,
+#     fuentes .png originales 7 MB, tests, dirs de dev como design-system/,
+#     stepmania-5_1-new/, .claude/, .husky/, etc.).
+#   - Resultado: todo asset versionado y necesario para producción se sube
+#     automáticamente. Añades una imagen nueva, la commiteas, y sube sola.
 #
 # Patron base mantenido (mismo que cadencia y KinesisLab): bash + curl,
 # cero deps, lee credenciales de .env.local (gitignored).
@@ -63,6 +65,27 @@ upload_file() {
   fi
 }
 
+# ──────────────────────────────────────────────
+# Construir lista de archivos a subir
+# ──────────────────────────────────────────────
+# Patrones EXCLUIDOS (no van a producción):
+#   - Docs/configs locales: *.md, .gitignore, LICENSE, package.json,
+#     pnpm-lock.yaml, vitest.config.mjs
+#   - Scripts dev: scripts/, *.py
+#   - Tests: tests/
+#   - Imagen fuente: *.png (las .webp optimizadas SÍ se suben — los .png
+#     originales pesan ~7 MB cada uno y no se referencian en HTML)
+#   - Dirs ajenos: .claude/, .husky/, design-system/, stepmania-5_1-new/
+#
+# Si algún día necesitas subir un .md o un .png a producción, ajusta la
+# regex aquí abajo — pero piensa dos veces (¿de verdad lo quieren ver los
+# crawlers / es seguro?).
+
+# Patterns con `/` matchean prefijo de directorio (sin $); patterns de archivo
+# exacto llevan `$`. Bash regex no permite mezclar bien anclas dentro de
+# alternativas con un solo `^...$`, así que cada item lleva su propio anchor.
+EXCLUDE_REGEX='^(\.gitignore$|\.claude/|\.husky/|design-system/|stepmania-5_1-new/|scripts/|tests/|node_modules/|LICENSE$|README\.md$|CLAUDE\.md$|PLAN.*\.md$|package\.json$|pnpm-lock\.yaml$|vitest\.config\.mjs$)|\.py$|\.png$'
+
 echo "=========================================="
 echo "  Deploy Sincro a Hostinger"
 echo "=========================================="
@@ -70,60 +93,27 @@ echo "Host: $FTP_HOST"
 echo "Dir:  $FTP_REMOTE_DIR (relativo al public_html del subdominio)"
 echo ""
 
-# ──────────────────────────────────────────────
-# 1) Archivos HTML + PWA shell de la raíz
-# ──────────────────────────────────────────────
-# Lista EXPLÍCITA. Si añades un .html nuevo (gh-create.html, etc.), añádelo aquí
-# manualmente — esa fricción intencional evita filtrar archivos accidentales.
-ROOT_FILES=(
-  index.html
-  app.html
-  play.html
-  stepmania-play.html
-  gh-play.html
-  autostepper.html
-  gh-autostepper.html
-  test-pad.html
-  tutorial.html
-  calibration.html
-  manifest.webmanifest
-  sw.js
-)
-
-echo "Raíz (HTML + PWA shell)..."
-for f in "${ROOT_FILES[@]}"; do
-  upload_file "$f" "$f"
-done
-
-# ──────────────────────────────────────────────
-# 2) Carpetas recursivas (iconos + módulos JS + CSS)
-# ──────────────────────────────────────────────
-# `find` aquí sí descubre archivos automáticamente porque dentro de estas
-# carpetas todo es shareable (ningún .env, ningún test). Si en el futuro
-# añades carpetas (p.ej. fonts/, audio/, fixtures/), agrégalas a DIRS.
-DIRS=(
-  icons
-  stepmania-web
-)
-
-for dir in "${DIRS[@]}"; do
-  if [ ! -d "$dir" ]; then
-    echo ""
-    echo "SKIP: $dir/ (no existe)"
-    continue
+# Recolectar archivos: todo lo trackeado por git que no matchee el regex de exclusión.
+FILES=()
+while IFS= read -r f; do
+  if [[ ! "$f" =~ $EXCLUDE_REGEX ]]; then
+    FILES+=("$f")
   fi
-  echo ""
-  echo "${dir}/ (recursivo)..."
-  while IFS= read -r f; do
-    upload_file "$f" "$f"
-  done < <(find "$dir" -type f | sort)
+done < <(git ls-files | sort)
+
+TOTAL=${#FILES[@]}
+echo "Archivos a subir: $TOTAL"
+echo ""
+
+for f in "${FILES[@]}"; do
+  upload_file "$f" "$f"
 done
 
 echo ""
 echo "=========================================="
 echo "  Deploy completado"
 echo "=========================================="
-echo "Subidos: $COUNTER archivos"
+echo "Subidos: $COUNTER / $TOTAL archivos"
 if [ $ERRORS -gt 0 ]; then
   echo "ERRORES: $ERRORS archivos"
   for f in "${FAILED_FILES[@]}"; do

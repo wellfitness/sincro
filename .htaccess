@@ -1,0 +1,53 @@
+# Sincro — overrides de headers HTTP para Hostinger.
+#
+# Objetivo: garantizar que sw.js, HTMLs y manifest se revaliden siempre,
+# sin afectar el cache largo (default Hostinger ~7 días) de assets estáticos
+# (JS / CSS / WEBP / SVG / fuentes). Esos sí pueden cachearse fuerte porque el
+# SW los invalida en bloque vía CACHE_VERSION bump.
+#
+# Si Hostinger no tiene mod_headers / mod_mime activos, las directivas se
+# ignoran silenciosamente — no rompe nada que ya funcionara.
+
+<IfModule mod_headers.c>
+  # Service Worker — NUNCA cachear sin revalidar.
+  # Si el navegador cachea sw.js durante días (default Hostinger: 7), los
+  # usuarios se quedan bloqueados con la versión vieja del SW y no ven los
+  # bumps de CACHE_VERSION hasta que pase el tiempo. La spec del SW garantiza
+  # max 24h, pero declararlo no-cache es la convención correcta.
+  <FilesMatch "^sw\.js$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+
+  # HTMLs — siempre revalidar contra el server.
+  # ETag / Last-Modified devuelven 304 si no hay cambios, así el coste es
+  # mínimo. Esto garantiza que la estrategia network-first del SW vea
+  # actualizaciones al vuelo, y que usuarios sin SW (primera carga, navegador
+  # con SW deshabilitado) también las vean inmediatamente.
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+
+  # Manifest PWA — siempre revalidar.
+  <FilesMatch "\.webmanifest$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
+# MIME types explícitos.
+# Hostinger ya envía la mayoría correctos, pero .webmanifest a veces sale como
+# application/octet-stream — los navegadores entonces ignoran el manifest y la
+# PWA no es instalable. Declararlo aquí es defensa en profundidad.
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+  AddType image/svg+xml             .svg
+  AddType image/webp                .webp
+</IfModule>
+
+# Compresión gzip para texto.
+# Hostinger ya lo hace por defecto en su CDN; declararlo es belt-and-suspenders
+# para hosts/proxies upstream que pudieran no aplicarlo.
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/x-javascript application/json application/manifest+json image/svg+xml
+</IfModule>
