@@ -1163,3 +1163,249 @@ details summary:hover { color: #fff; }
   font-size: 0.92em;
 }
 .session-summary .row:last-child { border-bottom: none; }
+
+/* ============================================================================
+   PUNTUACIONES / RANKINGS — formulario de guardar al acabar, panel de
+   ranking en results, modal de scores en song-select y library.
+   ============================================================================ */
+
+/* Form inline en results-screen tras acabar canción */
+.score-save-form {
+  display: flex; align-items: center; gap: 10px;
+  margin: 16px 0 8px;
+  padding: 14px 16px;
+  background: rgba(0,190,200,0.08);
+  border: 1px solid rgba(0,190,200,0.3);
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+.score-save-form label {
+  color: var(--gris-300); font-size: 0.9em; font-weight: 600;
+}
+.score-save-form input[type="text"] {
+  flex: 1; min-width: 180px;
+  padding: 10px 14px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff; border-radius: 8px;
+  font-size: 1em; font-family: inherit;
+}
+.score-save-form input[type="text"]:focus {
+  outline: none; border-color: var(--turquesa-400);
+  box-shadow: 0 0 0 3px rgba(0,190,200,0.2);
+}
+.action-btn.primary {
+  background: linear-gradient(90deg, var(--turquesa-400), var(--turquesa-600));
+  color: #001f22; font-weight: 700;
+}
+
+/* Pill de posición en el ranking panel */
+.position-pill {
+  display: inline-block;
+  padding: 8px 16px;
+  margin: 14px 0 10px;
+  background: rgba(255,190,11,0.15);
+  border: 1px solid rgba(255,190,11,0.4);
+  border-radius: 10px;
+  font-weight: 700; color: #ffbe0b;
+  font-size: 0.95em;
+}
+.position-pill.is-top {
+  background: linear-gradient(90deg, var(--turquesa-400), #ffbe0b);
+  color: #001f22; border-color: transparent;
+  animation: pos-pulse 1.5s ease-out;
+}
+@keyframes pos-pulse {
+  0%   { transform: scale(0.85); opacity: 0; }
+  50%  { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Delta numérico (+1240 / -340) */
+.ranking-delta-wrap { margin: 0 0 12px; }
+.ranking-delta {
+  font-family: 'Consolas', monospace;
+  font-size: 0.88em; font-weight: 700;
+  padding: 2px 8px; border-radius: 6px;
+  white-space: nowrap;
+}
+.ranking-delta.delta-up   { color: #00ff64; background: rgba(0,255,100,0.1); }
+.ranking-delta.delta-down { color: #ff6688; background: rgba(255,51,102,0.1); }
+.ranking-delta.delta-zero { color: var(--gris-400); background: rgba(255,255,255,0.05); }
+
+/* Tabs CSS-only en el panel de ranking (radio inputs + sibling selectors).
+   `display:none` en los radios + label como pestaña visible. Los panes
+   muestran/oculatan según qué radio está `:checked`. */
+.ranking-panel { margin-top: 14px; }
+.ranking-tabs {
+  display: flex; flex-wrap: wrap; gap: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.ranking-tabs input[type="radio"] { display: none; }
+.ranking-tab {
+  padding: 10px 18px;
+  cursor: pointer;
+  color: var(--gris-400);
+  font-weight: 600; font-size: 0.92em;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  user-select: none;
+}
+.ranking-tab:hover { color: #fff; }
+.ranking-tab.disabled { opacity: 0.4; cursor: not-allowed; }
+#rkTabTop:checked  ~ .ranking-tab[for="rkTabTop"],
+#rkTabMine:checked ~ .ranking-tab[for="rkTabMine"] {
+  color: var(--turquesa-400);
+  border-bottom-color: var(--turquesa-400);
+}
+.ranking-pane { display: none; width: 100%; padding-top: 12px; }
+#rkTabTop:checked  ~ .ranking-pane-top,
+#rkTabMine:checked ~ .ranking-pane-mine {
+  display: block;
+}
+
+/* Lista de runs en cualquier ranking (panel de results, modal de chart, modal
+   de song). Estructura: <ol class="ranking-list"><li class="ranking-row">…</li></ol> */
+.ranking-list {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.ranking-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  font-size: 0.92em;
+}
+.ranking-row.is-me { background: rgba(0,190,200,0.12); }
+.ranking-row.is-just-saved {
+  animation: just-saved-pulse 1.5s ease-out;
+  border-left: 3px solid var(--turquesa-400);
+}
+@keyframes just-saved-pulse {
+  0%   { background: rgba(0,245,212,0.5); }
+  100% { background: rgba(0,190,200,0.12); }
+}
+.ranking-row .rank-num   { color: var(--gris-400); font-family: 'Consolas', monospace; font-weight: 700; min-width: 28px; }
+.ranking-row .rank-name  { color: #fff; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.ranking-row .rank-date  { color: var(--gris-400); font-size: 0.86em; font-family: 'Consolas', monospace; }
+.ranking-row .rank-grade { font-family: 'Consolas', monospace; font-weight: 800; font-size: 0.85em; padding: 2px 8px; border-radius: 6px; letter-spacing: 0.05em; }
+.ranking-row .rank-score { color: #ffbe0b; font-family: 'Consolas', monospace; font-weight: 700; text-align: right; }
+.ranking-empty { color: var(--gris-500); padding: 12px; text-align: center; font-style: italic; }
+
+/* Coloreado de grades en las pills compactas (.rank-grade y .champ-grade).
+   Los selectores con .grade-AAA ya existen para las pills de song-select
+   (uppercase), aquí extendemos para el formato lowercase usado en runs. */
+.rank-grade.g-aaa, .champ-grade.g-aaa { background: linear-gradient(90deg,#00f5d4,#ffbe0b); color:#000; }
+.rank-grade.g-aa,  .champ-grade.g-aa  { background: rgba(0,245,212,0.2); color: #00f5d4; }
+.rank-grade.g-a,   .champ-grade.g-a   { background: rgba(0,255,100,0.2); color: #66ff99; }
+.rank-grade.g-b,   .champ-grade.g-b   { background: rgba(58,134,255,0.2); color: #88b4ff; }
+.rank-grade.g-c,   .champ-grade.g-c   { background: rgba(255,190,11,0.2); color: #ffbe0b; }
+.rank-grade.g-d,   .champ-grade.g-d   { background: rgba(255,51,102,0.2); color: #ff6688; }
+
+/* Línea de campeón en la fila de biblioteca */
+.lib-row-champion {
+  margin-top: 6px;
+  display: flex; align-items: center; gap: 8px;
+  color: var(--gris-300); font-size: 0.86em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lib-row-champion.empty { color: var(--gris-500); font-style: italic; }
+.lib-row-champion strong { color: #fff; }
+.lib-row-champion .champ-diff {
+  color: var(--gris-400); font-size: 0.88em;
+}
+.lib-row-champion .champ-grade {
+  font-family: 'Consolas', monospace; font-weight: 700; font-size: 0.82em;
+  padding: 2px 7px; border-radius: 5px;
+}
+.lib-row-champion .champ-score {
+  font-family: 'Consolas', monospace; font-weight: 700; color: #ffbe0b;
+  margin-left: auto;
+}
+
+/* Contador de partidas debajo del pill en song-select */
+.chart-row-plays {
+  color: var(--gris-500); font-size: 0.78em; margin-top: 2px;
+}
+
+/* Modal de scores — overlay flotante reusable en song-select y library */
+.scores-modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  animation: fade-in 0.2s ease-out;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.scores-modal-inner {
+  background: var(--gris-900, #0f172a);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  max-width: 640px; width: 100%; max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px 28px;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.scores-modal-inner h2 {
+  margin: 0 0 4px;
+  color: #fff; font-size: 1.3em;
+}
+.scores-modal-inner h3 {
+  margin: 12px 0 8px;
+  color: var(--turquesa-400); font-size: 0.95em;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.scores-modal-sub {
+  color: var(--gris-400); font-size: 0.9em;
+  margin: 0 0 14px;
+}
+.scores-modal-section { margin-bottom: 18px; }
+.scores-modal-section .muted { color: var(--gris-500); font-weight: 400; font-size: 0.85em; }
+.scores-modal-close {
+  position: absolute; top: 12px; right: 14px;
+  width: 32px; height: 32px;
+  background: transparent; border: none;
+  color: var(--gris-300); font-size: 1.4em;
+  cursor: pointer; border-radius: 50%;
+  transition: background 0.15s;
+}
+.scores-modal-close:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.scores-modal-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+  margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  flex-wrap: wrap;
+}
+.scores-modal-chart {
+  background: rgba(255,255,255,0.02);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  padding: 4px 12px;
+}
+.scores-modal-chart > summary {
+  cursor: pointer;
+  padding: 8px 4px;
+  list-style: none;
+  display: flex; align-items: center; gap: 10px;
+}
+.scores-modal-chart > summary::-webkit-details-marker { display: none; }
+.scores-modal-chart > summary::before {
+  content: '▸'; color: var(--turquesa-400); transition: transform 0.15s;
+}
+.scores-modal-chart[open] > summary::before { transform: rotate(90deg); }
+.scores-modal-chart > summary strong { color: #fff; }
+
+/* La lista "todas las partidas" añade un botón delete por fila */
+.scores-all-list .ranking-row {
+  grid-template-columns: auto 1fr auto auto auto;
+}
+.scores-all-list .ranking-row .run-delete-btn {
+  width: 26px; height: 26px;
+  padding: 0; line-height: 1;
+}

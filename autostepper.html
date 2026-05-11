@@ -1817,7 +1817,10 @@ function downloadOne(id) {
 // entry debe COINCIDIR con el que escribe library.js al importar archivos
 // — si divergen, stepmania-play.html no encontrará el chart correcto.
 const SM_DB_NAME = 'StepManiaWebDB';
-const SM_DB_VERSION = 3;
+// v4: sincronizado con core.js y gh-db.js. La DB se comparte entre los 3
+// puntos de entrada (motor SM, suite GH, autostepper standalone); todos
+// deben pedir la misma versión o IndexedDB lanza VersionError.
+const SM_DB_VERSION = 4;
 let _smDbPromise = null;
 function _smOpenDB() {
   if (_smDbPromise) return _smDbPromise;
@@ -1830,9 +1833,16 @@ function _smOpenDB() {
       if (!db.objectStoreNames.contains('songs')) {
         db.createObjectStore('songs', { keyPath: 'id', autoIncrement: true });
       }
-      if (!db.objectStoreNames.contains('scores')) {
-        const ss = db.createObjectStore('scores', { keyPath: 'key' });
-        ss.createIndex('songId', 'songId', { unique: false });
+      // v3→v4: wipe del antiguo `scores` (sin nombre de jugador) y creación
+      // de `runs` (ranking arcade). Mirror de la migración en core.js.
+      if (e.oldVersion < 4 && db.objectStoreNames.contains('scores')) {
+        db.deleteObjectStore('scores');
+      }
+      if (!db.objectStoreNames.contains('runs')) {
+        const rs = db.createObjectStore('runs', { keyPath: 'id', autoIncrement: true });
+        rs.createIndex('songId',      'songId',      { unique: false });
+        rs.createIndex('chartId',     'chartId',     { unique: false });
+        rs.createIndex('playerLower', 'playerLower', { unique: false });
       }
       if (!db.objectStoreNames.contains('gh-songs')) {
         db.createObjectStore('gh-songs', { keyPath: 'id', autoIncrement: true });

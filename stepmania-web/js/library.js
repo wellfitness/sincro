@@ -30,7 +30,16 @@ async function refreshLibrary() {
   const c = document.getElementById('libraryContainer');
   const countEl = document.getElementById('libraryCount');
   c.innerHTML = 'Cargando...';
-  const [songs, info] = await Promise.all([dbAll(), getStorageInfo()]);
+  // Una sola lectura de runs para toda la biblioteca — agrupamos en memoria.
+  // Alternativa N+1 (dbRunsForSong por cada fila) lanzaría 1 transacción de
+  // IndexedDB por canción y en bibliotecas de 50+ canciones es notablemente
+  // más lento (cada `transaction()` paga overhead aunque sea readonly).
+  const [songs, info, allRuns] = await Promise.all([dbAll(), getStorageInfo(), dbRunsAll()]);
+  const runsBySong = new Map();
+  for (const r of allRuns) {
+    if (!runsBySong.has(r.songId)) runsBySong.set(r.songId, []);
+    runsBySong.get(r.songId).push(r);
+  }
   const storageBar = info
     ? `<div style="margin-bottom:14px;padding:10px 14px;background:rgba(0,190,200,0.08);border:1px solid rgba(0,190,200,0.2);border-radius:8px;font-size:0.85em;color:var(--gris-300)">
          💾 Librería ocupa <strong style="color:var(--turquesa-400)">${info.usedMB} MB</strong> de ${info.quotaMB} MB disponibles (${info.pct}%)
@@ -63,6 +72,26 @@ async function refreshLibrary() {
     const dur = s.duration ? formatTime(s.duration) : '?';
     const isMarked = selectedLibraryIds.has(s.id);
     const chartCount = (s.charts || []).length;
+    // Campeón = mejor score absoluto entre todos los charts de la canción.
+    // No filtramos por dificultad: el #1 puede haber salido en Challenge y
+    // sigue siendo el top de la canción. La dificultad aparece junto al nombre
+    // para que se entienda el contexto.
+    const songRuns = runsBySong.get(s.id) || [];
+    let championHtml;
+    if (songRuns.length === 0) {
+      championHtml = '<div class="lib-row-champion empty">Sin puntuaciones todavía</div>';
+    } else {
+      const champ = rankRuns(songRuns)[0];
+      championHtml = `<div class="lib-row-champion" title="${songRuns.length} partida${songRuns.length === 1 ? '' : 's'} guardada${songRuns.length === 1 ? '' : 's'}">
+        👑 <strong>${escapeHtml(champ.playerName || 'Anónimo')}</strong>
+        <span class="champ-diff">${escapeHtml(diffLabel(champ.chartKey))}</span>
+        <span class="champ-grade g-${(champ.grade || '').toLowerCase()}">${escapeHtml(champ.grade || '')}</span>
+        <span class="champ-score">${(champ.score || 0).toLocaleString()}</span>
+      </div>`;
+    }
+    const scoresBtn = songRuns.length > 0
+      ? `<button class="icon-btn" style="padding:8px 12px" onclick="openSongScoresModal(${s.id})" title="Ver todas las puntuaciones">🏆</button>`
+      : '';
     html += `<div class="lib-row${isMarked ? ' in-playlist' : ''}">
       <input type="checkbox" class="playlist-checkbox" ${isMarked ? 'checked' : ''}
         onchange="togglePlaylistSelectionLibrary(${s.id})" title="Marcar para eliminar en grupo"
@@ -70,9 +99,11 @@ async function refreshLibrary() {
       <div style="flex:1;min-width:0">
         <div style="color:#fff;font-weight:600">${escapeHtml(s.title || 'Sin título')}</div>
         <div style="color:var(--gris-400);font-size:0.85em">${escapeHtml(s.artist || 'Unknown')} · ${s.bpm ? s.bpm.toFixed(1) + ' BPM' : '? BPM'} · ${dur} · ${chartCount} chart${chartCount === 1 ? '' : 's'}</div>
+        ${championHtml}
       </div>
       <div class="lib-row-actions">
         <button class="action-btn" style="padding:8px 16px;font-size:0.95em" onclick="playSong(${s.id})">▶ Tocar</button>
+        ${scoresBtn}
         <button class="icon-btn danger" style="padding:8px 12px" onclick="deleteSong(${s.id})" title="Eliminar esta canción">🗑</button>
       </div>
     </div>`;
@@ -388,3 +419,71 @@ document.getElementById('backupRestoreInput')?.addEventListener('change', e => {
     document.getElementById('restoreDrop')?.classList.add('loaded');
   }
 });
+
+// ----- Modal de puntuaciones de una canción (vista global) ------------------
+// Acordeón por dificultad: cada sección muestra el ranking por jugador + las
+// últimas 10 partidas. Se reusa la misma clase `.scores-modal` que el modal
+// de song-select para coherencia visual.
+async function openSongScoresModal(songId) {
+  const [song, runs] = await Promise.all([dbGet(songId), dbRunsForSong(songId)]);
+  if (!song) return;
+  // Agrupamos runs por chartKey y ordenamos cada grupo.
+  const byChart = new Map();
+  for (const r of runs) {
+    if (!byChart.has(r.chartKey)) byChart.set(r.chartKey, []);
+    byChart.get(r.chartKey).push(r);
+  }
+  const _ORDER = ['Beginner','Easy','Medium','Hard','Challenge','Edit'];
+  const orderedKeys = Array.from(byChart.keys()).sort((a, b) => {
+    const ia = _ORDER.indexOf(a), ib = _ORDER.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+
+  const sections = orderedKeys.map(chartKey => {
+    const chartRuns = byChart.get(chartKey);
+    const ranking = bestRunPerPlayer(chartRuns).slice(0, 10);
+    const totalPlays = chartRuns.length;
+    const rankRows = ranking.map((r, i) => `
+      <li class="ranking-row">
+        <span class="rank-num">#${i + 1}</span>
+        <span class="rank-name">${escapeHtml(r.playerName || 'Anónimo')}</span>
+        <span class="rank-grade g-${(r.grade || '').toLowerCase()}">${escapeHtml(r.grade || '—')}</span>
+        <span class="rank-score">${(r.score || 0).toLocaleString()}</span>
+      </li>`).join('');
+    return `
+      <details class="scores-modal-chart" open>
+        <summary>
+          <strong>${escapeHtml(diffLabel(chartKey))}</strong>
+          <span class="muted">${totalPlays} partida${totalPlays === 1 ? '' : 's'} · ${ranking.length} jugador${ranking.length === 1 ? '' : 'es'}</span>
+        </summary>
+        <ol class="ranking-list">${rankRows}</ol>
+      </details>`;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'scores-modal';
+  overlay.innerHTML = `
+    <div class="scores-modal-inner">
+      <button class="scores-modal-close" aria-label="Cerrar">×</button>
+      <h2>${escapeHtml(song.title || 'Sin título')}</h2>
+      <p class="scores-modal-sub">${escapeHtml(song.artist || 'Unknown')} · ${runs.length} partida${runs.length === 1 ? '' : 's'} en total</p>
+      <div class="scores-modal-section">
+        ${sections || '<p class="muted">Sin puntuaciones todavía.</p>'}
+      </div>
+      <div class="scores-modal-actions">
+        <button class="action-btn danger scores-clear-btn">Limpiar todas las puntuaciones de esta canción</button>
+        <button class="action-btn scores-close-btn">Cerrar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => { overlay.remove(); refreshLibrary(); };
+  overlay.querySelector('.scores-modal-close').addEventListener('click', close);
+  overlay.querySelector('.scores-close-btn').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  overlay.querySelector('.scores-clear-btn').addEventListener('click', async () => {
+    if (!confirm(`¿Borrar TODAS las puntuaciones de "${song.title}"? Esto no se puede deshacer.`)) return;
+    await dbRunsClearForSong(songId);
+    close();
+  });
+}

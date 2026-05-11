@@ -1267,6 +1267,12 @@ function render(audioTime) {
   ctx2d.fillRect(0, 0, W * pct, 4);
 }
 
+// Run "pendiente" — construido en endGame, persistido en saveCurrentRun tras
+// capturar el nombre. Vive a nivel de módulo (no en gameState) porque stopGame()
+// nulifica gameState ANTES de que el usuario haya escrito su nombre y dado a
+// Guardar; necesitamos sobrevivir esa transición.
+let _pendingRun = null;
+
 async function endGame() {
   if (!gameState || gameState.finished) return;
   gameState.finished = true;
@@ -1275,16 +1281,24 @@ async function endGame() {
   const accuracy = total ? ((j.marvelous + j.perfect*0.9 + j.great*0.7 + j.good*0.4) / total * 100) : 0;
   const grade = accuracy >= 95 ? 'AAA' : accuracy >= 90 ? 'AA' : accuracy >= 80 ? 'A' : accuracy >= 70 ? 'B' : accuracy >= 60 ? 'C' : 'D';
 
-  // Save high score (only if better than previous)
+  // Construimos el run pendiente — solo se persiste tras capturar el nombre.
+  // Si no hay selectedSong/Chart (ej. test mode), pendingRun queda en null y
+  // el form de guardar no se renderiza.
   if (selectedSong && selectedChart) {
-    const prev = await dbScoreGet(selectedSong.id, selectedChart.key);
-    if (!prev || (gameState.score > (prev.score||0))) {
-      await dbScoreSet(selectedSong.id, selectedChart.key, {
-        score: gameState.score, grade, accuracy: +accuracy.toFixed(2),
-        maxCombo: gameState.maxCombo, judgments: j, mods: {...activeMods},
-        playedAt: Date.now()
-      });
-    }
+    _pendingRun = {
+      songId:   selectedSong.id,
+      chartKey: selectedChart.key,
+      chartId:  chartIdOf(selectedSong.id, selectedChart.key),
+      score:    gameState.score,
+      grade,
+      accuracy: +accuracy.toFixed(2),
+      maxCombo: gameState.maxCombo,
+      judgments: j,
+      mods:     {...activeMods},
+      playedAt: Date.now()
+    };
+  } else {
+    _pendingRun = null;
   }
 
   document.getElementById('resultsTitle').textContent = gameState.songInfo || 'Resultados';
@@ -1306,6 +1320,14 @@ async function endGame() {
         <span class="jcount">${count}</span>
       </div>`;
   }).join('');
+  // El form de guardar solo aparece cuando hay un run válido pendiente.
+  const lastName = escapeHtml(getLastPlayerName());
+  const saveFormHtml = _pendingRun ? `
+    <div id="resultsScoreSave" class="score-save-form">
+      <label for="playerNameInput">Tu nombre</label>
+      <input id="playerNameInput" type="text" maxlength="12" value="${lastName}" placeholder="Tu nombre" autocomplete="off">
+      <button id="saveRunBtn" class="action-btn primary">Guardar puntuación</button>
+    </div>` : '';
   document.getElementById('resultsContent').innerHTML = `
     <div class="results-header">
       <div class="results-grade ${gradeClass}">${grade}</div>
@@ -1316,7 +1338,20 @@ async function endGame() {
       </div>
     </div>
     <div class="results-judgments">${judgmentRows}</div>
+    ${saveFormHtml}
   `;
+  // Wire-up del form: Enter en input dispara click en botón. Autofocus solo
+  // si el nombre prefilled está vacío — si ya hay nombre del último jugador,
+  // dejamos al usuario decidir si lo cambia (no robamos foco al texto).
+  if (_pendingRun) {
+    const inp = document.getElementById('playerNameInput');
+    const btn = document.getElementById('saveRunBtn');
+    if (inp && btn) {
+      btn.addEventListener('click', () => { saveCurrentRun().catch(e => console.error('saveCurrentRun:', e)); });
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); btn.click(); } });
+      if (!lastName) inp.focus();
+    }
+  }
   stopGame();
   goto('results');
   // Hook de modo playlist: si hay sesión activa, inyecta banner de siguiente
@@ -1324,4 +1359,123 @@ async function endGame() {
   if (typeof updateResultsForSession === 'function') {
     updateResultsForSession({ grade, accuracy: +accuracy.toFixed(2), score: gameState.score });
   }
+}
+
+// Captura el nombre del input, persiste el run pendiente y reemplaza el form
+// por el panel de ranking con la posición conseguida. Llamada idempotente:
+// si _pendingRun ya se guardó (doble click), no hace nada.
+async function saveCurrentRun() {
+  if (!_pendingRun) return;
+  const inp = document.getElementById('playerNameInput');
+  const name = sanitizePlayerName(inp ? inp.value : '');
+  setLastPlayerName(name);
+  const run = {
+    ..._pendingRun,
+    playerName: name,
+    playerLower: name.toLowerCase()
+  };
+  const { songId, chartKey } = run;
+  _pendingRun = null;  // marcamos como consumido antes del await — evita doble save
+  let newId;
+  try {
+    newId = await dbRunAdd(run);
+  } catch (e) {
+    console.error('No se pudo guardar la puntuación:', e);
+    _pendingRun = run;  // restaurar para que el usuario pueda reintentar
+    return;
+  }
+  // Sustituimos solo el form por el panel — el resumen (grade, judgments) sigue
+  // arriba. Si el contenedor no existe (usuario navegó fuera), salimos limpios.
+  const form = document.getElementById('resultsScoreSave');
+  if (!form) return;
+  const panel = document.createElement('div');
+  panel.id = 'resultsRankingPanel';
+  panel.className = 'ranking-panel';
+  form.replaceWith(panel);
+  await renderRankingPanel(panel, songId, chartKey, newId, name);
+}
+
+// Renderiza la posición del run + 2 tabs (Top canción / Mi progresión).
+// Tabs son CSS-only (radio buttons ocultos + :checked + ~ selectors).
+async function renderRankingPanel(container, songId, chartKey, justSavedId, playerName) {
+  const allRuns = await dbRunsForChart(songId, chartKey);
+  const bestRanking = bestRunPerPlayer(allRuns);
+  const myRuns = allRuns
+    .filter(r => r.playerLower === playerName.toLowerCase())
+    .sort((a, b) => (b.playedAt || 0) - (a.playedAt || 0)); // newest first
+
+  // Posición del run recién guardado en el ranking (best-per-player).
+  const myBestRow = bestRanking.find(r => r.playerLower === playerName.toLowerCase());
+  const myPos = myBestRow ? bestRanking.indexOf(myBestRow) + 1 : null;
+  const totalPlayers = bestRanking.length;
+  const justSavedIsBest = myBestRow && myBestRow.id === justSavedId;
+
+  // Mejora vs run anterior del mismo jugador (excluyendo el actual).
+  let deltaHtml = '';
+  if (myRuns.length >= 2) {
+    const prev = myRuns.find(r => r.id !== justSavedId);  // 2º más reciente
+    if (prev) {
+      const delta = (myRuns[0].score - prev.score);
+      const sign = delta >= 0 ? '+' : '−';
+      const cls = delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : 'delta-zero';
+      deltaHtml = `<span class="ranking-delta ${cls}">${sign}${Math.abs(delta).toLocaleString()} vs partida anterior</span>`;
+    }
+  }
+
+  let posPillHtml = '';
+  if (myPos === 1 && justSavedIsBest) {
+    posPillHtml = `<div class="position-pill is-top">¡Nuevo #1 en ${escapeHtml(diffLabel(chartKey))}!</div>`;
+  } else if (myPos) {
+    posPillHtml = `<div class="position-pill">Tu posición: #${myPos} de ${totalPlayers} jugador${totalPlayers === 1 ? '' : 'es'}</div>`;
+  }
+
+  // Top 5 globales (best por jugador).
+  const topRows = bestRanking.slice(0, 5).map((r, i) => {
+    const isMe = r.playerLower === playerName.toLowerCase();
+    const isJust = r.id === justSavedId;
+    const cls = [isMe ? 'is-me' : '', isJust ? 'is-just-saved' : ''].filter(Boolean).join(' ');
+    return `
+      <li class="ranking-row ${cls}">
+        <span class="rank-num">#${i + 1}</span>
+        <span class="rank-name">${escapeHtml(r.playerName || 'Anónimo')}</span>
+        <span class="rank-grade g-${(r.grade || '').toLowerCase()}">${escapeHtml(r.grade || '—')}</span>
+        <span class="rank-score">${(r.score || 0).toLocaleString()}</span>
+      </li>`;
+  }).join('');
+
+  // Mi progresión: hasta 8 partidas más recientes con delta entre filas
+  // consecutivas (cuando hay siguiente más antigua).
+  const progRows = myRuns.slice(0, 8).map((r, i, arr) => {
+    const next = arr[i + 1];
+    const delta = next ? (r.score - next.score) : null;
+    const deltaSpan = delta !== null
+      ? `<span class="ranking-delta ${delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : 'delta-zero'}">${delta >= 0 ? '+' : '−'}${Math.abs(delta).toLocaleString()}</span>`
+      : '<span class="ranking-delta"></span>';
+    const date = r.playedAt ? new Date(r.playedAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    const isJust = r.id === justSavedId ? 'is-just-saved' : '';
+    return `
+      <li class="ranking-row ${isJust}">
+        <span class="rank-date">${escapeHtml(date)}</span>
+        <span class="rank-grade g-${(r.grade || '').toLowerCase()}">${escapeHtml(r.grade || '—')}</span>
+        <span class="rank-score">${(r.score || 0).toLocaleString()}</span>
+        ${deltaSpan}
+      </li>`;
+  }).join('');
+
+  container.innerHTML = `
+    ${posPillHtml}
+    ${deltaHtml ? `<div class="ranking-delta-wrap">${deltaHtml}</div>` : ''}
+    <div class="ranking-tabs">
+      <input type="radio" name="rankingTab" id="rkTabTop" checked>
+      <label for="rkTabTop" class="ranking-tab">Top de la canción</label>
+      <input type="radio" name="rankingTab" id="rkTabMine"${myRuns.length < 2 ? ' disabled' : ''}>
+      <label for="rkTabMine" class="ranking-tab${myRuns.length < 2 ? ' disabled' : ''}" title="${myRuns.length < 2 ? 'Necesitas al menos 2 partidas en esta dificultad' : ''}">Mi progresión</label>
+      <div class="ranking-pane ranking-pane-top">
+        <ol class="ranking-list">${topRows || '<li class="ranking-empty">Sin puntuaciones todavía</li>'}</ol>
+      </div>
+      <div class="ranking-pane ranking-pane-mine">
+        <ol class="ranking-list">${progRows || '<li class="ranking-empty">Solo has jugado esta partida</li>'}</ol>
+      </div>
+    </div>
+  `;
 }

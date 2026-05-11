@@ -31,10 +31,17 @@ async function refreshSongs() {
   const songs = await dbAll();
   _allSongsCache = songs;
   document.getElementById('songsSubtitle').textContent = `${songs.length} canciones en tu librería`;
-  // Attach best score to each song
+  // Attach best run a cada canción para el filtro de grade. Una sola query
+  // de runs y agrupamos en memoria — evita N+1 transacciones a IndexedDB.
+  const allRuns = await dbRunsAll();
+  const runsBySong = new Map();
+  for (const r of allRuns) {
+    if (!runsBySong.has(r.songId)) runsBySong.set(r.songId, []);
+    runsBySong.get(r.songId).push(r);
+  }
   for (const s of songs) {
-    const scores = await dbScoresForSong(s.id);
-    s._bestGrade = scores.length ? scores.sort((a,b) => (b.score||0) - (a.score||0))[0] : null;
+    const songRuns = runsBySong.get(s.id) || [];
+    s._bestGrade = songRuns.length ? rankRuns(songRuns)[0] : null;
   }
   // Repopulate tag filter dropdown with the union of all tags
   const sel = document.getElementById('songFilterTag');
@@ -207,8 +214,20 @@ async function renderDiffScreen() {
   // para elegir dificultad (eso se hace arriba en songs-screen).
   const c = document.getElementById('diffsContainer');
   c.innerHTML = '';
-  const scores = await dbScoresForSong(selectedSong.id);
-  const scoreMap = Object.fromEntries(scores.map(s => [s.chartKey, s]));
+  // Cargamos todos los runs de la canción y agrupamos por chartKey. Para cada
+  // dificultad mostramos al CAMPEÓN (mejor score considerando todos los
+  // jugadores), no la última partida de cualquiera.
+  const allRuns = await dbRunsForSong(selectedSong.id);
+  const championByChart = {};
+  const countByChart = {};
+  for (const r of allRuns) {
+    countByChart[r.chartKey] = (countByChart[r.chartKey] || 0) + 1;
+    const cur = championByChart[r.chartKey];
+    if (!cur || r.score > cur.score ||
+        (r.score === cur.score && (r.playedAt || 0) < (cur.playedAt || 0))) {
+      championByChart[r.chartKey] = r;
+    }
+  }
   // Orden visual: Beginner → Easy → Medium → Hard → Challenge. Los charts
   // del .ssc/.sm pueden venir en orden arbitrario; aquí imponemos el orden
   // canónico para que el usuario lea de fácil a difícil de arriba a abajo.
@@ -227,10 +246,15 @@ async function renderDiffScreen() {
     el.title = `Empezar a jugar en dificultad ${diffLabel(chart.name)}`;
     el.onclick = () => selectChartAndPlay(chart.key);
     el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectChartAndPlay(chart.key); } };
-    const sc = scoreMap[chart.key];
-    const gradeCell = sc ? `<span class="grade-pill grade-${sc.grade}">${sc.grade}</span>` : '<span class="chart-row-empty">—</span>';
-    const deleteBtn = sc
-      ? `<button class="icon-btn danger" title="Eliminar high score" onclick="event.stopPropagation();deleteChartScore('${chart.key}')">×</button>`
+    const champ = championByChart[chart.key];
+    const count = countByChart[chart.key] || 0;
+    // Pill compacto: "AAA · Elena" + contador "(N partidas)" debajo en tenue.
+    // El nombre se sanea con escapeHtml — viene de input de usuario.
+    const gradeCell = champ
+      ? `<span class="grade-pill grade-${champ.grade}" title="Mejor: ${escapeHtml(champ.playerName || 'Anónimo')} con ${(champ.score||0).toLocaleString()} puntos">${champ.grade} · ${escapeHtml(champ.playerName || 'Anónimo')}</span><div class="chart-row-plays">${count} partida${count === 1 ? '' : 's'}</div>`
+      : '<span class="chart-row-empty">—</span>';
+    const scoresBtn = count > 0
+      ? `<button class="icon-btn" title="Ver puntuaciones de esta dificultad" onclick="event.stopPropagation();openChartScoresModal('${chart.key}')">🏆</button>`
       : '';
     const ratingNum = Math.max(0, Math.min(15, chart.rating || 0));
     // Resaltar el chart que coincide con la dificultad global elegida (última
@@ -244,7 +268,7 @@ async function renderDiffScreen() {
       </div>
       <div class="chart-row-meta">${chart.count} pasos</div>
       <div class="chart-row-grade">${gradeCell}</div>
-      <div class="chart-row-action">${deleteBtn}</div>
+      <div class="chart-row-action">${scoresBtn}</div>
     `;
     c.appendChild(el);
   }
@@ -507,11 +531,75 @@ function stopPreviewLoop() {
 window._startPreviewLoop = startPreviewLoop;
 window._stopPreviewLoop = stopPreviewLoop;
 
-async function deleteChartScore(chartKey) {
+// Modal de puntuaciones para una dificultad concreta. Lista top 10, permite
+// borrar individuales y limpiar la dificultad entera. Reutiliza la estructura
+// `.scores-modal` (overlay flotante) — sin dependencias de framework de modales.
+async function openChartScoresModal(chartKey) {
   if (!selectedSong) return;
-  if (!confirm('¿Borrar el high score de esta dificultad?')) return;
-  await dbScoreDelete(selectedSong.id, chartKey);
-  renderDiffScreen();
+  const runs = await dbRunsForChart(selectedSong.id, chartKey);
+  const ranking = bestRunPerPlayer(runs); // 1 fila por jugador (su mejor)
+  const allSorted = rankRuns(runs);       // todas las partidas, score desc
+  const songTitle = selectedSong.title;
+  const diffName = diffLabel(chartKey);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'scores-modal';
+  overlay.innerHTML = `
+    <div class="scores-modal-inner">
+      <button class="scores-modal-close" aria-label="Cerrar">×</button>
+      <h2>${escapeHtml(songTitle)}</h2>
+      <p class="scores-modal-sub">Puntuaciones — ${escapeHtml(diffName)}</p>
+      <div class="scores-modal-section">
+        <h3>Ranking por jugador <span class="muted">(mejor de cada uno)</span></h3>
+        <ol class="ranking-list">
+          ${ranking.length ? ranking.map((r, i) => `
+            <li class="ranking-row">
+              <span class="rank-num">#${i + 1}</span>
+              <span class="rank-name">${escapeHtml(r.playerName || 'Anónimo')}</span>
+              <span class="rank-grade g-${(r.grade || '').toLowerCase()}">${escapeHtml(r.grade || '—')}</span>
+              <span class="rank-score">${(r.score || 0).toLocaleString()}</span>
+            </li>`).join('') : '<li class="ranking-empty">Sin puntuaciones todavía</li>'}
+        </ol>
+      </div>
+      <div class="scores-modal-section">
+        <h3>Todas las partidas <span class="muted">(${allSorted.length})</span></h3>
+        <ol class="ranking-list scores-all-list">
+          ${allSorted.slice(0, 50).map(r => `
+            <li class="ranking-row" data-run-id="${r.id}">
+              <span class="rank-date">${r.playedAt ? new Date(r.playedAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+              <span class="rank-name">${escapeHtml(r.playerName || 'Anónimo')}</span>
+              <span class="rank-grade g-${(r.grade || '').toLowerCase()}">${escapeHtml(r.grade || '—')}</span>
+              <span class="rank-score">${(r.score || 0).toLocaleString()}</span>
+              <button class="icon-btn danger run-delete-btn" title="Eliminar esta partida" data-run-id="${r.id}">×</button>
+            </li>`).join('') || '<li class="ranking-empty">Sin partidas</li>'}
+        </ol>
+      </div>
+      <div class="scores-modal-actions">
+        <button class="action-btn danger scores-clear-btn">Limpiar dificultad</button>
+        <button class="action-btn scores-close-btn">Cerrar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => { overlay.remove(); renderDiffScreen(); };
+  overlay.querySelector('.scores-modal-close').addEventListener('click', close);
+  overlay.querySelector('.scores-close-btn').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  overlay.querySelector('.scores-clear-btn').addEventListener('click', async () => {
+    if (!confirm(`¿Borrar TODAS las puntuaciones de ${diffName}? Esto no se puede deshacer.`)) return;
+    await dbRunsClearForChart(selectedSong.id, chartKey);
+    close();
+  });
+  overlay.querySelectorAll('.run-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.dataset.runId, 10);
+      if (!confirm('¿Borrar esta partida?')) return;
+      await dbRunDelete(id);
+      // Re-render solo del modal sin cerrar — UX más fluida.
+      overlay.remove();
+      openChartScoresModal(chartKey);
+    });
+  });
 }
 
 // ----- Chart selection UI ---------------------------------------------------

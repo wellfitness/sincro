@@ -27,7 +27,12 @@
 // ============================================================================
 
 const GH_DB_NAME = 'StepManiaWebDB';
-const GH_DB_VERSION = 3;
+// v4: sincronizado con core.js — la suite SM migró el store `scores` (1 entry
+// por chart sin nombre de jugador) a `runs` (autoincrement, ranking arcade).
+// La DB se comparte entre SM y GH, así que TODOS los openDB deben ir a la
+// misma versión, o IndexedDB lanza VersionError al intentar abrir con un
+// número de versión menor que el persistido.
+const GH_DB_VERSION = 4;
 let _ghDbPromise = null;
 
 function ghOpenDB() {
@@ -36,13 +41,22 @@ function ghOpenDB() {
     const req = indexedDB.open(GH_DB_NAME, GH_DB_VERSION);
     req.onupgradeneeded = e => {
       const db = e.target.result;
-      // Garantizar todos los stores que la suite usa (idempotente)
+      // Garantizar todos los stores que la suite usa (idempotente).
       if (!db.objectStoreNames.contains('songs')) {
         db.createObjectStore('songs', { keyPath: 'id', autoIncrement: true });
       }
-      if (!db.objectStoreNames.contains('scores')) {
-        const ss = db.createObjectStore('scores', { keyPath: 'key' });
-        ss.createIndex('songId', 'songId', { unique: false });
+      // v3→v4: wipe del antiguo `scores` y creación de `runs` (mirror de la
+      // migración en core.js — necesario aquí porque si el primer archivo que
+      // abre la DB tras el deploy es uno de la suite GH, este onupgradeneeded
+      // es el que corre, no el de core.js).
+      if (e.oldVersion < 4 && db.objectStoreNames.contains('scores')) {
+        db.deleteObjectStore('scores');
+      }
+      if (!db.objectStoreNames.contains('runs')) {
+        const rs = db.createObjectStore('runs', { keyPath: 'id', autoIncrement: true });
+        rs.createIndex('songId',      'songId',      { unique: false });
+        rs.createIndex('chartId',     'chartId',     { unique: false });
+        rs.createIndex('playerLower', 'playerLower', { unique: false });
       }
       if (!db.objectStoreNames.contains('gh-songs')) {
         db.createObjectStore('gh-songs', { keyPath: 'id', autoIncrement: true });

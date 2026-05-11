@@ -11,9 +11,12 @@ async function exportBackupZip() {
   const songs = await dbAll();
   const enc = new TextEncoder();
   const files = [];
-  // Per-song dump: audio + ssc + score(s)
+  // Per-song dump: audio + ssc + runs (puntuaciones arcade).
+  // version=2 introduce el array `runs` (reemplaza al antiguo `scores` que
+  // tenía 1 entry por chart sin nombre de jugador). Backups v1 siguen
+  // importables — el reader ignora `scores` y deja la canción sin ranking.
   const meta = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     settings: { ...settings },
     songs: []
@@ -25,13 +28,15 @@ async function exportBackupZip() {
     const audioBytes = new Uint8Array(await s.audioBlob.arrayBuffer());
     files.push({ name: audioName, data: audioBytes });
     files.push({ name: sscName,  data: enc.encode(s.sscText) });
-    const scores = await dbScoresForSong(s.id);
+    const runs = await dbRunsForSong(s.id);
+    // Strip campos regenerables al importar (id viene del autoincrement nuevo,
+    // chartId y playerLower se recalculan en función del nuevo songId).
     meta.songs.push({
       id: s.id, title: s.title, artist: s.artist,
       audioPath: audioName, sscPath: sscName, audioName: s.audioName,
       bpm: s.bpm, offsetSec: s.offsetSec, duration: s.duration,
       sampleStart: s.sampleStart, charts: s.charts, addedAt: s.addedAt,
-      scores: scores.map(({ key, ...rest }) => rest)
+      runs: runs.map(({ id, songId, chartId, playerLower, ...rest }) => rest)
     });
   }
   files.push({ name: 'metadata.json', data: enc.encode(JSON.stringify(meta, null, 2)) });
@@ -120,9 +125,24 @@ async function importBackupZip(file) {
       duration: songMeta.duration, sampleStart: songMeta.sampleStart,
       charts: songMeta.charts, addedAt: songMeta.addedAt || Date.now()
     });
-    // Restore scores attached to this song under the new id
-    for (const sc of songMeta.scores || []) {
-      await dbScoreSet(newId, sc.chartKey, sc);
+    // Restaurar puntuaciones — formato v2 usa `runs[]`. Backups v1 traen
+    // `scores[]` (sin nombre de jugador): los ignoramos por decisión del
+    // producto (wipe limpio en la migración a v4). Si en el futuro se quiere
+    // revivirlos, aquí va el loop convirtiendo cada score a un run con
+    // playerName='Anónimo'.
+    if (Array.isArray(songMeta.runs)) {
+      for (const run of songMeta.runs) {
+        const playerName = run.playerName || 'Anónimo';
+        await dbRunAdd({
+          ...run,
+          songId: newId,
+          chartId: chartIdOf(newId, run.chartKey),
+          playerName,
+          playerLower: playerName.toLowerCase()
+        });
+      }
+    } else if (Array.isArray(songMeta.scores) && songMeta.scores.length) {
+      console.info(`backup v1: descartando ${songMeta.scores.length} scores antiguos de "${songMeta.title}" (sin nombre de jugador, ya no compatibles)`);
     }
     imported++;
     status.textContent = `Restaurando ${imported}/${(meta.songs||[]).length}...`;

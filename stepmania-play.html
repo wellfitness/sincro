@@ -411,7 +411,7 @@
     parser       → parseSscOrSm, buildTimingEngine, parseNotesToEvents
     library      → list/import UI (uses dbAll, parseSscOrSm)
     backup       → export/import full DB as ZIP (uses makeZip + dbAdd)
-    song-select  → song list, diff screen, mods (uses dbScoresForSong)
+    song-select  → song list, diff screen, mods (uses dbRunsAll/dbRunsForSong)
     game         → player, render, scoring (uses everything above)
     app          → goto(), settings bindings, kickoff
   Note: autostepper.js, calibration.js and pad-test.js NOT loaded here —
