@@ -1814,7 +1814,9 @@ section { padding: 80px 24px; position: relative; }
     if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
   });
 
-  // Si no compatible: bloquear TODOS los enlaces al juego (app.html, play.html y demás HTML del motor)
+  // Si no compatible: interceptar clicks en TODOS los enlaces al juego (app.html, play.html y demás HTML del motor).
+  // NO se hace auto-popup al cargar — la landing es contenido informativo legítimo y la usuaria
+  // debe poder leerla. El modal aparece solo cuando intenta entrar al juego.
   if (!compatible) {
     var GAME_SELECTORS = 'a[href^="app.html"], a[href*="play.html"], a[href*="stepmania-play.html"], a[href*="gh-play.html"], a[href*="autostepper.html"], a[href*="gh-autostepper.html"], a[href*="test-pad.html"], a[href*="tutorial.html"], a[href*="calibration.html"]';
     document.querySelectorAll(GAME_SELECTORS).forEach(function(a){
@@ -1823,12 +1825,6 @@ section { padding: 80px 24px; position: relative; }
         openModal();
       });
     });
-    // Auto-popup al cargar la página
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', openModal);
-    } else {
-      openModal();
-    }
   }
 })();
 </script>
