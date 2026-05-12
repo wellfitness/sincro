@@ -3364,7 +3364,9 @@ async function refreshManageList() {
   for (const e of entries) {
     const dur = e.duration ? `${Math.floor(e.duration/60)}:${('0'+Math.floor(e.duration%60)).slice(-2)}` : '?';
     const isMarked = selectedManageIds.has(e.id);
-    html += `<div class="lib-row${isMarked ? ' in-playlist' : ''}">
+    html += `<div class="lib-row${isMarked ? ' in-playlist' : ''}"
+      onmouseenter="scheduleGHAudioPreview(${e.id})"
+      onmouseleave="cancelGHAudioPreview()">
       <input type="checkbox" class="playlist-checkbox" ${isMarked ? 'checked' : ''}
         onchange="toggleManageSelection(${e.id})" title="Marcar para eliminar"
         aria-label="Marcar ${escHtml(e.title || 'chart')} para eliminar">
@@ -3448,6 +3450,7 @@ async function bulkDeleteFromManage() {
 // Borrado individual (botón 🗑 de cada fila).
 async function deleteFromManage(id) {
   if (!confirm('¿Eliminar esta partitura de la biblioteca?')) return;
+  cancelGHAudioPreview();
   await window.GHLibrary.delete(id);
   selectedGHIds.delete(id);
   selectedManageIds.delete(id);

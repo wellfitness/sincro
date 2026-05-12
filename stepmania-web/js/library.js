@@ -95,7 +95,9 @@ async function refreshLibrary() {
     const scoresBtn = songRuns.length > 0
       ? `<button class="icon-btn" style="padding:8px 12px" onclick="openSongScoresModal(${s.id})" title="Ver todas las puntuaciones">🏆</button>`
       : '';
-    html += `<div class="lib-row${isMarked ? ' in-playlist' : ''}">
+    html += `<div class="lib-row${isMarked ? ' in-playlist' : ''}"
+      onmouseenter="scheduleSongPreview(${s.id})"
+      onmouseleave="cancelSongPreview()">
       <input type="checkbox" class="playlist-checkbox" ${isMarked ? 'checked' : ''}
         onchange="togglePlaylistSelectionLibrary(${s.id})" title="Marcar para eliminar en grupo"
         aria-label="Marcar ${escapeHtml(s.title || 'canción')}">
@@ -189,6 +191,7 @@ async function bulkDeleteFromLibrary() {
 
 async function deleteSong(id) {
   if (!confirm('¿Eliminar canción de la biblioteca?')) return;
+  if (typeof cancelSongPreview === 'function') cancelSongPreview();
   await dbDelete(id);
   selectedLibraryIds.delete(id);
   refreshLibrary();
