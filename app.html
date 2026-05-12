@@ -422,6 +422,7 @@
       '/gh-autostepper': 'gh-autostepper.html',
       '/test-pad':       'test-pad.html',
       '/tutorial':       'tutorial.html',
+      '/rankings':       'rankings.html',
       '/calibration':    'test-pad.html#alfombra-sync',
       '/about':          'index.html'
     };
@@ -430,6 +431,7 @@
     var frame   = document.getElementById('shellFrame');
     var loading = document.getElementById('shellLoading');
     var navLinks = Array.prototype.slice.call(document.querySelectorAll('.shell-nav a'));
+    var brandLink = document.querySelector('.shell-brand');
 
     function currentRoute() {
       var h = (location.hash || '').replace(/^#/, '');
@@ -462,33 +464,91 @@
 
     window.addEventListener('hashchange', navigate);
 
-    // Click handler explícito para los links del nav.
+    // Handler explícito de navegación para los links del topbar.
     //
-    // Por qué no basta con el default action de <a href="#/foo">:
-    // cuando el iframe tiene el foco (juego activo, modal abierto, fullscreen
-    // invocado por la herramienta) el navegador a veces consume el primer
-    // click del topbar solo para devolver foco al parent — el <a> se queda
-    // sin disparar la navegación. Interceptar manualmente con preventDefault
-    // + window.focus() + asignación directa de location.hash garantiza que
-    // el segundo paso (navegación) ocurra siempre, no solo cuando el parent
-    // ya tenía foco.
-    navLinks.forEach(function (a) {
-      a.addEventListener('click', function (e) {
+    // Por qué no basta con el default action de <a href="#/foo">, y por qué
+    // escuchamos `pointerdown` además de `click`:
+    //
+    // Cuando el iframe del motor tiene foco activo (la usuaria ha pulsado
+    // teclas en el juego, ha movido la guitarra/alfombra, etc.), Chrome
+    // consume el primer click sobre el topbar del padre SOLO para transferir
+    // foco — el evento `click` ni siquiera llega al `<a>`, así que un handler
+    // de `click` no se dispara. Es el bug clásico de "primer click se come
+    // el browser para devolver foco al parent". El segundo click ya funciona.
+    //
+    // `pointerdown` se entrega al elemento físicamente clickeado ANTES de
+    // que el navegador resuelva el flujo de foco — es la capa más baja y
+    // se dispara fiablemente incluso cuando el iframe tenía el foco previo.
+    // Mantenemos `click` como respaldo para casos exóticos (touch que
+    // cancela el pointerdown, AT que sintetiza solo click, etc.).
+    //
+    // Patrón: misma función para ambos eventos, con guard contra doble
+    // disparo si el browser entrega los dos en el mismo gesto.
+    function navTo(route) {
+      window.focus();
+      if (location.hash === '#' + route) {
+        navigate();
+      } else {
+        location.hash = '#' + route;
+      }
+    }
+    function makeNavHandler(getRoute) {
+      var lastFiredAt = 0;
+      return function (e) {
+        // pointerdown solo dispara con botón principal (izquierdo del ratón
+        // o toque simple). Para click, e.button siempre es 0.
+        if (e.type === 'pointerdown' && e.button !== 0) return;
+        // Debounce contra el doble disparo pointerdown→click del mismo gesto.
+        var now = e.timeStamp || performance.now();
+        if (now - lastFiredAt < 400) { e.preventDefault(); return; }
+        lastFiredAt = now;
         e.preventDefault();
-        var route = a.dataset.route;
-        window.focus();
-        if (location.hash === '#' + route) {
-          navigate();
-        } else {
-          location.hash = '#' + route;
-        }
-      });
+        navTo(getRoute());
+      };
+    }
+    navLinks.forEach(function (a) {
+      var h = makeNavHandler(function () { return a.dataset.route; });
+      a.addEventListener('pointerdown', h);
+      a.addEventListener('click', h);
     });
+    // El logo (.shell-brand) también es navegación: href="#/play". Sin handler
+    // explícito sufría el mismo bug — Chrome se comía el primer click cuando
+    // el motor tenía foco. Le pegamos el mismo patrón.
+    if (brandLink) {
+      var brandHandler = makeNavHandler(function () { return '/play'; });
+      brandLink.addEventListener('pointerdown', brandHandler);
+      brandLink.addEventListener('click', brandHandler);
+    }
 
     // Asegura que haya hash al entrar — start_url=/app.html sin hash debe
     // resolver a la ruta default (/play).
     if (!location.hash) location.replace('#' + DEFAULT_ROUTE);
     else navigate();
+
+    // Polling de sincronización inversa: el evento `load` del iframe solo se
+    // dispara cuando el PADRE cambia frame.src. Cuando el contenido del iframe
+    // navega por cuenta propia (p.ej. las cards del dashboard hacen
+    // window.location.href='stepmania-play.html'), el padre no se entera y su
+    // hash queda desincronizado. Este interval detecta esa discrepancia y
+    // actualiza el hash silenciosamente con history.replaceState (sin disparar
+    // hashchange ni recargar el iframe).
+    setInterval(function () {
+      try {
+        var iframeFile = frame.contentWindow.location.href
+          .split('/').pop().split('#')[0].split('?')[0];
+        var syncRoute = null;
+        var rkeys = Object.keys(ROUTES);
+        for (var ri = 0; ri < rkeys.length; ri++) {
+          if (ROUTES[rkeys[ri]].split('#')[0] === iframeFile) { syncRoute = rkeys[ri]; break; }
+        }
+        if (syncRoute && syncRoute !== currentRoute()) {
+          frame.dataset.route = syncRoute;
+          history.replaceState(null, '', '#' + syncRoute);
+          setActive(syncRoute);
+          document.title = 'Sincro · ' + syncRoute.slice(1).replace(/-/g, ' ');
+        }
+      } catch (_) { /* cross-origin inesperado — ignorar */ }
+    }, 500);
 
     // Botón de instalación PWA — bootstrap dispara 'sincro-pwa-installable'
     // cuando el navegador tiene el prompt deferido disponible.
