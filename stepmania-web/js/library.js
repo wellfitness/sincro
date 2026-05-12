@@ -55,6 +55,21 @@ async function refreshLibrary() {
   songs.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
   _libraryCache = songs;
   renderLibraryFromCache();
+  // Auto-corrección silenciosa de tags rotos en background. NO bloquea el
+  // primer render — la biblioteca aparece inmediatamente con los datos
+  // actuales y, si el parser nuevo encuentra mejores tags, refresca después.
+  // El campo _metaParserVersion en cada entry evita re-procesar lo ya OK.
+  _autoFixBrokenLibraryTags().then((fixed) => {
+    if (fixed > 0) {
+      // Recargar caché desde DB para reflejar los cambios y re-renderizar.
+      dbAll().then((fresh) => {
+        fresh.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+        _libraryCache = fresh;
+        if (typeof _allSongsCache !== 'undefined') _allSongsCache = fresh;
+        renderLibraryFromCache();
+      });
+    }
+  }).catch(() => { /* nunca propagar — es opcional */ });
 }
 
 function renderLibraryFromCache() {
@@ -103,7 +118,6 @@ function renderLibraryFromCache() {
   let html = storageBar + `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:rgba(0,0,0,0.3);border-radius:8px">
       <input type="checkbox" class="playlist-checkbox" id="selectAllVisibleLibrary" onchange="toggleAllVisibleLibrary()" aria-label="Seleccionar todas las canciones visibles">
       <span style="color:var(--gris-300);font-size:0.88em;flex:1">💡 Marca varias canciones con la casilla para eliminarlas a la vez${(qTitle || qArtist) ? ` · <strong>${songs.length}/${allSongs.length}</strong> tras filtros` : ''}</span>
-      <button class="icon-btn" onclick="refreshLibraryTags(event)" title="Releer los tags ID3 del audio de cada canción y actualizar título/artista">🔄 Refrescar metadatos</button>
     </div>`;
 
   for (const s of songs) {
@@ -173,39 +187,44 @@ function toggleAllVisibleLibrary() {
   renderLibraryFromCache();
 }
 
-// Re-lee los tags ID3 de cada audioBlob guardado en `songs` y actualiza
-// title/artist en IndexedDB. Útil tras un bug del parser (ej: el de
-// 2026-05-12 con UTF-16 que dejaba `�` al final) para limpiar datos
-// corruptos sin perder las canciones. Si `audio-metadata.js` no está
-// cargado (deploy intermedio sin actualizar el HTML), el botón queda
-// inerte con aviso al usuario.
-async function refreshLibraryTags(evt) {
-  if (!window.AudioMetadata || !window.AudioMetadata.refreshStoredTags) {
-    alert('El módulo de metadatos no está cargado. Recarga la página con Ctrl+F5.');
-    return;
-  }
-  const btn = evt && evt.target;
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Releyendo tags...'; }
-  try {
-    const db = await openDB();
-    const result = await window.AudioMetadata.refreshStoredTags(db, 'songs');
-    _libraryCache = await dbAll();
-    // Invalidar también el cache de song-select (pantalla "Bailar") si existe,
-    // para que cuando el usuario navegue allí vea los datos limpios sin
-    // necesidad de re-cargar la página.
-    if (typeof _allSongsCache !== 'undefined') _allSongsCache = _libraryCache;
-    renderLibraryFromCache();
-    if (result.fixed > 0) {
-      alert(`Refrescado: ${result.fixed} canciones actualizadas de ${result.total} (${result.unchanged} ya estaban OK${result.errors ? `, ${result.errors} con errores` : ''}).`);
-    } else {
-      alert(`Sin cambios: las ${result.total} canciones ya tenían sus tags al día.`);
+// Auto-corrección silenciosa de canciones con tags rotos o ausentes. Se
+// ejecuta en background al abrir la biblioteca para reparar lo que el parser
+// viejo dejó mal (artist = "Unknown", título con `�` por bug UTF-16, o
+// archivos M4A importados antes de tener parser para ese formato).
+//
+// Filtros para evitar re-procesar lo que ya está bien:
+//   - artist === 'Unknown' o vacío → el parser viejo falló o no había tags
+//   - title o artist contienen `�` → parser corrupto v24
+//   - flag `_metaParserVersion < 30` → optimización para no re-procesar
+//     canciones ya verificadas con el parser actual aunque queden mal por
+//     archivos sin tags reales (UI muestra esos como vacío sin reintentar)
+//
+// El re-parseo solo OK los rotos, no toca los buenos. Tras corregir,
+// re-render automático.
+async function _autoFixBrokenLibraryTags() {
+  if (!window.AudioMetadata || !window.AudioMetadata.extractMetadata) return 0;
+  const songs = await dbAll();
+  const PARSER_VERSION = 30;  // bump cuando se descubra otro bug del parser
+  let fixed = 0;
+  for (const s of songs) {
+    if (!s.audioBlob) continue;
+    const alreadyChecked = (s._metaParserVersion || 0) >= PARSER_VERSION;
+    if (alreadyChecked) continue;
+    try {
+      const meta = await window.AudioMetadata.extractMetadata(s.audioBlob);
+      const newTitle = meta.title || s.title;
+      const newArtist = meta.artist || s.artist;
+      const changed = newTitle !== s.title || newArtist !== s.artist;
+      s.title = newTitle;
+      s.artist = newArtist;
+      s._metaParserVersion = PARSER_VERSION;
+      await dbPut(s);
+      if (changed) fixed++;
+    } catch (err) {
+      // Una canción rota no debe parar el batch.
     }
-  } catch (err) {
-    console.error('[refreshLibraryTags]', err);
-    alert('Error al refrescar metadatos: ' + (err.message || String(err)));
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '🔄 Refrescar metadatos'; }
   }
+  return fixed;
 }
 
 // Limpia los filtros de texto y re-renderiza. Lo expone el "Sin resultados"

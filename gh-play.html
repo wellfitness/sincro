@@ -1364,6 +1364,19 @@ async function refreshLibraryList() {
   entries.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
   _ghLibraryCache = entries;
   renderGhLibraryFromCache();
+  // Auto-corrección silenciosa de tags rotos en background. Idem SM
+  // (library.js): no bloquea el primer render, re-renderiza solo si hubo
+  // cambios. Cada entry lleva _metaParserVersion para no re-procesar.
+  _autoFixBrokenGhTags().then((fixed) => {
+    if (fixed > 0) {
+      window.GHLibrary.all().then((fresh) => {
+        fresh.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+        _ghLibraryCache = fresh;
+        if (typeof _ghManageCache !== 'undefined') _ghManageCache = fresh;
+        renderGhLibraryFromCache();
+      });
+    }
+  }).catch(() => { /* opcional */ });
 }
 
 function renderGhLibraryFromCache() {
@@ -1404,7 +1417,6 @@ function renderGhLibraryFromCache() {
   let html = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:rgba(0,0,0,0.3);border-radius:8px">
       <input type="checkbox" class="playlist-checkbox" id="selectAllVisibleGH" onchange="toggleAllVisible()" aria-label="Seleccionar todas las partituras visibles">
       <span style="color:var(--gris-300);font-size:0.88em;flex:1">💡 Marca varias partituras para tocarlas en cadena (modo lista)${(qTitle || qArtist) ? ` · <strong>${entries.length}/${allEntries.length}</strong> tras filtros` : ''}</span>
-      <button class="icon-btn" onclick="refreshGhLibraryTags(event)" title="Releer los tags ID3 del audio de cada partitura y actualizar título/artista">🔄 Refrescar metadatos</button>
     </div>`;
   for (const e of entries) {
     const dur = e.duration ? `${Math.floor(e.duration/60)}:${('0'+Math.floor(e.duration%60)).slice(-2)}` : '?';
@@ -1597,37 +1609,40 @@ function clearPlaylistSelection() {
   renderGhLibraryFromCache();
 }
 
-// Re-lee los tags ID3 de cada audioBlob guardado en `gh-songs` y actualiza
-// title/artist en IndexedDB. Equivalente al refreshLibraryTags de la SM
-// (library.js) — útil tras un bug del parser para limpiar datos corruptos
-// sin perder las partituras.
-async function refreshGhLibraryTags(event) {
-  if (!window.AudioMetadata || !window.AudioMetadata.refreshStoredTags) {
-    alert('El módulo de metadatos no está cargado. Recarga la página con Ctrl+F5.');
-    return;
-  }
-  const btn = event && event.target;
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Releyendo tags...'; }
-  try {
-    const db = await window.GHLibrary.open();
-    const result = await window.AudioMetadata.refreshStoredTags(db, 'gh-songs');
-    // Invalidar caches in-memory de ambas pantallas (Tocar y Gestionar) para
-    // que el render siguiente lea las filas actualizadas de IndexedDB.
-    const fresh = await window.GHLibrary.all();
-    if (typeof _ghLibraryCache !== 'undefined') _ghLibraryCache = fresh;
-    if (typeof _ghManageCache !== 'undefined') _ghManageCache = fresh;
-    renderGhLibraryFromCache();
-    if (result.fixed > 0) {
-      alert(`Refrescado: ${result.fixed} partituras actualizadas de ${result.total} (${result.unchanged} ya estaban OK${result.errors ? `, ${result.errors} con errores` : ''}).`);
-    } else {
-      alert(`Sin cambios: las ${result.total} partituras ya tenían sus tags al día.`);
+// Auto-corrección silenciosa de tags rotos / "Unknown" en la biblioteca GH.
+// Equivalente al _autoFixBrokenLibraryTags de la SM (library.js) — se ejecuta
+// en background al abrir la biblioteca de GH para reparar lo que el parser
+// viejo dejó mal sin que el usuario tenga que pulsar ningún botón.
+async function _autoFixBrokenGhTags() {
+  if (!window.AudioMetadata || !window.AudioMetadata.extractMetadata) return 0;
+  if (!window.GHLibrary) return 0;
+  const entries = await window.GHLibrary.all();
+  const PARSER_VERSION = 30;
+  const db = await window.GHLibrary.open();
+  let fixed = 0;
+  for (const e of entries) {
+    if (!e.audioBlob) continue;
+    if ((e._metaParserVersion || 0) >= PARSER_VERSION) continue;
+    try {
+      const meta = await window.AudioMetadata.extractMetadata(e.audioBlob);
+      const newTitle = meta.title || e.title;
+      const newArtist = meta.artist || e.artist;
+      const changed = newTitle !== e.title || newArtist !== e.artist;
+      e.title = newTitle;
+      e.artist = newArtist;
+      e._metaParserVersion = PARSER_VERSION;
+      await new Promise((res, rej) => {
+        const tx = db.transaction('gh-songs', 'readwrite');
+        const r = tx.objectStore('gh-songs').put(e);
+        r.onsuccess = () => res();
+        r.onerror = () => rej(r.error);
+      });
+      if (changed) fixed++;
+    } catch (err) {
+      // Una partitura rota no debe parar el batch.
     }
-  } catch (err) {
-    console.error('[refreshGhLibraryTags]', err);
-    alert('Error al refrescar metadatos: ' + (err.message || String(err)));
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '🔄 Refrescar metadatos'; }
   }
+  return fixed;
 }
 
 // Limpia los filtros de texto de la biblioteca de Tocar y re-renderiza.
