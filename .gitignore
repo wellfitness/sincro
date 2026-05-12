@@ -1,6 +1,7 @@
-# Source de StepMania (clon del repo oficial, no se duplica aquí)
+# Source de StepMania y YARG (clones de repos oficiales, referencias locales)
 stepmania/
 stepmania-5_1-new/
+YARG-master/
 
 # Configuración local de Claude Code y agentes
 .claude/

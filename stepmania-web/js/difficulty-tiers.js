@@ -25,11 +25,19 @@
 //  (NoteDataUtil.cpp:1142 — `Stream = (total_taps / fSongSeconds) / 7.0f`):
 //
 //    Stream value oficial → NPS = Stream * 7
-//    DDR Beginner:  Stream <0.15 → NPS <1.0    (cap nuestro: 1.0 ✓)
-//    DDR Easy:      Stream 0.10-0.25 → 0.7-1.75 (cap: 2.0 ✓)
-//    DDR Medium:    Stream 0.20-0.45 → 1.4-3.15 (cap: 3.5 ✓)
-//    DDR Hard:      Stream 0.40-0.70 → 2.8-4.9  (cap: 5.5 ✓)
-//    DDR Challenge: Stream 0.65+    → 4.5+     (cap: 9.0 ✓)
+//    DDR Beginner:  Stream <0.15      → NPS <1.0    (cap nuestro: 1.0 — top del rango)
+//    DDR Easy:      Stream 0.10-0.25  → NPS 0.7-1.75 (cap: 2.0 — un pelo por encima a propósito)
+//    DDR Medium:    Stream 0.20-0.45  → NPS 1.4-3.15 (cap: 2.6 — dentro del rango)
+//    DDR Hard:      Stream 0.40-0.70  → NPS 2.8-4.9  (cap: 4.2 — dentro del rango)
+//    DDR Challenge: Stream 0.65+      → NPS 4.5+     (cap: 7.5 — Challenge accesible)
+//
+//  Recalibración 2026-05-12: los caps anteriores (Medium 3.5, Hard 5.5, Challenge 9.0)
+//  estaban por encima del techo de los rangos oficiales. La razón: el autostepper
+//  coloca nota en cada onset detectado SIN respiros coreográficos, así que la
+//  misma cifra de NPS se siente más densa en chart auto que en chart humano.
+//  Los nuevos caps caen dentro del rango oficial y el ratio Easy→Medium pasa de
+//  1.75x a 1.30x — alineado con la progresión geométrica natural ~1.33x que YARG
+//  asume entre tiers (NoteSpeedScale 0.422→0.5625→0.75→1.0).
 //
 //  Para Voltage SM5 usa ventana fija de 8 BEATS (no segundos), formula:
 //    Voltage = (max_notes_in_8_beats / 8) * avg_bps / 10
@@ -40,17 +48,19 @@
 //    pMeter = 0.775 + 10.1*Stream + 5.27*Voltage - 0.905*Air - 1.10*Freeze
 //           + 2.86*Chaos + DifficultyCoeff - 6.35*(Stream*Voltage) - 2.58*Chaos²
 //    DifficultyCoeff = {-0.877, -0.877, 0, 0.722, 0.722, 0}  // Beg,Easy,Med,Hard,Ch,Edit
-//  Verificación con nuestros caps:
+//  Verificación con los caps nuevos:
 //    Beginner (Stream=0.10, Voltage=0.20): pMeter ≈ 1.8  → meter ~2 ✓
 //    Easy     (Stream=0.20, Voltage=0.30): pMeter ≈ 3.1  → meter ~3 ✓
-//    Medium   (Stream=0.40, Voltage=0.50): pMeter ≈ 5.5  → meter ~5-6 ✓
-//    Hard     (Stream=0.65, Voltage=0.70): pMeter ≈ 8.7  → meter ~9 ✓
-//    Chall.   (Stream=1.00, Voltage=0.90): pMeter ≈ 13.5 → meter ~13-14 ✓
+//    Medium   (Stream=0.37, Voltage=0.45): pMeter ≈ 5.4  → meter ~5 ✓
+//    Hard     (Stream=0.60, Voltage=0.65): pMeter ≈ 8.3  → meter ~8 ✓
+//    Chall.   (Stream=1.07, Voltage=0.85): pMeter ≈ 11   → meter ~11 (sin coreografía humana
+//                                                                     no se alcanza el meter 13-14
+//                                                                     típico de Challenge oficial)
 //
-//  GH Easy (diff_guitar 0-1):  G/R/Y solo, casi sin chords, NPS ~0.5-1.2
-//  GH Medium (diff_guitar 2-3): añade Blue, chords ocasionales
-//  GH Hard (diff_guitar 4):    los 5, chords frecuentes
-//  GH Expert (diff_guitar 5-6): todo, HOPOs, taps
+//  GH Easy (diff_guitar 0-1):  G/R/Y solo, casi sin chords, NPS típico oficial 0.5-1.2 (cap: 1.4)
+//  GH Medium (diff_guitar 2-3): añade Blue, chords ocasionales,            NPS típico 1.0-2.2 (cap: 1.9)
+//  GH Hard (diff_guitar 4):    los 5, chords frecuentes,                   NPS típico 2.0-4.0 (cap: 3.5)
+//  GH Expert (diff_guitar 5-6): todo, HOPOs, taps,                         NPS típico 3.5-7+  (cap: 6.0)
 //
 //  Uso:
 //    <script src="stepmania-web/js/difficulty-tiers.js"></script>
@@ -71,15 +81,15 @@
     sm: {
       beginner:  { minGapSec: 1.00, targetMaxNps: 1.0, minRhythmPriority: 4 },
       easy:      { minGapSec: 0.50, targetMaxNps: 2.0, minRhythmPriority: 3 },
-      medium:    { minGapSec: 0.30, targetMaxNps: 3.5, minRhythmPriority: 2 },
-      hard:      { minGapSec: 0.18, targetMaxNps: 5.5, minRhythmPriority: 1 },
-      challenge: { minGapSec: 0.10, targetMaxNps: 9.0, minRhythmPriority: 0 }
+      medium:    { minGapSec: 0.42, targetMaxNps: 2.6, minRhythmPriority: 3 },
+      hard:      { minGapSec: 0.24, targetMaxNps: 4.2, minRhythmPriority: 2 },
+      challenge: { minGapSec: 0.10, targetMaxNps: 7.5, minRhythmPriority: 0 }
     },
     gh: {
       easy:   { minGapSec: 0.70, targetMaxNps: 1.4, minRhythmPriority: 4 },
-      medium: { minGapSec: 0.40, targetMaxNps: 2.5, minRhythmPriority: 3 },
-      hard:   { minGapSec: 0.22, targetMaxNps: 4.5, minRhythmPriority: 1 },
-      expert: { minGapSec: 0.13, targetMaxNps: 7.5, minRhythmPriority: 0 }
+      medium: { minGapSec: 0.55, targetMaxNps: 1.9, minRhythmPriority: 3 },
+      hard:   { minGapSec: 0.30, targetMaxNps: 3.5, minRhythmPriority: 2 },
+      expert: { minGapSec: 0.17, targetMaxNps: 6.0, minRhythmPriority: 0 }
     }
   };
 

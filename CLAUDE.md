@@ -190,13 +190,28 @@ Algoritmo (optimizado para música bailable: techno, dance, pop, rock):
 Tabla calibrada (tier → minGap / NPS max / minRhythmPriority):
 - SM Beginner: 1.00s / 1.0 / 4 (solo downbeats y mitades de compás)
 - SM Easy: 0.50s / 2.0 / 3 (hasta beat completo)
-- SM Medium: 0.30s / 3.5 / 2 (hasta corchea)
-- SM Hard: 0.18s / 5.5 / 1 (hasta semicorchea)
-- SM Challenge: 0.10s / 9.0 / 0 (todo)
+- SM Medium: 0.42s / 2.6 / 3 (mismo grid rítmico que Easy, más denso)
+- SM Hard: 0.24s / 4.2 / 2 (entra a corcheas offbeat)
+- SM Challenge: 0.10s / 7.5 / 0 (todo)
 - GH Easy: 0.70s / 1.4 / 4
-- GH Medium: 0.40s / 2.5 / 3
-- GH Hard: 0.22s / 4.5 / 1
-- GH Expert: 0.13s / 7.5 / 0
+- GH Medium: 0.55s / 1.9 / 3
+- GH Hard: 0.30s / 3.5 / 2
+- GH Expert: 0.17s / 6.0 / 0
+
+Recalibración 2026-05-12: los valores anteriores (SM Medium 0.30/3.5/2,
+Hard 0.18/5.5/1, Challenge 0.10/9.0/0; GH Medium 0.40/2.5/3, Hard 0.22/4.5/1,
+Expert 0.13/7.5/0) estaban por encima del techo de los rangos oficiales DDR
+(Medium oficial cap 3.15 NPS, Hard 4.9, GH Hard 4.0). Bajados para alinear con
+los rangos `diff_guitar` 0-6 documentados (customsongscentral) y la progresión
+geométrica ~1.33x entre tiers que YARG usa para NoteSpeedScale
+(`Assets/Script/Helpers/Extensions/DifficultyExtensions.cs:55-72` en repo local
+`YARG-master/`, ignorado por `.gitignore` junto a `stepmania-5_1-new/`). Ratio
+Easy→Medium: pasa de 1.75x a 1.30x — el "salto que se sentía como entrar a otro
+juego" desaparece. Además, SM Medium ahora mantiene `minRhythmPriority: 3`
+(igual que Easy), eliminando el cambio cualitativo "Easy solo beats / Medium
+ya corcheas offbeat" — la entrada a corcheas offbeat ocurre ahora en Hard. La
+calibración antigua sigue accesible vía preset "Intenso" (multiplica caps × 1.30,
+divide minGap / 1.30).
 
 Los presets (suave/normal/intenso) se traducen a multiplicadores globales (×0.7/×1.0/×1.3) que escalan minGap y NPS target uniformemente.
 
@@ -281,7 +296,7 @@ Generador automático de charts **Guitar Hero (.chart Clone Hero / Feedback form
 **Note generation (5 trastes, 4 dificultades):**
 - **Roles**: 0=Verde, 1=Rojo, 2=Amarillo, 3=Azul, 4=Naranja (índices del `.chart` format).
 - **Walk de trastes**: caminata aleatoria con bias 65% adyacente, 25% jump de 2, 10% random. Prohíbe repetir traste consecutivo. La primera nota de cada chart va a Verde/Rojo (más fácil empezar bajo).
-- **Filtrado por dificultad**: delegado a `DifficultyTiers.filterTicks` — cada tier tiene NPS objetivo absoluto y `minGapSec` real (no stride relativo). Easy: rango G-Y, gap ≥ 0.7s, ≤1.4 NPS. Medium: G-Az, gap ≥ 0.4s, ≤2.5 NPS. Hard: G-N, gap ≥ 0.22s, ≤4.5 NPS. Expert: G-N, gap ≥ 0.13s, ≤7.5 NPS. Calibrado a estándares de `diff_guitar` de la comunidad Clone Hero (Easy = "incredibly easy and simple, almost no alt-strumming").
+- **Filtrado por dificultad**: delegado a `DifficultyTiers.filterTicks` — cada tier tiene NPS objetivo absoluto y `minGapSec` real (no stride relativo). Easy: rango G-Y, gap ≥ 0.70s, ≤1.4 NPS. Medium: G-Az, gap ≥ 0.55s, ≤1.9 NPS. Hard: G-N, gap ≥ 0.30s, ≤3.5 NPS. Expert: G-N, gap ≥ 0.17s, ≤6.0 NPS. Calibrado a estándares de `diff_guitar` de la comunidad Clone Hero (Easy = "incredibly easy and simple, almost no alt-strumming") y a la progresión geométrica ~1.33x entre tiers que YARG asume oficialmente (NoteSpeedScale en `DifficultyExtensions.cs:55-72`). Los caps anteriores (Medium 2.5, Hard 4.5, Expert 7.5 NPS) estaban por encima del techo de los rangos oficiales y producían el salto Easy→Medium 1.79x; los nuevos lo dejan en 1.36x.
 - **Chords (Hard+)**: con probabilidad `chordProb` (slider 0-60%, default 18%) se añade un fret adyacente al actual. Easy/Medium nunca llevan chords.
 - **Sustains**: si hay gap ≥ 1/2 beat al siguiente onset, con prob. `sustainProb` se convierte en sustain del 80% del gap.
 - **HOPOs**: NO se marcan explícitamente. Clone Hero auto-detecta HOPOs por proximidad usando la regla canónica de `scan-chart` (gap < 65 ticks a res 192, single, fret distinto al previo, no chord, no override por flag forceHopo/forceTap). Ver "Constantes canónicas" para el detalle del algoritmo.
