@@ -1,8 +1,9 @@
 // ============================================================================
 //  BACKUP / RESTORE — export full library (songs + scores + settings) as a
-//  single ZIP, and import it back. Reuses makeZip from autostepper.js for
-//  packing; ships its own minimal "store"-mode unzip (no compression
-//  required since makeZip writes uncompressed entries).
+//  single ZIP, and import it back. Ships its own minimal ZIP encoder/decoder
+//  in "store" mode (sin compresión), igual que los autosteppers standalone
+//  (autostepper.html, gh-autostepper.html). Mantener los tres encoders ZIP
+//  alineados si se tocan headers o end-of-central-directory.
 // ============================================================================
 
 async function exportBackupZip() {

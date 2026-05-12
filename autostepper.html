@@ -783,6 +783,7 @@
 
 <script src="stepmania-web/js/audio-pipeline.js"></script>
 <script src="stepmania-web/js/difficulty-tiers.js"></script>
+<script src="stepmania-web/js/audio-metadata.js"></script>
 <script>
 // ============================================================
 //                  GLOBAL STATE
@@ -840,27 +841,29 @@ fileInput.addEventListener('change', e => {
   e.target.value = ''; // allow re-selecting same file
 });
 
-function addFiles(files) {
+async function addFiles(files) {
   // Filtro por extensión, no por file.type: en Windows el file picker entrega
   // FLAC/M4A/OGG con type="" y se descartarían silenciosamente.
   const AUDIO_RE = /\.(mp3|wav|ogg|m4a|flac)$/i;
-  for (const file of files) {
-    if (!AUDIO_RE.test(file.name)) continue;
-    const nameNoExt = file.name.replace(/\.[^.]+$/, '');
-    const m = nameNoExt.match(/^(.+?)\s*-\s*(.+)$/);
-    let artist = '', title = nameNoExt;
-    if (m) { artist = m[1].trim(); title = m[2].trim(); }
-    queue.push({
-      id: ++queueIdCounter,
+  const valid = Array.from(files).filter(f => AUDIO_RE.test(f.name));
+  if (!valid.length) return;
+  // Procesamos los tags en paralelo (cada lectura solo toca ~1MB del File).
+  // El ID se asigna sync ANTES del await para mantener correlatividad.
+  const items = await Promise.all(valid.map(async (file) => {
+    const id = ++queueIdCounter;
+    const meta = await AudioMetadata.extractMetadata(file);
+    return {
+      id,
       file,
-      title,
-      artist,
+      title: meta.title || file.name.replace(/\.[^.]+$/, ''),
+      artist: meta.artist,
       status: 'pending',
       bpmOverride: '',
       result: null,
       error: null
-    });
-  }
+    };
+  }));
+  queue.push(...items);
   renderQueue();
   document.getElementById('optionsCard').style.display = queue.length ? '' : 'none';
 }
@@ -916,7 +919,7 @@ function renderQueue() {
     html += `<div class="queue-row${sel}">
       <div class="name">
         <div style="font-weight:600">${escapeHtml(q.title || q.file.name)}</div>
-        <div style="color:#888;font-size:0.78em">${escapeHtml(q.artist || '')} · ${(q.file.size/1024/1024).toFixed(2)} MB</div>
+        <div style="color:#888;font-size:0.78em">${escapeHtml(q.artist) || '<em style="opacity:0.5">sin artista</em>'} · ${(q.file.size/1024/1024).toFixed(2)} MB</div>
       </div>
       <div class="status"><span class="badge ${q.status}">${statusLabel(q.status)}</span></div>
       <div class="bpm">

@@ -137,7 +137,7 @@ Constantes en `test-pad.html`:
 ### `autostepper.html`
 Generador automático de charts **StepMania (.ssc/.sm)** desde MP3/WAV. Equivalente al `phr00t/AutoStepper` (Java) pero en navegador.
 
-**Política unificada 8-lane:** todos los charts se generan como `dance-double` (8 carriles: cardinales + 4 diagonales) — master único por canción. La elección de modo (4/6/8) es decisión de runtime en Sincro Play, no de autoría. En StepMania nativo, los charts aparecen bajo el modo *Doubles* (requiere dos alfombras o remapeo). El integrado en `play.html` (vía `stepmania-web/js/autostepper.js`) y el standalone `autostepper.html` comparten esta política — cero divergencia entre ambos.
+**Política unificada 8-lane:** todos los charts se generan como `dance-double` (8 carriles: cardinales + 4 diagonales) — master único por canción. La elección de modo (4/6/8) es decisión de runtime en Sincro Play, no de autoría. En StepMania nativo, los charts aparecen bajo el modo *Doubles* (requiere dos alfombras o remapeo). El standalone `autostepper.html` aplica esta política. (Hubo un módulo `stepmania-web/js/autostepper.js` integrado en `play.html` hasta el 2026-05-11 que compartía la lógica; al separarse la pantalla "Crear" a archivo dedicado, ese módulo quedó huérfano y fue borrado el 2026-05-12.)
 
 **Pipeline de detección compartida** — vive en `stepmania-web/js/audio-pipeline.js`, expuesta como `window.AudioPipeline.{decodeFile, toMono, bassEmphasize, computeEnergyEnvelope, computeODF, pickPeaks, detectBPM, detectOffset, ensureAudioContext, audioBufferToWav}`. La usan tanto `autostepper.html` (output `.ssc/.sm`) como `gh-autostepper.html` (output `.chart`). El análisis es agnóstico al juego — solo cambia cómo se traduce el resultado a notas.
 
@@ -200,9 +200,31 @@ Tabla calibrada (tier → minGap / NPS max / minRhythmPriority):
 
 Los presets (suave/normal/intenso) se traducen a multiplicadores globales (×0.7/×1.0/×1.3) que escalan minGap y NPS target uniformemente.
 
-API expuesta: `window.DifficultyTiers.{filterByDifficulty(onsetsSec, bpm, offsetSec, gameType, difficultyKey, presetMul), filterPositions48(...), filterTicks(...)}`. Los autosteppers SM (HTML + integrado en `stepmania-web/js/autostepper.js` para play.html) usan `filterPositions48`; el GH usa `filterTicks` con `CHART_RESOLUTION=192`.
+API expuesta: `window.DifficultyTiers.{filterByDifficulty(onsetsSec, bpm, offsetSec, gameType, difficultyKey, presetMul), filterPositions48(...), filterTicks(...)}`. El autostepper SM (`autostepper.html` standalone) usa `filterPositions48`; el GH (`gh-autostepper.html`) usa `filterTicks` con `CHART_RESOLUTION=192`.
 
 Implementa encoder ZIP propio (modo "store", sin compresión) — sin dependencias externas.
+
+**Lectura de metadatos de audio:** ambos autosteppers cargan `stepmania-web/js/audio-metadata.js` (ver descripción más abajo) y lo invocan en `addFiles()` para poblar `title` y `artist` desde tags ID3v2/v1 (MP3) o Vorbis Comments (FLAC). Hasta el 2026-05-12 ambos hacían un split trivial del filename por `" - "`, lo que producía resultados absurdos con nombres como `12 Toxicity.mp3` (artist quedaba vacío y al guardar en biblioteca se etiquetaba como "Unknown") o `11 Rockstar - 2020 Remaster.mp3` (track# parseado como artist). El módulo nuevo replica lo que ya hace Windows Explorer (lee los tags embebidos del MP3). **Solo se persisten title y artist** — el módulo expone también `album/track/year` pero los autosteppers los ignoran porque la UI de biblioteca y los filtros de búsqueda (`library.js:84-89`, `song-select.js:77-88`, `gh-play.html:1248-1253`) solo operan sobre esos dos campos. El bug que dispararon ID3 reales era que los filtros "Buscar artista" daban 0 resultados aunque la canción claramente era de ese artista — al rellenarse bien `s.artist`, el `.includes(qArtist)` funciona.
+
+### `stepmania-web/js/audio-metadata.js`
+Parser binario de tags de audio (sin dependencias). Lo cargan los dos autosteppers (`autostepper.html` y `gh-autostepper.html`) para poblar metadatos al soltar archivos.
+
+Cobertura por formato:
+- **MP3:** ID3v2.3 y v2.4 (frames TIT2/TPE1/TALB/TRCK/TYER/TDRC en encodings ISO-8859-1, UTF-16 con BOM, UTF-16BE y UTF-8). v2.2 (frame IDs de 3 chars) no soportado — los taggers modernos ya no lo emiten desde 2002. Fallback a ID3v1 (últimos 128 bytes del archivo, latin1 estricto) cuando no hay v2.
+- **FLAC:** Vorbis Comments en el bloque `VORBIS_COMMENT` (type 4). Keys reconocidas: TITLE, ARTIST, ALBUM, TRACKNUMBER, DATE/YEAR. Case-insensitive en el parser (algunos taggers emiten `title=` minúscula).
+- **WAV/OGG/M4A:** fallback a filename. M4A (atoms iTunes nested `moov/udta/meta/ilst/©nam`) queda como TODO si en el futuro hay demanda.
+
+Estrategia de lectura: `extractMetadata(file)` lee solo los **primeros ~1MB** del File vía `file.slice(0, 1<<20).arrayBuffer()` — eso cubre ID3v2 con artwork embebido (típicamente 50-500KB) y FLAC headers, ahorrando memoria comparado con cargar el archivo entero (5-15MB por MP3). Para ID3v1 lee adicionalmente los últimos 128 bytes con un segundo slice. Si todo falla, cae a `parseFromFilename(name)` que strippea prefijos de track# (`02 `, `12. `, `03 - `, `03_`) antes de aplicar la heurística "Artist - Album - Title" por splits de `" - "`.
+
+El módulo devuelve `{ title, artist, album, track, year, source }` aunque los call-sites actuales (autosteppers SM y GH) solo consumen `title` y `artist` — la biblioteca y los filtros de búsqueda viven sobre esos dos campos. Los campos extra están disponibles para futuras features (sort por album, agrupación por año) sin necesidad de tocar el parser.
+
+**Detalles de implementación críticos** (cualquier toque debe respetarlos):
+- **Synchsafe ints (28 bits)**: tamaños en ID3v2 se codifican con bit 7 de cada byte siempre a 0 para no chocar con sync MPEG (que busca 11 bits "1" consecutivos). Decoder canónico en `synchsafe(b, off)`. **v2.3 usa uint32BE normal, v2.4 usa synchsafe** — un error clásico es usar el mismo decoder para ambos y leer tamaños 8× inflados.
+- **Multi-valor v2.4 separado por NUL**: dentro de un mismo frame TPE1 puede haber `"Artist1\0Artist2\0Artist3"`. Nos quedamos con el primero vía `text.split(/\x00/)[0]`. Usamos la forma regex (no literal `'\0'`) para evitar que algunos editores guarden el byte NUL real en el .js source.
+- **Guard de null**: si tras parsear todos los frames no hay title NI artist NI album, devolvemos `null` para que `extractMetadata` caiga al siguiente parser. Un tag con solo TRCK ("track 5") es basura para nuestra UI.
+- **Doble export CJS** al final del módulo siguiendo el patrón de `parser.js:275-289` y `difficulty-tiers.js:259-274`. Esto permite que el test `tests/audio-metadata.test.mjs` haga `import pkg from '...js'` aunque el módulo esté escrito como classic script.
+
+API expuesta: `window.AudioMetadata.{extractMetadata(file), parseID3v2(buf), parseID3v1(buf), parseFLAC(buf), parseFromFilename(name)}`. Los 4 parsers internos son exportados públicamente para testing — los autosteppers solo invocan `extractMetadata`.
 
 ### `stepmania-web/js/gh-db.js`
 Módulo de IndexedDB para la **biblioteca de charts Guitar Hero**. Comparte la misma DB `StepManiaWebDB` que la suite SM (DB_VERSION 3, upgrade-safe — añade el store `gh-songs` sin tocar `songs`/`scores` existentes). Expone `window.GHLibrary` con: `open()`, `add(entry)`, `all()`, `get(id)`, `delete(id)`, `extractMeta(chartText)`.
@@ -274,6 +296,8 @@ Generador automático de charts **Guitar Hero (.chart Clone Hero / Feedback form
 - 🌿 Suave: sens 2.4, 1/4 max, 5% chords, 30% sustains
 - ⚡ Normal: sens 1.7, 1/8 max, 18% chords, 20% sustains (recomendado)
 - 🔥 Intenso: sens 1.3, 1/16 max, 40% chords, 10% sustains
+
+**Lectura de metadatos de audio:** ver `stepmania-web/js/audio-metadata.js`. Desde el 2026-05-12 `addFiles()` invoca `AudioMetadata.extractMetadata(file)` en paralelo para todos los archivos soltados (`Promise.all` con `++queueIdCounter` ANTES del `await` para mantener IDs correlativos). Solo se persisten `title` y `artist` al store `gh-songs` — el `song.ini` y el `.chart` del ZIP siguen con `album =` vacío para no introducir asunciones sobre el corpus de Clone Hero del usuario.
 
 **Pendiente / mejoras futuras:**
 - Pitch-aware fret assignment (FFT + mapping low→Verde, high→Naranja). Ahora es aleatorio con bias.
@@ -390,7 +414,7 @@ Botón "Instalar app" en el shell: aparece cuando el navegador captura `beforein
   - `fetch Google Fonts`: stale-while-revalidate.
   - **Range requests passthrough** (`req.headers.has('range')`): el motor de audio carga segmentos, cachear esto los rompería.
   - **Cross-origin no same-origin passthrough**: no cacheamos blobs de audio ad-hoc; viven en IndexedDB de todas formas.
-  - `CACHE_VERSION = 'sincro-v16'` (al 2026-05-12; bumpeado al hacer `downloadAllZip` síncrona en ambos autosteppers — eliminado `await` que bloqueaba la descarga masiva en el shell iframe). **Bumpear cada vez que cambien archivos del precache** para que los clientes detecten la nueva versión y purguen la antigua en `activate`. Sin bump, los clientes con SW antiguo siguen sirviendo desde caché y los fixes nunca llegan al usuario.
+  - `CACHE_VERSION = 'sincro-v24'` (al 2026-05-12; bumpeado al añadir lectura de tags ID3/Vorbis con el módulo `audio-metadata.js` y sustituir en el precache al difunto `autostepper.js` —código muerto desde la separación de pantallas del 2026-05-11—). **Bumpear cada vez que cambien archivos del precache** para que los clientes detecten la nueva versión y purguen la antigua en `activate`. Sin bump, los clientes con SW antiguo siguen sirviendo desde caché y los fixes nunca llegan al usuario.
 - **`stepmania-web/js/pwa-bootstrap.js`** — registra el SW (solo https/localhost; file:// no soporta SW), expone `window.SincroPWA.{inShell, isInstalled, canInstall, promptInstall}`, captura `beforeinstallprompt` y dispara eventos custom `sincro-pwa-installable` / `sincro-pwa-installed` / `sincro-pwa-update-available`.
 - **`icons/icon.svg` + `icons/icon-maskable.svg`** — flechas DDR sobre gradiente turquesa→dorado de la marca. Maskable lleva 10% de padding interno (safe-zone) para que Android no recorte al aplicar el shape. Chrome moderno y iOS 16+ aceptan SVG en manifest.
 
@@ -409,7 +433,7 @@ Cada HTML clásico (`index.html`, `play.html`, `gh-play.html`, `autostepper.html
 - **Dominio destino:** `play.movimientofuncional.app` (subdominio del sitio principal de Movimiento Funcional). El antiguo subdominio `stepmania.movimientofuncional.app` fue retirado tras el rebrand a Sincro.
 - **Credenciales FTP del host:** en `.env.local` (raíz del proyecto). **Nunca commitear** — el archivo está ignorado por `.gitignore` (regla `.env.*`).
 - Para futuros agentes: si necesitas las claves de despliegue, léelas de `.env.local`. No las muevas a archivos versionados.
-- **Estructura desplegada:** todos los `.html` de la raíz (`index.html`, `app.html`, `play.html`, `stepmania-play.html`, `gh-play.html`, `autostepper.html`, `gh-autostepper.html`, `test-pad.html`, `tutorial.html`, `calibration.html`), `manifest.webmanifest`, `sw.js`, las 5 imágenes `.webp` de raíz (`hero-clean.webp`, `hero-clean-movil.webp`, `play-hero.webp`, `play-hero-movil.webp`, `elena-cruces.webp`), `icons/` (2 SVG) y la carpeta `stepmania-web/` (CSS + 15 JS). Los `.py`, los `.png` de 7 MB (fuentes originales antes de la conversión a `.webp`), docs `.md` y configs locales NO se despliegan.
+- **Estructura desplegada:** todos los `.html` de la raíz (`index.html`, `app.html`, `play.html`, `stepmania-play.html`, `gh-play.html`, `autostepper.html`, `gh-autostepper.html`, `test-pad.html`, `tutorial.html`, `calibration.html`), `manifest.webmanifest`, `sw.js`, las 5 imágenes `.webp` de raíz (`hero-clean.webp`, `hero-clean-movil.webp`, `play-hero.webp`, `play-hero-movil.webp`, `elena-cruces.webp`), `icons/` (2 SVG) y la carpeta `stepmania-web/` (CSS + 15 JS, contando el nuevo `audio-metadata.js` y sin el difunto `autostepper.js` borrado el 2026-05-12). Los `.py`, los `.png` de 7 MB (fuentes originales antes de la conversión a `.webp`), docs `.md` y configs locales NO se despliegan.
 - **Script de deploy:** `scripts/deploy.sh` (bash + curl, cero deps). Lee credenciales de `.env.local` y sube **todos los archivos versionados en git** excepto los que matchean `EXCLUDE_REGEX` (docs `.md`, `LICENSE`, configs de dev como `package.json` / `pnpm-lock.yaml` / `vitest.config.mjs`, `.gitignore`, scripts `*.py`, fuentes `*.png`, y dirs no-prod: `scripts/`, `tests/`, `design-system/`, `stepmania-5_1-new/`, `.claude/`, `.husky/`, `node_modules/`). Al 2026-05-11 son 35 archivos. **Ventaja clave:** añadir un nuevo asset (HTML, imagen, módulo JS) sólo requiere `git add` + commit — el deploy lo recoge automáticamente. La fricción anti-leak ahora vive en el regex de exclusión: si añades un archivo nuevo cuyo path matchea un prefijo excluido (p.ej. dejas un `notas.md` en raíz, o `.py` en raíz), NO se sube. Uso: `bash scripts/deploy.sh` desde cualquier cwd (el script hace `cd "$(dirname "$0")/.."`). Usa `--ssl-allow-beast -k` en curl para sortear el SChannel-strict OCSP de Windows. Reporta `OK / FAIL / SKIP` por archivo y `X / Y subidos` al final. **Historial:** la versión anterior usaba lista de inclusión explícita con 29 archivos hardcodeados; rompía cada vez que se añadía un asset nuevo y no se actualizaba el script en el mismo commit — el rebrand al hero con imágenes `.webp` quedó incompleto en producción durante un deploy porque las imágenes no estaban en la lista.
 - **Headers HTTP recomendados** (configurar en host):
   - `sw.js`: `Cache-Control: no-cache` (para que el navegador siempre revise si hay versión nueva del SW; el SW controla su propio cache versionado).
@@ -437,8 +461,9 @@ Desde un test, el patrón de import es: `import pkg from '../stepmania-web/js/pa
 ### Cobertura actual (al 2026-05-10)
 - **`tests/parser.test.mjs`** — 23 tests: parseo .ssc/.sm (incluye formato legacy 6-partes), múltiples charts, comentarios //, parseSscPairs (orden, NaN, espacios), buildTimingEngine (BPMs constantes/cambiantes/STOPS — verifica la convención clave de `parser.js:112` "el stop solo se aplica a beats POSTERIORES con `s.beat < beat` estricto"), lanesFromStepType, parseAttacks (TIME=...:LEN=...:MODS=...), quantColorFor.
 - **`tests/difficulty-tiers.test.mjs`** — 23 tests: TIER_CONFIG (5 tiers SM, 4 tiers GH, monotonía de NPS y minGap), rhythmPriority (downbeat=5, mid-measure=4, beat=3, offbeat=2, semicorchea=1), filterByDifficulty con invariantes (NPS cap, gap mínimo, retención esperada por tier), filterPositions48 round-trip, filterTicks GH, PRESET_MULTIPLIER.
+- **`tests/audio-metadata.test.mjs`** — 25 tests: parser ID3v2.3/v2.4 (TIT2/TPE1/TALB/TRCK/TYER en UTF-8 con tildes y emoji, multi-valor v2.4 separado por NUL, "5/12"→"5" en TRCK, guard de null sin title/artist/album), ID3v1 canónico y v1.1 con byte de track, FLAC Vorbis Comments (case-insensitive en keys), `parseFromFilename` con prefijos de track# en 4 formatos (`02 `, `12. `, `03 - `, `03_`) y splits "Artist - Title" / "Artist - Album - Title" / "Artist - Album - 03 - Title". Los fixtures binarios se generan en runtime con helpers locales (`makeID3v2`, `makeID3v1`, `makeFLAC`) — no se commitean .mp3 reales.
 
-**Total: 46 tests, ~430ms en CI.**
+**Total: 94 tests (parser 23 + difficulty-tiers 23 + scores 23 + audio-metadata 25), ~470ms en CI.**
 
 ### Lo que NO se testea (decisión consciente)
 - Render del canvas en `game.js` (visual regression manual).
@@ -447,7 +472,7 @@ Desde un test, el patrón de import es: `import pkg from '../stepmania-web/js/pa
 - Gamepad polling, Web Audio playback, touch overlay, DOM transitions.
 
 ### Cómo extender
-Cuando arregles un bug en algoritmo puro, primero añade el test que lo reproduce. Sin disciplina TDD — solo "el bug existió una vez, no debe volver". Para añadir cobertura a `audio-pipeline.js` o `autostepper.js` necesitarás mockear `AudioBuffer` (Vitest soporta `vi.fn` y stubbing global). El siguiente candidato natural es `autostepper.js` — algoritmo determinista con seed fija, ideal para tests de snapshot del output `.ssc`.
+Cuando arregles un bug en algoritmo puro, primero añade el test que lo reproduce. Sin disciplina TDD — solo "el bug existió una vez, no debe volver". Para añadir cobertura a `audio-pipeline.js` necesitarás mockear `AudioBuffer` (Vitest soporta `vi.fn` y stubbing global). El siguiente candidato natural es la generación de notas en los autosteppers — algoritmo determinista con seed fija, ideal para tests de snapshot del output `.ssc`/`.chart`.
 
 ## Pendiente / ideas futuras
 

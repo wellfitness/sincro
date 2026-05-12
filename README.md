@@ -137,7 +137,7 @@ sincro/
 │       ├── parser.js             Parser .ssc/.sm + timing engine
 │       ├── audio-pipeline.js     Análisis de audio compartido (BPM, ODF)
 │       ├── difficulty-tiers.js   Filtrado por dificultad calibrado a SM5/CH
-│       ├── autostepper.js        Generador de charts SM (integrado en play.html)
+│       ├── audio-metadata.js     Parser ID3v2/v1 + Vorbis Comments (FLAC)
 │       ├── library.js            UI de import/delete + IndexedDB
 │       ├── backup.js             Backup/restore ZIP completo
 │       ├── song-select.js        Pantalla de selección de canción
@@ -179,7 +179,7 @@ Si vas a contribuir o mantener, **lee `CLAUDE.md` primero**. Está pensado para 
 - Update mode: re-generar charts conservando BPM/offset que el usuario afinó a mano.
 - Star Power + whammy modulation en `gh-play.html`.
 - Open notes / drums tracks en GH.
-- Ampliar cobertura de tests a `audio-pipeline.js` (mockear `AudioBuffer`) y `autostepper.js` (snapshot de output `.ssc`).
+- Ampliar cobertura de tests a `audio-pipeline.js` (mockear `AudioBuffer`).
 
 ---
 

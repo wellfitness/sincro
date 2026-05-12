@@ -4,12 +4,13 @@
 //
 //  Equivalente a backup.js (StepMania) pero opera sobre GHLibrary (gh-db.js).
 //  Lleva su propio `ghMakeZip`/`ghReadZip` (modo store, sin compresión) para
-//  no depender de autostepper.js, que vive en otra página.
+//  no depender de los autosteppers standalone (gh-autostepper.html), que
+//  embeben su propio encoder y viven en otras páginas.
 // ============================================================================
 
 // ----- ZIP encoder (mode "store", no compression) ---------------------------
-// Duplicado funcional de makeZip de autostepper.js. Mantenerlos en sync si
-// hay cambios — son 50 líneas de bit-banging del formato ZIP.
+// Duplicado funcional del makeZip embebido en autostepper.html y
+// gh-autostepper.html. Mantener los tres alineados si se tocan headers.
 let _GH_CRC_TABLE = null;
 function _ghCrc32(data) {
   if (!_GH_CRC_TABLE) {
