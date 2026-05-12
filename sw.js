@@ -18,7 +18,7 @@
 // Aviso: NO interceptamos requests POST ni con header Range (audio range
 // requests del motor son delicados — los dejamos pasar a network).
 
-const CACHE_VERSION = 'sincro-v35';
+const CACHE_VERSION = 'sincro-v38';
 const PRECACHE      = `${CACHE_VERSION}-shell`;
 const RUNTIME       = `${CACHE_VERSION}-runtime`;
 
@@ -51,6 +51,7 @@ const PRECACHE_URLS = [
   '/stepmania-web/js/backup.js',
   '/stepmania-web/js/song-select.js',
   '/stepmania-web/js/pad-test.js',
+  '/stepmania-web/js/mat-layout.js',
   '/stepmania-web/js/game.js',
   '/stepmania-web/js/gh-db.js',
   '/stepmania-web/js/gh-backup.js',

@@ -395,12 +395,12 @@ window._bindSongsScreenConfig = bindSongsScreenConfig;
 //   - Las notas SUBEN (igual que game.js: receptor cerca del top, dt>0 ⇒
 //     nota debajo del receptor que sube hasta él).
 //   - El lead time del preview = lead time del juego real con el viewport
-//     actual. Fórmula equivalente al juego (game.js:351):
-//       juego_pps = 600 * settings.scrollSpeed * activeMods.chartSpeed
+//     actual. Fórmula equivalente al juego (game.js:419):
+//       juego_pps = computePixelsPerSec(songBPM, activeMods.chartSpeed)
 //       lead_time = (innerHeight - 110) / juego_pps
 //     El preview escala su pps para cubrir ese mismo lead_time en su canvas.
-//   - Aplicamos settings.scrollSpeed además de activeMods.chartSpeed (antes
-//     solo aplicaba chartSpeed → ignoraba el slider global).
+//   - computePixelsPerSec (definida en core.js) respeta los 3 modos xMod /
+//     CMod / MMod, así el preview muestra la velocidad real elegida.
 //
 // Decisión de diseño: el loop solo corre cuando songs-screen está visible.
 // Al cambiar de pantalla cancelamos el rAF para no quemar GPU.
@@ -459,9 +459,15 @@ function startPreviewLoop() {
       }
     }
 
-    // Lead time real del juego con la config actual. Replicar exactamente
-    // game.js:351 + game.js:655 para que la sensación coincida.
-    const gamePPS = _GAME_BASE_PPS * (settings.scrollSpeed || 1) * activeMods.chartSpeed;
+    // Lead time real del juego con la config actual. Usa el helper compartido
+    // de core.js para que xMod / CMod / MMod se reflejen idénticos en el preview.
+    // selectedSong.bpm solo importa en MMod (cap); en CMod es independiente y en
+    // xMod nuestro motor también es BPM-agnóstico, así que _PREVIEW_BPM funciona
+    // como fallback razonable mientras no haya canción elegida.
+    const gamePPS = computePixelsPerSec(
+      (typeof selectedSong !== 'undefined' && selectedSong && selectedSong.bpm) ? selectedSong.bpm : _PREVIEW_BPM,
+      activeMods.chartSpeed
+    );
     const gameLeadDist = Math.max(100, window.innerHeight - _GAME_RECEPTOR_Y);
     const leadTime = gameLeadDist / gamePPS; // segundos visibles antes del receptor
     const pixelsPerSec = PREVIEW_LEAD_DIST / leadTime;

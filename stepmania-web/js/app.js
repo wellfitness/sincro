@@ -105,6 +105,30 @@ function goto(name) {
     document.getElementById('scrollSpeedVal').textContent = settings.scrollSpeed.toFixed(1) + 'x';
     saveSettings();
   });
+  const speedModeEl = document.getElementById('speedMode');
+  if (speedModeEl) {
+    speedModeEl.addEventListener('change', e => {
+      settings.speedMode = e.target.value;
+      if (typeof refreshSpeedModeUi === 'function') refreshSpeedModeUi();
+      saveSettings();
+    });
+  }
+  const cmodEl = document.getElementById('cmodBPM');
+  if (cmodEl) {
+    cmodEl.addEventListener('input', e => {
+      settings.cmodBPM = parseInt(e.target.value);
+      document.getElementById('cmodBPMVal').textContent = 'C' + settings.cmodBPM;
+      saveSettings();
+    });
+  }
+  const mmodEl = document.getElementById('mmodBPM');
+  if (mmodEl) {
+    mmodEl.addEventListener('input', e => {
+      settings.mmodBPM = parseInt(e.target.value);
+      document.getElementById('mmodBPMVal').textContent = 'M' + settings.mmodBPM;
+      saveSettings();
+    });
+  }
   document.getElementById('timingWindow').addEventListener('change', e => {
     settings.timingWindow = e.target.value;
     document.getElementById('timingWinVal').textContent = TIMING_WIN_LABEL[settings.timingWindow] || 'J5';

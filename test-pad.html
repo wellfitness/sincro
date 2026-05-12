@@ -2231,8 +2231,8 @@ const MAT_CALIB_STEPS = [
   { role: 'right',     prompt: 'Pisa DERECHA (→)',    hint: 'Panel derecho' },
   { role: 'upLeft',    prompt: 'Pisa UP-LEFT (↖)',    optional: true, hint: '(Opcional) Diagonal superior-izquierda. Si tu pad no la tiene, "Saltar paso".' },
   { role: 'upRight',   prompt: 'Pisa UP-RIGHT (↗)',   optional: true, hint: '(Opcional) Diagonal superior-derecha. Si no la tienes, salta.' },
-  { role: 'downLeft',  prompt: 'Pisa DOWN-LEFT (↙)',  optional: true, hint: '(Opcional) Diagonal inferior-izquierda. La mayoría de pads no la tienen — salta.' },
-  { role: 'downRight', prompt: 'Pisa DOWN-RIGHT (↘)', optional: true, hint: '(Opcional) Diagonal inferior-derecha. La mayoría de pads no la tienen — salta.' },
+  { role: 'downLeft',  prompt: 'Pisa DOWN-LEFT (↙)',  optional: true, hint: '(Opcional) Diagonal inferior-izquierda. Si tu pad solo tiene las inferiores (mats baratos de 6 botones), asigna ESTA y el juego adaptará las flechas automáticamente.' },
+  { role: 'downRight', prompt: 'Pisa DOWN-RIGHT (↘)', optional: true, hint: '(Opcional) Diagonal inferior-derecha. Si tu pad solo tiene las inferiores, asigna ESTA y el juego usará diagonales ↙↘ en modo Solo.' },
   { role: 'start',     prompt: 'Pulsa START',          hint: 'Suele ser un botón en el centro o lateral del pad' },
   { role: 'back',      prompt: 'Pulsa BACK / SELECT',  optional: true, hint: '(Opcional) A veces se llama Select. Salta si no lo tienes.' },
 ];

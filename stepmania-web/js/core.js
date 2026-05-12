@@ -246,9 +246,43 @@ async function dbPut(song) {
 const SETTINGS_KEY = 'stepmania-web-settings';
 const settings = Object.assign({
   globalOffset: 0,    // ms
-  scrollSpeed: 1.0,
+  scrollSpeed: 1.0,   // xMod multiplier (BPM-agnostic en nuestro motor)
+  speedMode: 'xmod',  // 'xmod' | 'cmod' | 'mmod' — replica los 3 modos de StepMania 5
+  cmodBPM: 300,       // velocidad constante (CMod) en BPM equivalente; activa solo si speedMode==='cmod'
+  mmodBPM: 450,       // techo de velocidad (MMod) en BPM equivalente; activa solo si speedMode==='mmod'
   timingWindow: 'j5',
 }, (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch(e) { return {}; } })());
+
+// ----- Cálculo de velocidad de scroll (3 modos: xMod / CMod / MMod) --------
+// Replica el sistema de speed-mods de StepMania 5 (PlayerOptions.cpp:625-660):
+//   - xMod: multiplicador relativo. scrollSpeed × chartSpeed × BASE.
+//   - CMod: BPM equivalente constante, ignora chartSpeed (la velocidad la fija el usuario).
+//   - MMod: como xMod pero capa a maxBPM (útil cuando alternas canciones de tempo dispar).
+//
+// Equivalencia de calibración: xMod 1.0 ≡ CMod 200, alineado con el
+// CMOD_DEFAULT = 200.0f del repo oficial (stepmania-5_1-new/PlayerOptions.cpp:53).
+// PPS_PER_BPM = 600/200 = 3 (deriva de "default xMod actual produce 600 px/s").
+//
+// Nota: nuestro xMod NO escala con songBPM (a diferencia de SM oficial). Esto
+// es una decisión heredada para no romper settings existentes — funcionalmente
+// nuestro xMod ya es "BPM-independiente" como un CMod implícito. Lo único que
+// faltaba era exponer ese hecho al usuario y dejarle elegir el BPM equivalente.
+const SCROLL_BASE_PPS = 600;       // px/seg a scrollSpeed 1.0 × chartSpeed 1.0
+const SCROLL_PPS_PER_BPM = 3;      // píxeles/seg por BPM en CMod/MMod
+
+function computePixelsPerSec(songBPM, chartSpeedMul) {
+  const cs = (typeof chartSpeedMul === 'number' && chartSpeedMul > 0) ? chartSpeedMul : 1.0;
+  if (settings.speedMode === 'cmod') {
+    return settings.cmodBPM * SCROLL_PPS_PER_BPM;
+  }
+  if (settings.speedMode === 'mmod') {
+    const xmodPps = SCROLL_BASE_PPS * settings.scrollSpeed * cs;
+    const capPps  = settings.mmodBPM * SCROLL_PPS_PER_BPM;
+    return Math.min(xmodPps, capPps);
+  }
+  // xMod (default): comportamiento heredado idéntico al anterior.
+  return SCROLL_BASE_PPS * settings.scrollSpeed * cs;
+}
 
 const TIMING_WIN_LABEL = { j4:'J4 (suave)', j5:'J5 (SM5)', j6:'J6 (estricto)', j7:'J7 (ITG pro)' };
 
@@ -270,9 +304,36 @@ function openSettings() {
   document.getElementById('settingsModal').classList.add('show');
   document.getElementById('globalOffset').value = settings.globalOffset;
   document.getElementById('globalOffsetVal').textContent = settings.globalOffset + ' ms';
+  // Speed mode (xMod / CMod / MMod): selector + slider contextual.
+  const sm = document.getElementById('speedMode');
+  if (sm) sm.value = settings.speedMode;
   document.getElementById('scrollSpeed').value = settings.scrollSpeed;
   document.getElementById('scrollSpeedVal').textContent = settings.scrollSpeed.toFixed(1) + 'x';
+  const cm = document.getElementById('cmodBPM');
+  if (cm) {
+    cm.value = settings.cmodBPM;
+    document.getElementById('cmodBPMVal').textContent = 'C' + settings.cmodBPM;
+  }
+  const mm = document.getElementById('mmodBPM');
+  if (mm) {
+    mm.value = settings.mmodBPM;
+    document.getElementById('mmodBPMVal').textContent = 'M' + settings.mmodBPM;
+  }
+  refreshSpeedModeUi();
   document.getElementById('timingWindow').value = settings.timingWindow;
   document.getElementById('timingWinVal').textContent = TIMING_WIN_LABEL[settings.timingWindow] || 'J5';
+}
+
+// Muestra solo el slider del modo activo, oculta los otros dos. Idempotente —
+// llamable en cada cambio de dropdown.
+function refreshSpeedModeUi() {
+  const rows = {
+    xmod: document.getElementById('speedRowX'),
+    cmod: document.getElementById('speedRowC'),
+    mmod: document.getElementById('speedRowM')
+  };
+  for (const [mode, el] of Object.entries(rows)) {
+    if (el) el.style.display = (settings.speedMode === mode) ? '' : 'none';
+  }
 }
 function closeSettings() { document.getElementById('settingsModal').classList.remove('show'); }

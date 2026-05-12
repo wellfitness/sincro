@@ -234,6 +234,7 @@ stepmania-web/
 
 Cambios significativos desde la creación del README:
 
+- **2026-05-12** — Sistema de speed mods (xMod / CMod / MMod) en el modal de Ajustes del motor DDR. Réplica fiel de `PlayerOptions.cpp` de StepMania 5. CMod permite fijar una velocidad visual constante en BPM equivalente, independiente del tempo real de cada canción.
 - **2026-05-12** — Segunda pasada de afinado en tiers SM (Medium 2.2 NPS, Hard 3.5, Challenge 7.0). Ratio Easy→Medium SM 1.30x → 1.10x.
 - **2026-05-12** — Curva de dificultad suavizada en autosteppers SM + GH (commit `52cb36f`).
 - **2026-05-12** — Restaurar desde ZIP acepta exports del autostepper (`bef865b`).

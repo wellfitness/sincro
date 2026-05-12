@@ -163,7 +163,7 @@
           <li>🎯 <strong>Solo (6)</strong>: añade ↖ ↗ y reparte las notas en seis carriles. Útil para entrenar todo el cuerpo aunque la canción se haya creado para cuatro carriles.</li>
           <li>🌟 <strong>Full (8)</strong>: añade las cuatro diagonales y reparte las notas en ocho carriles para máxima actividad.</li>
           <li>🎲 <strong>Aleatorio fijo</strong>: si usas Solo o Full, mantiene el mismo reparto cada vez que juegas esa canción (más fácil de memorizar). Sin esta opción, el reparto cambia en cada partida.</li>
-          <li>⏱ <strong>Anticipación de las flechas</strong>: ajusta cuánto antes aparecen las flechas en pantalla solo para esta canción (se suma a la anticipación global de Ajustes). No cambia el ritmo de la música ni la dificultad — solo cuánto tiempo tienes para leer cada flecha antes de pisarla.</li>
+          <li>⏱ <strong>Velocidad de desplazamiento</strong>: ajusta lo rápido que bajan las flechas solo para esta canción (se combina con la velocidad global de Ajustes). <strong>Más a la derecha = bajan más rápido = menos tiempo para leerlas.</strong> <strong>Más a la izquierda = bajan más lento = más anticipación para preparar el pie.</strong> No cambia el ritmo de la música ni la dificultad real del chart — solo el tiempo de lectura.</li>
         </ul>
 
         <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">Teclas según el modo</h3>
@@ -338,8 +338,14 @@
         <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🎵 Desfase global (entre −200 y +200 milisegundos)</h3>
         <p style="line-height:1.6;color:var(--gris-300)">Compensa el retardo entre el sonido que oyes y la pisada que da el juego. <strong>Positivo</strong> = pisas tarde (las flechas se "adelantan" al valorarse). <strong>Negativo</strong> = pisas pronto. El botón <strong>🎧 Auto-detectar</strong> aplica un primer valor según el retardo que reporta tu navegador. Para un ajuste fino, usa la pantalla de Calibración.</p>
 
-        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">⏱ Anticipación de las flechas (de 0,5x a 3,0x)</h3>
-        <p style="line-height:1.6;color:var(--gris-300)"><strong>Importante: este ajuste NO cambia el ritmo de la canción ni la dificultad.</strong> Solo cambia cuánto antes aparecen las flechas en pantalla antes de llegar al receptor. Cada flecha siempre se pisa en el mismo instante exacto del beat — la anticipación solo decide si la ves venir desde lejos (anticipación alta) o si aparece más tarde y cruza la pantalla más rápido (anticipación baja). 1.0x equivale a 600 píxeles por segundo de scroll. Una anticipación más alta te da más tiempo para leer el patrón pero ocupa más pantalla. Se combina con la anticipación específica de cada coreografía que aparece en la pantalla de dificultad.</p>
+        <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">⏱ Velocidad de desplazamiento (3 modos)</h3>
+        <p style="line-height:1.6;color:var(--gris-300)"><strong>Importante: este ajuste NO cambia el ritmo de la canción ni la dificultad real del chart.</strong> Solo cambia lo rápido que bajan las flechas por la pantalla. Cada flecha se pisa siempre en el mismo instante exacto del beat — la velocidad solo decide si la ves venir desde lejos (lento = más tiempo para leer) o si aparece más tarde y cruza la pantalla rápido (rápido = menos tiempo para reaccionar). En el dropdown de Ajustes puedes elegir entre tres modos, todos heredados de StepMania 5 oficial:</p>
+        <ul style="line-height:1.7;color:var(--gris-300);margin-left:20px">
+          <li><strong>xMod (multiplicador)</strong>: el clásico. Slider de 0,5x a 3,0x. 1,0x equivale a 600 píxeles por segundo. Sube el slider para acelerar, baja para frenar. Es independiente del BPM real de cada canción.</li>
+          <li><strong>CMod (BPM constante)</strong>: eliges un BPM equivalente (100–700) y todas las canciones se ven a la misma velocidad — independiente de su tempo real. Es el truco que usa la comunidad de StepMania para no recalibrar cada vez que cambias de canción. Si te encuentras cómoda con xMod 1,0x en una canción de 140 BPM, prueba CMod 280 (equivalencia aproximada).</li>
+          <li><strong>MMod (techo)</strong>: xMod normal pero nunca pasa de un BPM máximo. Útil si tu librería mezcla canciones lentas (100 BPM) y rápidas (180 BPM): pones M450 y las rápidas se "frenan" al techo sin que tengas que tocar nada.</li>
+        </ul>
+        <p style="line-height:1.6;color:var(--gris-300)">Equivalencia: <strong>xMod 1,0x ≡ CMod 200</strong>. En la pantalla de dificultad hay un segundo slider de velocidad específico por canción que se combina con el global.</p>
 
         <h3 style="margin-top:18px;color:var(--tulip-tree-500);font-size:1em">🎯 Nivel de precisión (J4 a J7)</h3>
         <ul style="line-height:1.8;color:var(--gris-300);margin-left:20px">

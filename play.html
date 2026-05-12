@@ -45,11 +45,35 @@
     </div>
     <div class="param">
       <div class="param-header">
-        <span class="param-label">⏱ Anticipación de las flechas</span>
-        <span class="param-value" id="scrollSpeedVal">1.0x</span>
+        <span class="param-label">⏱ Velocidad de desplazamiento</span>
       </div>
-      <input type="range" id="scrollSpeed" min="0.5" max="3.0" step="0.1" value="1.0">
-      <div class="param-help">Cuánto antes aparecen las flechas en pantalla. Más anticipación = más tiempo para leer el patrón. <strong>No cambia la dificultad ni el ritmo de la canción.</strong></div>
+      <select id="speedMode" style="width:100%;background:rgba(0,0,0,0.4);border:1px solid rgba(131,56,236,0.3);color:#fff;padding:6px 10px;border-radius:6px;margin-bottom:8px">
+        <option value="xmod">xMod — Multiplicador (clásico)</option>
+        <option value="cmod">CMod — Velocidad constante en BPM</option>
+        <option value="mmod">MMod — xMod con techo máximo</option>
+      </select>
+      <div id="speedRowX">
+        <div class="param-header" style="margin-top:4px">
+          <span class="param-label" style="font-size:0.88em;opacity:0.85">Multiplicador</span>
+          <span class="param-value" id="scrollSpeedVal">1.0x</span>
+        </div>
+        <input type="range" id="scrollSpeed" min="0.5" max="3.0" step="0.1" value="1.0">
+      </div>
+      <div id="speedRowC" style="display:none">
+        <div class="param-header" style="margin-top:4px">
+          <span class="param-label" style="font-size:0.88em;opacity:0.85">BPM constante</span>
+          <span class="param-value" id="cmodBPMVal">C300</span>
+        </div>
+        <input type="range" id="cmodBPM" min="100" max="700" step="10" value="300">
+      </div>
+      <div id="speedRowM" style="display:none">
+        <div class="param-header" style="margin-top:4px">
+          <span class="param-label" style="font-size:0.88em;opacity:0.85">BPM máximo (techo)</span>
+          <span class="param-value" id="mmodBPMVal">M450</span>
+        </div>
+        <input type="range" id="mmodBPM" min="100" max="700" step="10" value="450">
+      </div>
+      <div class="param-help"><strong>xMod:</strong> velocidad fija independiente del tempo. Sube/baja con el slider. <strong>CMod:</strong> elige un BPM cómodo (ej. C300) y todas las canciones se ven igual de rápidas — independiente de su tempo real. Es el truco que usa la comunidad SM para no recalibrar canción a canción. <strong>MMod:</strong> xMod normal pero nunca pasa del BPM tope (útil si mezclas canciones lentas y rápidas).</div>
     </div>
     <div class="param">
       <div class="param-header">
@@ -205,6 +229,21 @@
     document.getElementById('scrollSpeed').addEventListener('input', e => {
       settings.scrollSpeed = parseFloat(e.target.value);
       document.getElementById('scrollSpeedVal').textContent = settings.scrollSpeed.toFixed(1) + 'x';
+      saveSettings();
+    });
+    document.getElementById('speedMode').addEventListener('change', e => {
+      settings.speedMode = e.target.value;
+      refreshSpeedModeUi();
+      saveSettings();
+    });
+    document.getElementById('cmodBPM').addEventListener('input', e => {
+      settings.cmodBPM = parseInt(e.target.value);
+      document.getElementById('cmodBPMVal').textContent = 'C' + settings.cmodBPM;
+      saveSettings();
+    });
+    document.getElementById('mmodBPM').addEventListener('input', e => {
+      settings.mmodBPM = parseInt(e.target.value);
+      document.getElementById('mmodBPMVal').textContent = 'M' + settings.mmodBPM;
       saveSettings();
     });
     document.getElementById('timingWindow').addEventListener('change', e => {

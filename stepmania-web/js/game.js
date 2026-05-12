@@ -47,7 +47,28 @@ const LANE_CONFIGS = {
     leftPerm:  [3, 0, 5, 1, 2, 4],   // approx CCW: down→left, ul→down, etc
     rightPerm: [1, 3, 4, 0, 5, 2],   // approx CW
     label:     'Solo (6)',
-    stepType:  'dance-solo'
+    stepType:  'dance-solo',
+    _diagonalLayout: 'up'
+  },
+  // Variante de Solo (6) para alfombras que tienen solo diagonales
+  // inferiores (típico en mats baratos de 6 botones: cardinales + ↙ ↘).
+  // Las flechas diagonales en pantalla apuntan ↙ y ↘ (rotaciones -135° y
+  // 135°) en lugar de ↖ y ↗. Misma paleta de colores que el 6 estándar para
+  // que la usuaria sienta continuidad visual entre cardinales y diagonales.
+  // El motor selecciona esta config automáticamente cuando el mat-mapping
+  // del usuario tiene downLeft+downRight asignados pero no upLeft+upRight.
+  '6-down': {
+    lanes: 6,
+    keyMap:    ['ArrowLeft', 'KeyQ', 'ArrowUp', 'ArrowDown', 'KeyE', 'ArrowRight'],
+    padMap:    [0, 6, 2, 1, 7, 3],
+    rotations: [-90, -135, 0, 180, 135, 90],
+    tints:     ['#ff006e', '#a259ff', '#00ff64', '#3a86ff', '#ffbe0b', '#ff8800'],
+    mirrorPerm:[5, 4, 3, 2, 1, 0],
+    leftPerm:  [3, 0, 5, 1, 2, 4],
+    rightPerm: [1, 3, 4, 0, 5, 2],
+    label:     'Solo (6) ↙↘',
+    stepType:  'dance-solo',
+    _diagonalLayout: 'down'
   },
   8: {
     lanes: 8,
@@ -59,30 +80,52 @@ const LANE_CONFIGS = {
     leftPerm:  [4, 1, 0, 3, 5, 7, 6, 2],
     rightPerm: [3, 1, 7, 6, 0, 5, 2, 4],
     label:     'Full (8)',
-    stepType:  'dance-double'
+    stepType:  'dance-double',
+    _diagonalLayout: 'both'
   }
 };
 function getActiveLaneConfig(nativeLanes) {
   // Runtime decides lane count via mods. Default is always 4 (clásico), the
   // chart's nativeLanes is just the "master" complexity from which we
   // redistribute. Authoring at 8 + playing default 4 = compress 8→4 every play.
+  //
+  // Para Solo (6), consultamos la calibración de la alfombra del usuario:
+  // si tiene solo diagonales inferiores asignadas (mat barato 6-button), el
+  // motor devuelve la variante '6-down' para que las flechas en pantalla
+  // apunten ↙↘ en vez de ↖↗ — la usuaria pisa donde su lona dice y juega
+  // sin volver la alfombra del revés. Si tiene las superiores (o ambas, o
+  // ninguna), devolvemos el Solo canónico DDR (↖↗).
   if (typeof activeMods !== 'undefined') {
     if (activeMods.full) return LANE_CONFIGS[8];
-    if (activeMods.solo) return LANE_CONFIGS[6];
+    if (activeMods.solo) {
+      const layout = (typeof window !== 'undefined' && window.MatLayout)
+        ? window.MatLayout.detectMatDiagonalLayout()
+        : 'up';
+      return layout === 'down' ? LANE_CONFIGS['6-down'] : LANE_CONFIGS[6];
+    }
   }
   return LANE_CONFIGS[4];
 }
 
-// Mapa columna→rol de calibración para cada lane count. Los roles ('left',
-// 'upLeft', etc.) son los que guarda test-pad.html en localStorage['mat-mapping'].
-// Imprescindible para que un pad recalibrado (alfombras chinas, ImpactDX,
-// Cobalt Flux…) funcione en el juego: sin esto, el motor lee `padMap` hardcoded
-// y las diagonales que el usuario asignó a botones distintos no se reconocen.
-const MAT_ROLES_BY_LANES = {
-  4: ['left', 'down', 'up', 'right'],
-  6: ['left', 'upLeft', 'up', 'down', 'upRight', 'right'],
-  8: ['left', 'upLeft', 'downLeft', 'up', 'down', 'upRight', 'downRight', 'right']
-};
+// Mapa columna→rol de calibración. Los roles ('left', 'upLeft', etc.) son los
+// que guarda test-pad.html en localStorage['mat-mapping']. Imprescindible para
+// que un pad recalibrado (alfombras chinas, ImpactDX, Cobalt Flux…) funcione
+// en el juego: sin esto, el motor lee `padMap` hardcoded y las diagonales que
+// el usuario asignó a botones distintos no se reconocen.
+//
+// Indexado por (lanes, _diagonalLayout) porque el Solo (6) tiene dos
+// variantes según qué diagonales tenga la alfombra: la columna 1 puede ser
+// 'upLeft' (cabinet DDR) o 'downLeft' (mat barato 6-button), análogo para 4.
+function getMatRolesForConfig(cfg) {
+  if (cfg.lanes === 4) return ['left', 'down', 'up', 'right'];
+  if (cfg.lanes === 8) return ['left', 'upLeft', 'downLeft', 'up', 'down', 'upRight', 'downRight', 'right'];
+  if (cfg.lanes === 6) {
+    return cfg._diagonalLayout === 'down'
+      ? ['left', 'downLeft', 'up', 'down', 'downRight', 'right']
+      : ['left', 'upLeft', 'up', 'down', 'upRight', 'right'];
+  }
+  return null;
+}
 
 // Devuelve una COPIA superficial del laneConfig con `padMap` reescrito según la
 // calibración del usuario (si existe). Cualquier rol sin asignar conserva el
@@ -95,7 +138,7 @@ function applyMatCalibrationToConfig(cfg) {
     if (raw) mapping = JSON.parse(raw);
   } catch (e) { /* localStorage o JSON corruptos: cae al default */ }
   if (!mapping) return cfg;
-  const roles = MAT_ROLES_BY_LANES[cfg.lanes];
+  const roles = getMatRolesForConfig(cfg);
   if (!roles) return cfg;
   const padMap = cfg.padMap.slice();
   for (let i = 0; i < roles.length; i++) {
@@ -416,7 +459,7 @@ async function startGame() {
     hitFx: [],   // {lane, t}
     songInfo: `${selectedSong.title} — ${diffLabel(selectedChart.name)} ★${selectedChart.rating}${laneConfig.lanes !== nativeLanes ? ` · ${laneConfig.label}` : ''}`,
     finished: false,
-    pixelsPerSec: 600 * settings.scrollSpeed * activeMods.chartSpeed,
+    pixelsPerSec: computePixelsPerSec(selectedSong.bpm, activeMods.chartSpeed),
     timing: getTimingWindows(),
     attacks,
     baseMods,
