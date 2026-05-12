@@ -223,6 +223,175 @@
     return null;
   }
 
+  // M4A (MPEG-4 container) — formato dominante en bibliotecas iTunes / Apple
+  // Music. Estructura jerárquica de "atoms" o "boxes":
+  //   ftyp                — file type (siempre primer atom)
+  //   moov                — metadata container
+  //     udta              — user data
+  //       meta            — metadata (precedido por 4 bytes version/flags)
+  //         ilst          — item list
+  //           ©nam        — title       (0xA9 + 'nam')
+  //           ©ART        — artist
+  //           ©alb        — album
+  //           ©day        — year
+  //           trkn        — track (binario, no string)
+  //             data      — atom hijo con valor real
+  //   mdat                — audio data (puede pesar 99% del archivo)
+  //
+  // Cada atom: uint32 BE size + 4 ASCII type + payload. Si size==1, extended
+  // 64-bit size en los siguientes 8 bytes. Si size==0, atom hasta EOF.
+  //
+  // El atom 'data' dentro de cada tag tiene formato:
+  //   uint32 BE size + 'data' + uint32 BE flag + uint32 BE locale + payload
+  // flag=1 → string UTF-8; flag=0 → binario (trkn = pad/num/total/pad uint16).
+  function parseM4A(arrayBuffer) {
+    if (!arrayBuffer || arrayBuffer.byteLength < 12) return null;
+    const b = new Uint8Array(arrayBuffer);
+    const u32BE = (off) => (b[off] * 0x1000000) + ((b[off + 1] << 16) | (b[off + 2] << 8) | b[off + 3]);
+    const hasFtyp = b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70;
+
+    // (A) Iteración limpia desde el inicio si el buffer parte por ftyp.
+    // Es la ruta rápida para archivos con moov al inicio (faststart, iTunes).
+    if (hasFtyp) {
+      let pos = 0;
+      while (pos + 8 <= b.length) {
+        const size = u32BE(pos);
+        if (size === 0) break;
+        const next = size === 1
+          ? pos + 16 + u32BE(pos + 12)
+          : pos + size;
+        if (size < 8 || next > b.length || next <= pos) break;
+        if (b[pos + 4] === 0x6D && b[pos + 5] === 0x6F && b[pos + 6] === 0x6F && b[pos + 7] === 0x76) {
+          const r = parseM4AMoov(b, size === 1 ? pos + 16 : pos + 8, next);
+          if (r) return r;
+        }
+        pos = next;
+      }
+    }
+
+    // (B) Búsqueda por firma "moov" como ATOM type. Cubre el caso típico de
+    // muxers que escriben moov al FINAL del archivo (Highway to Hell de la
+    // captura del usuario: moov en offset 6.6M de 6.8M total). Cuando el
+    // buffer es un tail-slice, no podemos iterar desde top-level porque
+    // empezaríamos en medio de mdat (audio AAC), donde 4 bytes random parecen
+    // un size de atom enorme y mi iterador salta sobre moov. La búsqueda
+    // por firma localiza 'moov' directamente, retrocede 4 bytes para leer el
+    // size, y verifica la estructura interna (parseM4AMoov debe devolver
+    // algo válido). Eso descarta falsos positivos del audio.
+    for (let i = 4; i + 8 < b.length; i++) {
+      if (b[i] === 0x6D && b[i + 1] === 0x6F && b[i + 2] === 0x6F && b[i + 3] === 0x76) {
+        const size = u32BE(i - 4);
+        if (size < 16) continue;
+        const start = i + 4;
+        const end = i - 4 + size;
+        if (end > b.length || end <= start) continue;
+        const r = parseM4AMoov(b, start, end);
+        if (r) return r;
+      }
+    }
+    return null;
+  }
+
+  function parseM4AMoov(b, start, end) {
+    const u32BE = (off) => (b[off] * 0x1000000) + ((b[off + 1] << 16) | (b[off + 2] << 8) | b[off + 3]);
+    // Buscar 'udta' como hijo directo, o dentro de 'trak' (algunos muxers lo
+    // anidan ahí). Iteramos los hijos de moov y abrimos los relevantes.
+    let pos = start;
+    while (pos + 8 <= end) {
+      const size = u32BE(pos);
+      if (size < 8 || pos + size > end) break;
+      const t0 = b[pos + 4], t1 = b[pos + 5], t2 = b[pos + 6], t3 = b[pos + 7];
+      if (t0 === 0x75 && t1 === 0x64 && t2 === 0x74 && t3 === 0x61) {  // 'udta'
+        const r = parseM4AUdta(b, pos + 8, pos + size);
+        if (r) return r;
+      }
+      pos += size;
+    }
+    return null;
+  }
+
+  function parseM4AUdta(b, start, end) {
+    const u32BE = (off) => (b[off] * 0x1000000) + ((b[off + 1] << 16) | (b[off + 2] << 8) | b[off + 3]);
+    let pos = start;
+    while (pos + 8 <= end) {
+      const size = u32BE(pos);
+      if (size < 8 || pos + size > end) break;
+      // 'meta' atom — 4 bytes version/flags antes del contenido
+      if (b[pos + 4] === 0x6D && b[pos + 5] === 0x65 && b[pos + 6] === 0x74 && b[pos + 7] === 0x61) {
+        return parseM4AMeta(b, pos + 8 + 4, pos + size);
+      }
+      pos += size;
+    }
+    return null;
+  }
+
+  function parseM4AMeta(b, start, end) {
+    const u32BE = (off) => (b[off] * 0x1000000) + ((b[off + 1] << 16) | (b[off + 2] << 8) | b[off + 3]);
+    let pos = start;
+    while (pos + 8 <= end) {
+      const size = u32BE(pos);
+      if (size < 8 || pos + size > end) break;
+      // 'ilst' atom
+      if (b[pos + 4] === 0x69 && b[pos + 5] === 0x6C && b[pos + 6] === 0x73 && b[pos + 7] === 0x74) {
+        return parseM4AIlst(b, pos + 8, pos + size);
+      }
+      pos += size;
+    }
+    return null;
+  }
+
+  function parseM4AIlst(b, start, end) {
+    const u32BE = (off) => (b[off] * 0x1000000) + ((b[off + 1] << 16) | (b[off + 2] << 8) | b[off + 3]);
+    const result = { title: '', artist: '', album: '', track: '', year: '', source: 'm4a' };
+    let pos = start;
+    while (pos + 8 <= end) {
+      const size = u32BE(pos);
+      if (size < 8 || pos + size > end) break;
+      const t0 = b[pos + 4], t1 = b[pos + 5], t2 = b[pos + 6], t3 = b[pos + 7];
+      // Cada item es container con un atom 'data' dentro:
+      //   8 bytes header (data atom size + 'data')
+      //   4 bytes flag (1=UTF-8 string, 0=binary, 21=int)
+      //   4 bytes locale
+      //   payload
+      const dataStart = pos + 8;
+      if (dataStart + 16 <= pos + size) {
+        const dataSize = u32BE(dataStart);
+        const isDataAtom = b[dataStart + 4] === 0x64 && b[dataStart + 5] === 0x61 &&
+                           b[dataStart + 6] === 0x74 && b[dataStart + 7] === 0x61;
+        if (isDataAtom && dataSize >= 16) {
+          const flag = u32BE(dataStart + 8);
+          const payloadStart = dataStart + 16;
+          const payloadEnd = dataStart + dataSize;
+          if (flag === 1 && payloadEnd <= pos + size) {
+            // UTF-8 string
+            const str = new TextDecoder('utf-8').decode(b.subarray(payloadStart, payloadEnd)).trim();
+            if (str) {
+              // ©nam = title
+              if (t0 === 0xA9 && t1 === 0x6E && t2 === 0x61 && t3 === 0x6D) result.title = str;
+              // ©ART = artist
+              else if (t0 === 0xA9 && t1 === 0x41 && t2 === 0x52 && t3 === 0x54) result.artist = str;
+              // ©alb = album
+              else if (t0 === 0xA9 && t1 === 0x61 && t2 === 0x6C && t3 === 0x62) result.album = str;
+              // ©day = year
+              else if (t0 === 0xA9 && t1 === 0x64 && t2 === 0x61 && t3 === 0x79) result.year = str.slice(0, 4);
+              // aART = album artist — usar como artist si ©ART no se encontró
+              else if (!result.artist && t0 === 0x61 && t1 === 0x41 && t2 === 0x52 && t3 === 0x54) result.artist = str;
+            }
+          } else if (flag === 0 && payloadEnd - payloadStart >= 4 && payloadEnd <= pos + size) {
+            // trkn: 2 bytes pad + uint16 track# + uint16 total + 2 bytes pad
+            if (t0 === 0x74 && t1 === 0x72 && t2 === 0x6B && t3 === 0x6E) {
+              const num = (b[payloadStart + 2] << 8) | b[payloadStart + 3];
+              if (num > 0) result.track = String(num);
+            }
+          }
+        }
+      }
+      pos += size;
+    }
+    if (!result.title && !result.artist && !result.album) return null;
+    return result;
+  }
+
   // Fallback inteligente cuando no hay tags. Sin tags el problema es ambiguo
   // por definición, pero al menos limpiamos prefijos de track# antes de
   // aplicar la heurística "Artist - Album - Title". Casos cubiertos:
@@ -286,9 +455,20 @@
   //   2) Intenta ID3v2 → FLAC Vorbis Comments → ID3v1 (últimos 128 bytes) →
   //      fallback parseFromFilename.
   //   3) Cualquier campo no encontrado en el tag se rellena con filename.
+  // Detecta si el buffer es M4A (ftyp box al inicio) sin parsear.
+  function isM4A(arrayBuffer) {
+    if (!arrayBuffer || arrayBuffer.byteLength < 8) return false;
+    const b = new Uint8Array(arrayBuffer, 0, 8);
+    return b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70;
+  }
+
   async function extractMetadata(file) {
     if (!file) return parseFromFilename('');
-    const headSize = Math.min(file.size, 1 << 20);
+    // Para M4A con moov al final del archivo, los primeros MB no contienen
+    // tags. Leemos 2MB para cubrir cómodamente moov al inicio en archivos
+    // taggeados por iTunes; si no encontramos moov, intentamos leer 2MB del
+    // final del archivo donde podría estar para otros muxers.
+    const headSize = Math.min(file.size, 2 * (1 << 20));
     let headBuf;
     try {
       headBuf = await file.slice(0, headSize).arrayBuffer();
@@ -301,6 +481,25 @@
 
     const flac = parseFLAC(headBuf);
     if (flac) return normalize(flac, file);
+
+    if (isM4A(headBuf)) {
+      const m4aHead = parseM4A(headBuf);
+      if (m4aHead) return normalize(m4aHead, file);
+      // moov no encontrado al inicio → probar con el final del archivo. Los
+      // muxers tipo iTunes a veces escriben moov tras mdat. parseM4A ahora
+      // busca por firma 'moov' como atom type, así que podemos pasarle el
+      // tail directamente y encontrará el atom incluso sin ftyp delante.
+      if (file.size > headSize) {
+        try {
+          const tailStart = Math.max(0, file.size - 4 * (1 << 20));
+          const tailBuf = await file.slice(tailStart).arrayBuffer();
+          const m4aTail = parseM4A(tailBuf);
+          if (m4aTail) return normalize(m4aTail, file);
+        } catch (err) {
+          // Caer a filename
+        }
+      }
+    }
 
     if (file.size > 128) {
       try {
@@ -367,6 +566,7 @@
     parseID3v2,
     parseID3v1,
     parseFLAC,
+    parseM4A,
     parseFromFilename,
     refreshStoredTags
   };
