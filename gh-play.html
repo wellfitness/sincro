@@ -1237,7 +1237,9 @@ async function refreshLibraryList() {
     const scoresBtn = songRuns.length > 0
       ? `<button class="icon-btn" style="padding:8px 12px" onclick="openGhSongScoresModal(${e.id})" title="Ver todas las puntuaciones">🏆</button>`
       : '';
-    html += `<div class="lib-row${isMarked ? ' in-playlist' : ''}">
+    html += `<div class="lib-row${isMarked ? ' in-playlist' : ''}"
+      onmouseenter="scheduleGHAudioPreview(${e.id})"
+      onmouseleave="cancelGHAudioPreview()">
       <input type="checkbox" class="playlist-checkbox" ${isMarked ? 'checked' : ''}
         onchange="togglePlaylistSelection(${e.id})" title="Marcar para sesión continua"
         aria-label="Marcar ${escHtml(e.title || 'partitura')}">
@@ -1255,6 +1257,93 @@ async function refreshLibraryList() {
   el.innerHTML = html;
   updatePlaylistBar();
 }
+
+// ----- Audio preview on hover (debounced + cached) --------------------------
+// Replica del patrón usado en stepmania-web/js/song-select.js:709-774. Al pasar
+// el cursor por encima de una row de la biblioteca, tras 250ms de hover sostenido
+// se reproduce un fragmento de ~12s desde el 30% de la duración (típicamente el
+// estribillo o un momento representativo). El delay evita arrancar audio al solo
+// scrollear; la caché por songId evita re-decodificar en hovers repetidos.
+// Usamos el AudioContext compartido del motor (AudioPipeline.ensureAudioContext)
+// para que el resume() por gesto previo siga valiendo y no haya conflictos con
+// el playback real del juego.
+const _ghAudioPreviewCache = new Map(); // songId -> AudioBuffer
+let _ghAudioPreviewSrc = null;
+let _ghAudioPreviewGain = null;
+let _ghAudioPreviewTimer = null;
+let _ghAudioPreviewCurrentId = null;
+
+async function startGHAudioPreview(songId) {
+  if (!window.GHLibrary || !window.AudioPipeline) return;
+  // Si hay partida activa, no preview: solaparía con el audio del juego.
+  if (document.body.classList.contains('playing')) return;
+  stopGHAudioPreview();
+  _ghAudioPreviewCurrentId = songId;
+  const ctx = window.AudioPipeline.ensureAudioContext();
+  if (ctx.state === 'suspended') {
+    try { await ctx.resume(); } catch (e) { return; }
+  }
+  let buffer = _ghAudioPreviewCache.get(songId);
+  if (!buffer) {
+    try {
+      const entry = await window.GHLibrary.get(songId);
+      if (!entry || !entry.audioBlob) return;
+      const arr = await entry.audioBlob.arrayBuffer();
+      buffer = await ctx.decodeAudioData(arr.slice(0));
+      _ghAudioPreviewCache.set(songId, buffer);
+    } catch (e) { return; }
+  }
+  // El usuario puede haber salido de la row mientras decodificábamos.
+  if (_ghAudioPreviewCurrentId !== songId) return;
+  const src = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  src.buffer = buffer;
+  src.connect(gain).connect(ctx.destination);
+  // .chart no tiene sampleStart, así que arrancamos al 30% (típicamente fuera
+  // de la intro instrumental y dentro de una sección con melodía clara).
+  const start = Math.min(buffer.duration - 1, buffer.duration * 0.3);
+  const previewLen = Math.min(12, buffer.duration - start);
+  const t0 = ctx.currentTime;
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(0.55, t0 + 0.5);
+  gain.gain.setValueAtTime(0.55, t0 + previewLen - 0.5);
+  gain.gain.linearRampToValueAtTime(0, t0 + previewLen);
+  src.start(t0, start);
+  src.stop(t0 + previewLen + 0.05);
+  _ghAudioPreviewSrc = src;
+  _ghAudioPreviewGain = gain;
+  src.onended = () => {
+    if (_ghAudioPreviewSrc === src) { _ghAudioPreviewSrc = null; _ghAudioPreviewGain = null; }
+  };
+}
+
+function stopGHAudioPreview() {
+  _ghAudioPreviewCurrentId = null;
+  if (_ghAudioPreviewTimer) { clearTimeout(_ghAudioPreviewTimer); _ghAudioPreviewTimer = null; }
+  if (_ghAudioPreviewSrc && _ghAudioPreviewGain && window.AudioPipeline) {
+    try {
+      const ctx = window.AudioPipeline.ensureAudioContext();
+      const t = ctx.currentTime;
+      _ghAudioPreviewGain.gain.cancelScheduledValues(t);
+      _ghAudioPreviewGain.gain.setValueAtTime(_ghAudioPreviewGain.gain.value, t);
+      _ghAudioPreviewGain.gain.linearRampToValueAtTime(0, t + 0.15);
+      _ghAudioPreviewSrc.stop(t + 0.16);
+    } catch (e) {}
+    _ghAudioPreviewSrc = null;
+    _ghAudioPreviewGain = null;
+  }
+}
+
+function scheduleGHAudioPreview(songId) {
+  if (_ghAudioPreviewTimer) clearTimeout(_ghAudioPreviewTimer);
+  _ghAudioPreviewTimer = setTimeout(() => startGHAudioPreview(songId), 250);
+}
+
+function cancelGHAudioPreview() {
+  if (_ghAudioPreviewTimer) { clearTimeout(_ghAudioPreviewTimer); _ghAudioPreviewTimer = null; }
+  stopGHAudioPreview();
+}
+
 // Único entry point para tocar una canción de la biblioteca. Vive solo en la
 // pantalla "Tocar" (gh-songs-screen), donde el usuario YA tiene el selector
 // global #difficulty visible — no abrimos modal de elección porque la
@@ -1262,6 +1351,7 @@ async function refreshLibraryList() {
 // gestión y NO tiene botón de jugar.
 async function playFromLibrary(id) {
   if (!window.GHLibrary) return;
+  cancelGHAudioPreview();
   const entry = await window.GHLibrary.get(id);
   if (!entry) { alert('Partitura no encontrada en biblioteca'); return; }
   try {
@@ -2063,6 +2153,7 @@ function startGame(diffOverride) {
   // Parar el preview-loop al arrancar partida real para no tener dos rAF
   // queues activos simultáneamente.
   if (typeof stopGHPreviewLoop === 'function') stopGHPreviewLoop();
+  if (typeof cancelGHAudioPreview === 'function') cancelGHAudioPreview();
   // diffOverride viene de applyGlobalConfigAndPlay (resuelto a la diff más
   // cercana disponible). Si no hay override, leer del select directamente
   // para retro-compat con flows que llamen a startGame() sin parámetro.
