@@ -45,7 +45,7 @@
         <button class="tab-btn" data-ttab="calib">🎯 Calibración</button>
         <button class="tab-btn" data-ttab="library">📚 Biblioteca</button>
         <button class="tab-btn" data-ttab="settings">⚙ Ajustes</button>
-        <button class="tab-btn" data-ttab="hardware">🛒 Hardware</button>
+        <button class="tab-btn" data-ttab="equipamiento">🛒 Equipamiento</button>
         <button class="tab-btn" data-ttab="extra">🔧 Otras herramientas</button>
       </div>
 
@@ -363,17 +363,88 @@
         <p style="line-height:1.6;color:var(--gris-300)">Por defecto cada canción tiene un fondo único generado a partir de su título. Puedes cargar una imagen para que se use como fondo común en todas las canciones. Se guarda dentro del navegador.</p>
       </div>
 
-      <!-- TUT: HARDWARE -->
-      <div class="tab-content" id="tut-hardware">
-        <h2 style="font-family:var(--font-display);color:var(--turquesa-400);margin-bottom:10px">Hardware recomendado</h2>
+      <!-- TUT: EQUIPAMIENTO -->
+      <div class="tab-content" id="tut-equipamiento">
+        <h2 style="font-family:var(--font-display);color:var(--turquesa-400);margin-bottom:10px">Equipamiento recomendado</h2>
         <p style="line-height:1.6;color:var(--gris-300)">
-          No hace falta comprar nada caro para empezar — con un teclado ya juegas. Pero si quieres la
-          experiencia completa, conviene saber qué tipos de alfombras y guitarras existen y qué modos
-          de juego desbloquea cada una. Aquí va el detalle, sin marcas concretas (cambian cada año)
-          pero con los criterios que importan al comprar.
+          Para sacarle partido a Sincro necesitas tres cosas en orden: un ordenador adecuado, una
+          alfombra de baile USB y opcionalmente una guitarra de Guitar Hero. Aquí va el detalle de
+          qué buscar en cada uno, sin marcas concretas (cambian cada año) pero con los criterios
+          que sí importan al comprar.
         </p>
 
-        <h3 id="hardware" style="margin-top:24px;color:var(--tulip-tree-500);font-size:1.05em">🦶 Alfombras de baile</h3>
+        <h3 id="ordenador" style="margin-top:24px;color:var(--tulip-tree-500);font-size:1.05em">💻 Ordenador host</h3>
+        <p style="line-height:1.6;color:var(--gris-300)">
+          El primer filtro: el ordenador desde el que vas a jugar. Sincro está pensado para
+          <strong>ordenador con pantalla grande, sonido decente y puerto USB</strong>. No depende de
+          potencia bruta — un equipo de gama media de hace 5 años tiene de sobra — pero sí de
+          factor forma.
+        </p>
+
+        <h3 style="margin-top:18px;color:var(--turquesa-400);font-size:0.98em">✅ Portátil 14&quot; o más</h3>
+        <p style="line-height:1.6;color:var(--gris-300)">
+          La opción más cómoda para empezar. Cualquier portátil con Windows, macOS o Linux moderno,
+          desde gama media (Intel Core i3/i5, AMD Ryzen 3/5, Apple Silicon) hasta lo que tengas.
+          Importa más la pantalla: <strong>14 pulgadas mínimo</strong> para que las flechas se vean a
+          la distancia normal de bailar (2-3 metros). Conexión USB-A nativa o un hub USB-C
+          asequible si tu portátil ya no la trae.
+        </p>
+
+        <h3 style="margin-top:18px;color:var(--turquesa-400);font-size:0.98em">✅ Mini-PC + televisor</h3>
+        <p style="line-height:1.6;color:var(--gris-300)">
+          La configuración ideal si vas a dejarlo montado en el salón. Un mini-PC barato (tipo
+          Intel N100 chino por 130-180€, o una Raspberry Pi 5 con caja decente) conectado por
+          HDMI a tu tele de 32-55 pulgadas. La pantalla grande hace que jugar Hard/Expert sea
+          realmente legible. Asegúrate de que el mini-PC tenga 2-3 puertos USB-A para alfombra,
+          guitarra y opcionalmente un mando si quieres añadir un Pro Controller para menús.
+        </p>
+        <ul style="line-height:1.7;color:var(--gris-300);padding-left:20px">
+          <li><strong>Pros:</strong> pantalla enorme, mejor sonido (TV o altavoces externos), setup permanente.</li>
+          <li><strong>Contras:</strong> requiere instalar Windows / Linux desde cero la primera vez.</li>
+        </ul>
+
+        <h3 style="margin-top:18px;color:var(--turquesa-400);font-size:0.98em">✅ Sobremesa convencional</h3>
+        <p style="line-height:1.6;color:var(--gris-300)">
+          Cualquier torre con monitor de 24" o más. La distancia silla-monitor suele ser de 60 cm
+          en uso normal, pero al bailar te alejas a 1.5-2 metros y un monitor pequeño se queda
+          corto. Si tu monitor es de 21" o menos, considera moverlo a una mesa más alta o usar un
+          segundo monitor / TV.
+        </p>
+
+        <h3 style="margin-top:18px;color:var(--turquesa-400);font-size:0.98em">⚠ Audio: por cable, siempre</h3>
+        <p style="line-height:1.6;color:var(--gris-300)">
+          <strong>Auriculares Bluetooth y altavoces inalámbricos NO funcionan bien</strong>. Añaden
+          100-200 ms de latencia que destrozan la jugabilidad — pisas en el momento que oyes el
+          beat, pero el beat ya pasó hace dos décimas. Usa siempre altavoces conectados por cable
+          (jack 3.5 mm o USB) o auriculares con cable. La salida HDMI a la TV también va perfecta
+          porque es síncrona con el vídeo.
+        </p>
+
+        <h3 style="margin-top:18px;color:var(--turquesa-400);font-size:0.98em">❌ Móviles y tablets</h3>
+        <p style="line-height:1.6;color:var(--gris-300)">
+          Sincro <strong>bloquea el acceso al juego desde móvil o tablet</strong>. La landing pública
+          sí se puede leer (es contenido informativo), pero al pulsar &laquo;Jugar&raquo; aparece un modal
+          explicando los requisitos y no permite continuar. Tres razones para esa decisión:
+        </p>
+        <ul style="line-height:1.7;color:var(--gris-300);padding-left:20px">
+          <li><strong>Pantalla insuficiente:</strong> las flechas caen rápido y desde 2 metros de
+              distancia — la natural al bailar. Una pantalla de 6-10 pulgadas obliga a acercarte
+              tanto que pierdes el sentido del movimiento corporal. En charts Medium/Hard
+              directamente no se ven las notas con tiempo de reacción.</li>
+          <li><strong>Sonido insuficiente:</strong> los altavoces internos de móviles/tablets no dan
+              cuerpo al bajo. Sin sentir el ritmo en el pecho, el cuerpo no sincroniza. Y los
+              Bluetooth (auriculares o altavoz portátil) añaden latencia que rompe el timing.</li>
+          <li><strong>Conectividad inviable:</strong> conectar una alfombra USB requiere un cable OTG
+              + hub alimentado, y aún así Android suele exponer la alfombra como teclado (sin
+              diagonales). En iPad/iPhone, Safari restringe Web Audio en segundo plano y la cuota
+              de IndexedDB es ~50 MB — no caben ni 10 canciones.</li>
+        </ul>
+        <p style="line-height:1.6;color:var(--gris-300)">
+          No es por proteger nada. Es para ahorrarte una hora intentando montar un setup con
+          adaptadores OTG que probablemente no va a ir.
+        </p>
+
+        <h3 id="hardware" style="margin-top:32px;color:var(--tulip-tree-500);font-size:1.05em">🦶 Alfombras de baile</h3>
         <p style="line-height:1.6;color:var(--gris-300)">
           <strong>El número de paneles físicos que tenga tu alfombra determina qué modos de juego
           puedes activar.</strong> Sincro lo detecta automáticamente cuando calibras y adapta las
@@ -519,10 +590,16 @@
         </ul>
 
         <p style="line-height:1.6;color:var(--gris-300);margin-top:24px;padding:14px;background:rgba(0,190,200,0.08);border-left:3px solid var(--turquesa-400);border-radius:6px">
-          <strong>💡 Antes de comprar cualquier cosa:</strong> abre Sincro en tu navegador con teclado
-          y guitarra/alfombra USB que tengas a mano. Si el dispositivo se reconoce en la pestaña
-          <em>Comprobar el equipo</em> y todos los botones responden en el test de Secuencia, ya
-          está listo para jugar.
+          <strong>💡 Antes de comprar:</strong> pide al vendedor (sobre todo en segunda mano) un
+          vídeo corto donde pulse cada botón / pise cada panel — los fallos de sensor, el bouncing
+          y los paneles muertos no se ven en las fotos. Busca el modelo exacto en YouTube añadiendo
+          &laquo;PC&raquo; o &laquo;USB&raquo; para confirmar que se reconoce como HID Gamepad estándar.
+          Y compra siempre en sitios con devolución sin preguntas (Amazon, eBay con MoneyBack):
+          si al recibirlo descubres que los sensores rebotan o las diagonales son decorativas,
+          devuelves sin drama. <strong>Cuando ya lo tengas en casa</strong>, abre Sincro en tu
+          navegador y pásalo por <em>Comprobar el equipo</em> — los tests de Stress, Ghost inputs
+          y Latencia te dicen en 2 minutos si tu unidad tiene defectos antes de pasar el plazo de
+          devolución.
         </p>
       </div>
 
@@ -578,10 +655,18 @@
   // Hash → pestaña. Aliases para nombres semánticos venidos del FAQ u otras
   // partes del producto. Si el hash apunta directamente al id de una pestaña
   // (data-ttab), también funciona.
+  // Aliases de hash → pestaña. `equipamiento` es el slug canónico (renombrado
+  // desde `hardware` el 2026-05-13 para coherencia con la voz del producto en
+  // castellano). `hardware`, `alfombras`, `guitarras`, `ordenador` se mantienen
+  // como aliases para no romper enlaces externos ya compartidos (FAQ legacy,
+  // bookmarks, redes sociales).
   const HASH_TO_TAB = {
-    hardware: 'hardware',
-    alfombras: 'hardware',
-    guitarras: 'hardware'
+    equipamiento: 'equipamiento',
+    hardware:     'equipamiento',
+    alfombras:    'equipamiento',
+    guitarras:    'equipamiento',
+    ordenador:    'equipamiento',
+    pc:           'equipamiento'
   };
   function applyHash() {
     const raw = (location.hash || '').replace('#', '').toLowerCase();
