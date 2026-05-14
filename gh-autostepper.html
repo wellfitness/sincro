@@ -1260,6 +1260,11 @@ async function processAll() {
     done++;
     document.getElementById('progressFill').style.width = (done / total * 100) + '%';
     renderQueue();
+    // Yield al event loop entre canciones para que el GC libere los buffers
+    // grandes (monoData, low-pass filters, bandEnvs) antes de la siguiente.
+    // Sin esto el navegador puede acumular ~300-500 MB por canción y colgarse
+    // a partir de la 2ª-3ª.
+    await new Promise(r => setTimeout(r, 50));
   }
 
   analyzing = false;
@@ -1288,7 +1293,12 @@ async function processOne(q, opts) {
   // Bass ODF (0-200 Hz): capta bombo. Mid ODF (200-2500 Hz): capta guitarra,
   // voz y caja. Se mezclan 40/60 a nivel de ODF (antes de pickPeaks) para
   // que tanto strums de guitarra como golpes de bombo generen notas.
-  const monoData = toMono(buffer);
+  // monoData se mantiene vivo hasta computeBandEnvelopes (más abajo). Los
+  // resultados de bass/midEmphasize NO se nombran — pasan inline a
+  // computeEnergyEnvelope y se liberan inmediatamente. Sin esto, los 3
+  // buffers internos de midEmphasize (~42 MB cada uno) podían convivir con
+  // monoData + AudioBuffer + bandEnvs y agotar el heap del navegador.
+  let monoData = toMono(buffer);
   const { env: bassEnv, framesPerSec } = computeEnergyEnvelope(bassEmphasize(monoData, sr), sr);
   const { env: midEnv }                = computeEnergyEnvelope(midEmphasize(monoData, sr),  sr);
   const bassOdf = computeODF(bassEnv);
@@ -1357,6 +1367,7 @@ async function processOne(q, opts) {
   // pueda consultar la energía mid-band al decidir sustains (isMidEnergySustained).
   // Claves = ticks quantizados (coinciden con uniqueTicks). Primer frame gana.
   const bandEnvs = computeBandEnvelopes(monoData, sr);
+  monoData = null;  // ya no se vuelve a usar — liberar ~42 MB antes de generar charts
   const pitchBandForTick = new Map();
   for (const f of peakFrames) {
     const sec = f / framesPerSec;

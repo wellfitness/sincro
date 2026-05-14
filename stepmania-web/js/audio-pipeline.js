@@ -94,22 +94,28 @@
   // Bandas: <250 Hz · 250-600 · 600-1500 · 1500-3500 · >3500 Hz.
   // Devuelve array de 5 Float32Arrays (misma indexación de frames que el
   // computeEnergyEnvelope estándar — hopMs=5ms, winMs=23ms).
+  //
+  // Memoria: cascada con solo `prev` + `cur` + `band` vivos a la vez (3
+  // buffers del tamaño de mono). La versión previa retenía los 4 low-passes
+  // simultáneamente, lo que para una canción de 4 min a 44.1 kHz suponía
+  // ~336 MB de pico y colgaba el navegador a la 2ª-3ª canción de la cola.
   function computeBandEnvelopes(mono, sr) {
     const cuts = [250, 600, 1500, 3500];
-    const filters = cuts.map(fc => iirLowPass(mono, sr, fc));
+    const N = mono.length;
     const envelopes = [];
+    let prev = iirLowPass(mono, sr, cuts[0]);
     // Banda 0: todo lo que pasa el primer low-pass (<250 Hz)
-    envelopes.push(computeEnergyEnvelope(filters[0], sr).env);
-    // Bandas 1-3: diferencia entre low-passes consecutivos (bandpass)
+    envelopes.push(computeEnergyEnvelope(prev, sr).env);
+    const band = new Float32Array(N);  // buffer reutilizable para diferencias
     for (let i = 1; i < cuts.length; i++) {
-      const band = new Float32Array(mono.length);
-      for (let j = 0; j < mono.length; j++) band[j] = filters[i][j] - filters[i-1][j];
+      const cur = iirLowPass(mono, sr, cuts[i]);
+      for (let j = 0; j < N; j++) band[j] = cur[j] - prev[j];
       envelopes.push(computeEnergyEnvelope(band, sr).env);
+      prev = cur;
     }
-    // Banda 4: lo que queda por encima de 3500 Hz
-    const hp = new Float32Array(mono.length);
-    for (let j = 0; j < mono.length; j++) hp[j] = mono[j] - filters[3][j];
-    envelopes.push(computeEnergyEnvelope(hp, sr).env);
+    // Banda 4: lo que queda por encima de 3500 Hz = mono - prev
+    for (let j = 0; j < N; j++) band[j] = mono[j] - prev[j];
+    envelopes.push(computeEnergyEnvelope(band, sr).env);
     return envelopes;
   }
 

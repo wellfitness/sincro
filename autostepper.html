@@ -1472,12 +1472,19 @@ async function analyzeOne(q) {
   // (snare en 2/4) los acota el filtro de NPS de DifficultyTiers en
   // tiers bajos. BPM y offset también se calculan sobre la blended para
   // consistencia entre tempo y picos (sin drift de fase).
-  const bassData = bassEmphasize(monoData, sr);
+  // Liberamos bassData/midData tras computeEnergyEnvelope porque son
+  // Float32Array del tamaño completo del audio (~42 MB cada uno a 4 min /
+  // 44.1 kHz). Sin null-earlos, la suma de monoData + bassData + midData +
+  // AudioBuffer original superaba 250 MB vivos durante el resto del
+  // pipeline y se acumulaba entre canciones.
+  let bassData = bassEmphasize(monoData, sr);
   await yieldUI();
-  const midData = midEmphasize(monoData, sr);
+  let midData = midEmphasize(monoData, sr);
   await yieldUI();
   const { env: bassEnv, framesPerSec } = computeEnergyEnvelope(bassData, sr);
+  bassData = null;
   const { env: midEnv }                = computeEnergyEnvelope(midData, sr);
+  midData = null;
   await yieldUI();
   const bassOdf = computeODF(bassEnv);
   const midOdf  = computeODF(midEnv);
@@ -1617,6 +1624,11 @@ async function analyzeAll() {
     await analyzeOne(q);
     i++;
     document.getElementById('analyzeProgress').style.width = (100*i/queue.length) + '%';
+    // Pausa entre canciones para que el GC libere los buffers grandes
+    // (monoData, bassData, midData, AudioBuffer) antes de la siguiente. Sin
+    // esto el navegador acumula ~300 MB por canción y la pestaña se cuelga
+    // a partir de la 3ª (especialmente con la pipeline multi-banda).
+    await new Promise(r => setTimeout(r, 50));
   }
 
   analyzing = false;
