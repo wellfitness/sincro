@@ -1624,11 +1624,16 @@ async function analyzeAll() {
     await analyzeOne(q);
     i++;
     document.getElementById('analyzeProgress').style.width = (100*i/queue.length) + '%';
-    // Pausa entre canciones para que el GC libere los buffers grandes
-    // (monoData, bassData, midData, AudioBuffer) antes de la siguiente. Sin
-    // esto el navegador acumula ~300 MB por canción y la pestaña se cuelga
-    // a partir de la 3ª (especialmente con la pipeline multi-banda).
-    await new Promise(r => setTimeout(r, 50));
+    // CRÍTICO: cerrar el AudioContext libera lo del thread nativo de audio
+    // (AudioBuffer decodificados, scratch internos). Los Float32Array grandes
+    // de monoData/bassData/midData van a "old space" en V8 y el GC menor del
+    // setTimeout NO los limpia — solo un GC mayor lo haría, pero no corre
+    // automáticamente. Cerrar el contexto fuerza la liberación nativa y deja
+    // que el GC menor recoja las refs JS pendientes. Sin esto la pestaña
+    // acumula ~300 MB por canción y se cuelga a partir de la 3ª.
+    await window.AudioPipeline.resetAudioContext();
+    audioCtx = null;  // invalida la cache local — el preview reabrirá uno nuevo si hace falta
+    await new Promise(r => setTimeout(r, 100));
   }
 
   analyzing = false;

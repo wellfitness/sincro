@@ -38,6 +38,19 @@
     return _audioCtx;
   }
 
+  // Cierra el AudioContext actual liberando TODO lo asociado al thread nativo
+  // de audio (AudioBuffer decodificados, scratch buffers internos, etc.). El
+  // próximo ensureAudioContext() creará uno nuevo automáticamente. Útil entre
+  // canciones de un batch para que el navegador libere realmente la memoria
+  // del audio anterior — la garbage collection de JS no puede liberarla por sí
+  // sola porque vive en el thread de audio, fuera del heap V8.
+  async function resetAudioContext() {
+    if (_audioCtx) {
+      try { await _audioCtx.close(); } catch (e) { /* ignore */ }
+      _audioCtx = null;
+    }
+  }
+
   async function decodeFile(file) {
     const ctx = ensureAudioContext();
     const buf = await file.arrayBuffer();
@@ -325,6 +338,7 @@
 
   window.AudioPipeline = {
     ensureAudioContext,
+    resetAudioContext,
     decodeFile,
     toMono,
     bassEmphasize,

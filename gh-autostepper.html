@@ -1259,11 +1259,15 @@ async function processAll() {
     done++;
     document.getElementById('progressFill').style.width = (done / total * 100) + '%';
     renderQueue();
-    // Yield al event loop entre canciones para que el GC libere los buffers
-    // grandes (monoData, low-pass filters, bandEnvs) antes de la siguiente.
-    // Sin esto el navegador puede acumular ~300-500 MB por canción y colgarse
-    // a partir de la 2ª-3ª.
-    await new Promise(r => setTimeout(r, 50));
+    // CRÍTICO entre canciones: cerrar el AudioContext libera TODO lo del thread
+    // nativo de audio (AudioBuffer decodificados, scratch internos). Sin esto,
+    // aunque JS suelte los Float32Array, el navegador retiene los AudioBuffer
+    // en el thread de audio — y como los TypedArray grandes van directos a
+    // "old space" en V8, el GC menor del setTimeout NO los limpia. Solo un
+    // GC mayor lo haría, pero no corre automáticamente entre canciones cortas.
+    // Combinado: close() + yield largo + reasignación = libera de verdad.
+    await window.AudioPipeline.resetAudioContext();
+    await new Promise(r => setTimeout(r, 100));
   }
 
   analyzing = false;
