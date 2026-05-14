@@ -159,7 +159,12 @@ let gameState = null;
 // devolviendo el mismo valor que justo antes de pausar (congelación efectiva).
 let isPaused = false;
 let pausedAtCtxTime = 0;
-const LEAD_IN_SEC = 3.0; // mismo lead-in usado en startGame() para alinear audio↔chart
+// LEAD_IN_SEC = duración de la cuenta atrás. El audio arranca al pulsar
+// Iniciar y la primera nota llega al receptor LEAD_IN_SEC segundos después
+// (durante esos segundos suena la música y el countdown 5→1 se solapa
+// encima). Antes eran 3s de delay TRAS un countdown silencioso de 5s = 8s
+// totales que se sentían eternos.
+const LEAD_IN_SEC = 5.0;
 const canvas = document.getElementById('gameCanvas');
 const ctx2d = canvas.getContext('2d');
 let canvasW = 0, canvasH = 0;
@@ -187,6 +192,20 @@ let canvasW = 0, canvasH = 0;
 // uiScale se mantiene solo para receptorY (margen superior — no afecta a
 // la geometría de los lanes).
 const LANE_WIDTH_IDEAL = 220;
+// Posición del receptor desde el top del canvas (en px, antes del scaling
+// por uiScale). Ajustes históricos:
+//   - 110 (original)
+//   - 70  (2026-05-15: más recorrido visual = más tiempo de reacción)
+//   - 90  (2026-05-15 mismo día: la usuaria reportó que los judgments caían
+//         demasiado encima del receptor; bajamos 20px para más separación
+//         vertical entre el texto "PERFECT/GREAT/..." y los círculos)
+// `tiempo de reacción = (canvasH - receptorY) / pps`. A pps=600 (xMod 1.0),
+// cada 20px = ~33ms de anticipación. Saldo neto vs original: -20px = +50ms
+// (sigue siendo más anticipación que el setup pre-2026-05-15).
+// Si se cambia, mantener sincronizado en TODOS los usos
+// (`updateComboMeter` lo usa también para posicionar el combo meter
+// JUSTO ENCIMA del receptor).
+const RECEPTOR_Y_BASE = 90;
 let uiScale = 1;
 let playfieldW = 540;
 let ARROW_SIZE = 56;
@@ -352,8 +371,8 @@ function getArrowSprite(rotation, color) {
 resizeCanvas();
 
 // ----- Game lifecycle --------------------------------------------------------
-// startGame() puede tardar 1-3s entre awaits (resume, arrayBuffer, decodeAudioData,
-// runCountdown). Si el usuario navega a otra pantalla durante ese intervalo,
+// startGame() puede tardar 1-3s entre awaits (resume, arrayBuffer,
+// decodeAudioData). Si el usuario navega a otra pantalla durante ese intervalo,
 // `goto()` bumpea el navToken — capturamos el token al inicio y verificamos
 // tras cada await; si ya no es el actual, abandonamos sin tocar UI ni crear
 // gameState. Sin esto, una promesa abandonada terminaba creando un loop
@@ -370,6 +389,12 @@ async function startGame() {
   isPaused = false;
   const _pauseOverlayInit = document.getElementById('pauseOverlay');
   if (_pauseOverlayInit) _pauseOverlayInit.classList.remove('show');
+  // body.playing oculta el topbar para liberar pantalla durante la partida.
+  // Lo activamos AL INICIO (no al final tras los awaits) para evitar que en
+  // restartSong (stopGame que lo quita + startGame que lo pone) el topbar
+  // reaparezca durante los ~200-500ms de decodeAudioData. Si startGame
+  // aborta o falla, los catch/early-returns lo restauran.
+  document.body.classList.add('playing');
   const myNavToken = currentNavToken();
   const aborted = () => !isCurrentNav(myNavToken);
   try {
@@ -444,18 +469,14 @@ async function startGame() {
     if (t !== null && t >= 0 && t < audioBuffer.duration + 2) beatTimes.push(t);
   }
 
-  // Countdown 3-2-1-GO before starting audio
-  await runCountdown(aborted);
-  if (aborted()) { document.getElementById('countdown').classList.add('hidden'); return; }
-
-  // Audio arranca YA (al terminar el countdown). LEAD_IN_SEC se aplica al
-  // CHART, no al audio: gameState.startTime queda 3s por delante del inicio
-  // real del audio, así audioTime es negativo durante los primeros 3s de
-  // música y las notas con n.time pequeñas aún no han alcanzado el receptor.
-  // La jugadora ESCUCHA la canción desde el primer instante y la primera
-  // nota llega cuando el audio lleva 3s sonando — orientación auditiva
-  // antes de pisar. Bug previo: arrancábamos el audio 3s en el futuro y
-  // las notas caían en silencio durante el lead-in.
+  // Audio arranca YA al pulsar Iniciar. El countdown 5→1 se pinta DENTRO
+  // del canvas del highway (ver render(), bloque "if (audioTime < 0)"),
+  // sin overlay HTML encima. Decisión consciente de la usuaria: countdown
+  // sobrio integrado en la pista, sin beep ni animación scale-pop.
+  // Bug previo (overlay HTML): se duplicaba con cualquier número pintado
+  // en canvas y dejaba "1 residual" si la animación no se ocultaba a
+  // tiempo. La primera nota llega al receptor cuando audioTime cruza 0
+  // (LEAD_IN_SEC=5s tras el src.start).
   const src = audioCtx.createBufferSource();
   src.buffer = audioBuffer;
   src.connect(audioCtx.destination);
@@ -512,7 +533,6 @@ async function startGame() {
 
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
-  showTouchControls();
   requestAnimationFrame(gameLoop);
   } catch (err) {
     // Cualquier fallo en la cadena async (decodeAudioData con OGG en iOS,
@@ -524,97 +544,24 @@ async function startGame() {
     const msg = (err && err.name === 'EncodingError')
       ? 'No se pudo decodificar el audio. Formato no soportado por este navegador (prueba MP3 o WAV).'
       : (err && err.message) ? err.message : 'Error desconocido al iniciar la canción.';
-    document.getElementById('countdown').classList.add('hidden');
     // Toast simple: alert() es invasivo pero garantiza visibilidad. Si en
     // futuro hay sistema de toasts global, reemplazar aquí.
     alert('No se pudo iniciar la canción.\n\n' + msg);
     goto('diff');
+  } finally {
+    // Si gameState no llegó a asignarse (aborted, decode error, parse error…)
+    // restauramos el topbar manualmente — stopGame() no se llama en esos
+    // casos. Si la partida arrancó bien, gameState existe y stopGame() ya
+    // se encarga al terminar.
+    if (!gameState) document.body.classList.remove('playing');
   }
 }
 
-// Countdown extendido a 5 segundos (5 pasos × 1000ms). El countdown previo
-// (~2.5s) era demasiado breve — la usuaria no llegaba a centrarse antes del
-// primer paso. Cinco pasos con animación scale-pop + tier de color + beep
-// auditivo en cada uno usando el AudioContext ya inicializado. El beep es un
-// oscilador sinusoidal de 12ms (corto, no enmascara la música pre-canción ni
-// la siguiente nota); ¡VAMOS! va con frecuencia más alta y duración doble
-// para subrayarlo. Al terminar la cuenta atrás el audio arranca de inmediato
-// y se aplica LEAD_IN_SEC=3 sobre el chart (no sobre el audio): la jugadora
-// oye la música durante 3s antes de que llegue la primera nota — sin tener
-// que adivinar el ritmo de notas cayendo en silencio.
-const COUNTDOWN_STEPS_SM = [
-  { text: '¡PREPÁRATE!', cls: 'cd-prep', beep: { freq: 660,  dur: 0.10 } },
-  { text: '3',           cls: 'cd-3',    beep: { freq: 880,  dur: 0.10 } },
-  { text: '2',           cls: 'cd-2',    beep: { freq: 880,  dur: 0.10 } },
-  { text: '1',           cls: 'cd-1',    beep: { freq: 880,  dur: 0.10 } },
-  { text: '¡VAMOS!',     cls: 'cd-go',   beep: { freq: 1320, dur: 0.22 } },
-];
-const COUNTDOWN_STEP_MS = 1000;
-const COUNTDOWN_TIER_CLASSES = 'cd-prep cd-3 cd-2 cd-1 cd-go pop';
-
-function playCountdownBeep(freq, dur) {
-  // Beep generado con Web Audio API en lugar de un asset .mp3 para evitar
-  // dependencias y mantener latencia <1ms. Sine wave + ramp up/down lineal
-  // (10ms attack, decay hasta dur) — sin attack hay click audible al inicio.
-  if (!audioCtx) return;
-  try {
-    const osc = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = freq;
-    g.gain.value = 0;
-    osc.connect(g);
-    g.connect(audioCtx.destination);
-    const t0 = audioCtx.currentTime;
-    g.gain.linearRampToValueAtTime(0.18, t0 + 0.01);
-    g.gain.linearRampToValueAtTime(0, t0 + dur);
-    osc.start(t0);
-    osc.stop(t0 + dur + 0.02);
-  } catch (e) { /* AudioContext suspended o detached — silencio OK */ }
-}
-
-function runCountdown(isAborted) {
-  return new Promise(resolve => {
-    const el = document.getElementById('countdown');
-    el.classList.remove('hidden');
-    let i = 0;
-    // isAborted devuelve true si el usuario navegó fuera mientras estábamos
-    // en la cuenta. Sin este check, los beeps + animaciones seguirían 5s
-    // después de que la usuaria ya saltó a otra pantalla.
-    const aborted = () => typeof isAborted === 'function' && isAborted();
-    const showStep = () => {
-      const s = COUNTDOWN_STEPS_SM[i];
-      el.textContent = s.text;
-      el.className = '';
-      void el.offsetWidth;
-      el.className = s.cls + ' pop';
-      playCountdownBeep(s.beep.freq, s.beep.dur);
-    };
-    showStep();
-    const advance = () => {
-      if (aborted()) {
-        el.classList.add('hidden');
-        el.className = 'hidden';
-        resolve();
-        return;
-      }
-      i++;
-      if (i >= COUNTDOWN_STEPS_SM.length) {
-        // Último paso (¡VAMOS!) ya está pintado — mantenerlo visible 1s antes
-        // de ocultar para que se lea bien (antes era solo 400ms y se perdía).
-        setTimeout(() => {
-          el.classList.add('hidden');
-          el.className = 'hidden';
-          resolve();
-        }, COUNTDOWN_STEP_MS);
-        return;
-      }
-      showStep();
-      setTimeout(advance, COUNTDOWN_STEP_MS);
-    };
-    setTimeout(advance, COUNTDOWN_STEP_MS);
-  });
-}
+// Countdown: NO hay overlay HTML — se pinta dentro del canvas del highway
+// con ctx2d.fillText en render() cuando audioTime<0. Decisión consciente:
+// overlay HTML grande con beep + scale-pop dejaba "1 residual" al final
+// y duplicaba lo que ya tenía el canvas. Mismo patrón que `gh-play.html`.
+// Duración del lead-in fijada por LEAD_IN_SEC (5.0s) declarado arriba.
 
 function stopGame() {
   if (!gameState) return;
@@ -630,23 +577,23 @@ function stopGame() {
   if (gameState.baseMods) Object.assign(activeMods, gameState.baseMods);
   window.removeEventListener('keydown', onKeyDown);
   window.removeEventListener('keyup', onKeyUp);
-  hideTouchControls();
   // Oculta combo meter si quedó visible al salir (pausa / quit antes del
   // endGame natural). Sin esto la siguiente canción arrancaría con el meter
   // mostrando el combo final de la anterior por un frame.
   const cm = document.getElementById('hudComboMeter');
   if (cm) cm.classList.remove('show', 'pulse', 'tier-1', 'tier-2', 'tier-3', 'tier-4', 'tier-5');
   _comboMeterLast = 0;
-  // Oculta countdown por si la usuaria abandona durante los 5s de cuenta
-  // (el aborted() check de runCountdown solo cubre navegar fuera de
-  // play-screen, no parar la canción ya iniciada).
-  const cd = document.getElementById('countdown');
-  if (cd) { cd.className = 'hidden'; }
+  // El countdown se pinta en canvas via render() cuando audioTime<0, así
+  // que al anular gameState el render() devuelve early (gameLoop checa
+  // `if (!gameState) return;`) y el countdown desaparece en el siguiente
+  // frame — sin elemento HTML que limpiar.
   // Reset de pausa: cualquier vía de salida (quit, end natural, navegación
   // fuera) debe dejar el módulo en estado "no pausado" para la próxima partida.
   isPaused = false;
   const _pauseOverlay = document.getElementById('pauseOverlay');
   if (_pauseOverlay) _pauseOverlay.classList.remove('show');
+  // Restaurar topbar al salir de la partida — body.playing lo había ocultado.
+  document.body.classList.remove('playing');
   gameState = null;
 }
 
@@ -712,9 +659,9 @@ function togglePause() {
       // Caso normal: la canción está sonando → arrancar desde el offset correcto.
       newSrc.start(0, audioElapsed);
     } else if (audioElapsed < 0) {
-      // Caso lead-in: la usuaria pausó antes de que el audio empezara a sonar
-      // (segundos -3..0 del chart). Programar el start en el futuro para que
-      // coincida con t=0 del audio.
+      // Caso lead-in: la usuaria pausó durante los primeros LEAD_IN_SEC=5s
+      // (countdown en canvas, audio sonando). Programar el start en el
+      // futuro para que coincida con t=0 del audio al reanudar.
       newSrc.start(audioCtx.currentTime + (-audioElapsed));
     }
     // (audioElapsed >= duration → la canción ya terminó; no recreamos
@@ -746,106 +693,15 @@ window.togglePause = togglePause;
 window.restartSong = restartSong;
 window.quitToMenu  = quitToMenu;
 
-// ----- Touch overlay para móvil ---------------------------------------------
-// La PWA se instala en Android y se enlaza desde la landing móvil ("Pisa el
-// ritmo, …"), pero el motor solo escuchaba teclado + Gamepad API → en móvil
-// el usuario llegaba a una pantalla muerta. Este overlay añade 4 zonas táctiles
-// (← ↓ ↑ →) en la mitad inferior de la pantalla, mapeadas a los carriles
-// cardinales por nombre vía LANE_CONFIGS[4].keyMap. Solo activo cuando:
-//   - El dispositivo expone touch ('ontouchstart' || maxTouchPoints > 0).
-//   - El chart se juega en modo default 4-lane (no Solo, no Full — los mods
-//     6/8 carriles requieren teclas extra que no tienen mapeo táctil natural).
-// Si el chart pide 6/8, mostramos un mensaje en vez del overlay.
-let _touchOverlayEl = null;
-const _IS_TOUCH = (typeof window !== 'undefined') && (
-  ('ontouchstart' in window) || (navigator.maxTouchPoints > 0)
-);
-
-function _ensureTouchOverlay() {
-  if (_touchOverlayEl) return _touchOverlayEl;
-  const root = document.createElement('div');
-  root.id = 'touchPad';
-  root.style.cssText = [
-    'position:fixed', 'left:0', 'right:0', 'bottom:52px', // 52px = HUD footer
-    'height:38vh', 'display:none', 'z-index:50',
-    'pointer-events:none', // solo los hijos capturan
-    'user-select:none', '-webkit-user-select:none',
-    'touch-action:none', // evitar scroll/zoom en gestos
-  ].join(';');
-  // 4 botones en fila, 25% width cada uno. Orden y rótulos coinciden con
-  // LANE_CONFIGS[4]: lane 0=Left, 1=Down, 2=Up, 3=Right.
-  const labels = ['←', '↓', '↑', '→'];
-  const colors = LANE_CONFIGS[4].tints;
-  for (let i = 0; i < 4; i++) {
-    const b = document.createElement('div');
-    b.dataset.lane = String(i);
-    b.style.cssText = [
-      'position:absolute', 'top:0', 'bottom:0',
-      `left:${i * 25}%`, 'width:25%',
-      'margin:6px',
-      'border-radius:14px',
-      `background:linear-gradient(180deg, ${colors[i]}33, ${colors[i]}10)`,
-      `border:2px solid ${colors[i]}88`,
-      'display:flex', 'align-items:center', 'justify-content:center',
-      'font-size:clamp(48px, 12vh, 96px)', 'font-weight:bold',
-      `color:${colors[i]}`,
-      'pointer-events:auto', 'cursor:pointer',
-      'transition:transform 80ms ease, background 80ms ease',
-      'box-shadow:0 4px 16px rgba(0,0,0,0.4)',
-    ].join(';');
-    b.textContent = labels[i];
-    // touch + pointer events: pointer cubre lápiz/stylus/touch en navegadores
-    // modernos. Mantenemos touchstart como fallback explícito iOS Safari viejo.
-    const press = (e) => {
-      e.preventDefault();
-      if (!gameState || gameState.finished || isPaused) return;
-      const lane = parseInt(b.dataset.lane);
-      if (gameState.keyHeld[lane]) return;
-      gameState.keyHeld[lane] = true;
-      gameState.pressedLanes[lane] = true;
-      gameState.flashTime[lane] = performance.now();
-      b.style.transform = 'scale(0.95)';
-      b.style.background = `linear-gradient(180deg, ${colors[lane]}aa, ${colors[lane]}44)`;
-      handleLanePress(lane);
-    };
-    const release = (e) => {
-      e.preventDefault();
-      if (!gameState || isPaused) return;
-      const lane = parseInt(b.dataset.lane);
-      gameState.keyHeld[lane] = false;
-      if (!gamepadButtonState[gameState.laneConfig.padMap[lane]]) {
-        gameState.pressedLanes[lane] = false;
-        handleLaneRelease(lane);
-      }
-      b.style.transform = '';
-      b.style.background = `linear-gradient(180deg, ${colors[lane]}33, ${colors[lane]}10)`;
-    };
-    b.addEventListener('pointerdown', press);
-    b.addEventListener('pointerup', release);
-    b.addEventListener('pointercancel', release);
-    b.addEventListener('pointerleave', release);
-    root.appendChild(b);
-  }
-  document.body.appendChild(root);
-  _touchOverlayEl = root;
-  return root;
-}
-
-function showTouchControls() {
-  if (!_IS_TOUCH) return;
-  if (!gameState || gameState.laneConfig.lanes !== 4) {
-    // Modo Solo/Full no tiene mapeo táctil natural — avisamos.
-    if (gameState && gameState.laneConfig.lanes !== 4) {
-      console.info('Touch overlay omitido: chart de ' + gameState.laneConfig.lanes + ' carriles. Usa teclado o alfombra.');
-    }
-    return;
-  }
-  const el = _ensureTouchOverlay();
-  el.style.display = 'block';
-}
-function hideTouchControls() {
-  if (_touchOverlayEl) _touchOverlayEl.style.display = 'none';
-}
+// ----- Inputs soportados ----------------------------------------------------
+// Sincro se juega EXCLUSIVAMENTE con alfombra USB (Gamepad API + calibración
+// por roles) o con teclado físico como fallback de desarrollo/testing. No hay
+// overlay táctil — la landing bloquea explícitamente dispositivos móviles vía
+// isCompatibleDevice() (viewport ≥ 1024×600 + pointer:fine). El overlay
+// táctil previo se eliminó el 2026-05-15: la heurística rota
+// `maxTouchPoints > 0` lo sacaba en monitores Windows con touchscreen
+// aunque la usuaria estuviera jugando con alfombra. Si en el futuro alguien
+// quiere reintroducirlo, hablar primero — está fuera del producto a propósito.
 
 function onKeyDown(e) {
   if (!gameState || gameState.finished) return;
@@ -1141,15 +997,20 @@ function showJudgment(judg) {
   // Force reflow para que el navegador "vea" el cambio de clase antes del show.
   void el.offsetWidth;
   el.className = 'judgment show ' + judg;
-  // Posición JUSTO ENCIMA del receptor. receptorY = 110 × uiScale (~110-176px).
-  // Restamos 90px para que el centro del texto (transform translateY -50%)
-  // quede claramente arriba del círculo del receptor. Clamp 40px protege
-  // pantallas muy pequeñas para no invadir el topbar. Antes el CSS fijaba
-  // top:24% del viewport, que en pantallas grandes (1080p) caía a ~260px,
-  // SOBRE los receptores en uiScale 1.6 — confusión visual señalada por el
-  // usuario ("aparecen sobre los círculos").
-  const receptorY = Math.round(110 * uiScale);
-  el.style.top = Math.max(40, receptorY - 90) + 'px';
+  // Posición 10px por encima del borde superior del receptor (no del centro).
+  // Medimos `offsetHeight` RUNTIME — el judgment tiene altura variable por
+  // tier (marvelous 3.8em vs bad 2.6em); un valor fijo desbordaba por arriba
+  // en tiers pequeños y dejaba demasiado hueco en grandes. Consultar
+  // offsetHeight tras aplicar `className = 'judgment show ${judg}'` fuerza
+  // un layout síncrono que devuelve la altura ya con el font-size del tier.
+  //   centro_judgment = receptorTop - 10 - halfH
+  // Clamp `max(halfH+2, ...)` asegura que el BORDE SUPERIOR del judgment
+  // (en `centro - halfH`) quede al menos 2px dentro del canvas — sin
+  // desbordar arriba aunque el receptor esté muy cerca del top.
+  const receptorY = Math.round(RECEPTOR_Y_BASE * uiScale);
+  const receptorTop = receptorY - ARROW_SIZE / 2;
+  const halfH = (el.offsetHeight || 50) / 2;
+  el.style.top = Math.max(halfH + 2, receptorTop - 10 - halfH) + 'px';
   setTimeout(() => { if (el.classList) el.classList.remove('show'); }, 700);
 }
 
@@ -1225,8 +1086,9 @@ function render(audioTime) {
   const totalWidth = laneWidth * numLanes;
   const startX = W/2 - totalWidth/2;
   // receptorY proporcional a uiScale — en pantallas grandes ofrecemos algo
-  // más de margen superior sin tapar la HUD.
-  const receptorY = Math.round(110 * uiScale);
+  // más de margen superior sin tapar la HUD. Base RECEPTOR_Y_BASE=70px
+  // (bajado de 110 el 2026-05-15 para más tiempo de reacción visual).
+  const receptorY = Math.round(RECEPTOR_Y_BASE * uiScale);
   // Apply per-section #SPEEDS and #SCROLLS modifiers based on current beat.
   // Negative scroll = reverse direction (notes flow upward from below).
   const T = gameState.timingEngine;
@@ -1576,6 +1438,20 @@ function render(audioTime) {
   grad2.addColorStop(0,'#ff006e'); grad2.addColorStop(0.5,'#8338ec'); grad2.addColorStop(1,'#3a86ff');
   ctx2d.fillStyle = grad2;
   ctx2d.fillRect(0, 0, W * pct, 4);
+
+  // Countdown sobrio dentro del highway: cuando audioTime < 0 (durante los
+  // LEAD_IN_SEC=5s previos a que la primera nota llegue al receptor) pinta
+  // un número monocromo en el centro del canvas. Patrón idéntico al motor
+  // GH (`gh-play.html` render()). Sin overlay HTML, sin beep, sin scale-pop
+  // — el countdown está integrado en la pista. Bug previo: overlay HTML
+  // grande dejaba "1 residual" y se duplicaba con cualquier render auxiliar.
+  if (audioTime < 0) {
+    const sec = Math.ceil(-audioTime);
+    ctx2d.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx2d.font = `bold ${H * 0.18}px ${getComputedStyle(document.body).getPropertyValue('--font-display') || 'sans-serif'}`;
+    ctx2d.textAlign = 'center'; ctx2d.textBaseline = 'middle';
+    ctx2d.fillText(sec, W / 2, H / 2);
+  }
 }
 
 // Run "pendiente" — construido en endGame, persistido en saveCurrentRun tras

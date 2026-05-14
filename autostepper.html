@@ -2080,7 +2080,7 @@ async function saveAllToLibrary() {
   if (quotaHit) {
     status.innerHTML = `<span style="color:#facc15">⚠ ${saved} guardadas antes de quedarte sin espacio. Elimina canciones viejas en la biblioteca o haz backup ZIP antes de seguir.</span>`;
   } else {
-    const link = `<a href="stepmania-play.html#library" style="color:var(--turquesa-400);font-weight:600">→ Ver biblioteca</a>`;
+    const link = `<a href="stepmania-play.html" style="color:var(--turquesa-400);font-weight:600">→ Bailar</a>`;
     status.innerHTML = `<span style="color:#00ff64">✓ ${saved} canciones guardadas en biblioteca${errors ? ` · ${errors} con error` : ''}.</span> ${link}`;
   }
 }

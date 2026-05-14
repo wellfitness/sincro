@@ -320,6 +320,7 @@
         <span id="playlistCount">Marca varias canciones para crear una sesión continua</span>
         <small>O haz click en una sola para jugarla individualmente</small>
       </div>
+      <button class="action-btn secondary" type="button" onclick="randomSelectSong()" title="Elige una canción al azar entre las visibles">🎲 Al azar</button>
       <button class="action-btn secondary" id="playlistClearBtn" onclick="clearPlaylistSelection()" disabled>Limpiar</button>
       <button class="action-btn" id="playlistStartBtn" onclick="startPlaylistSession()" disabled>🎮 Crear partida</button>
     </div>
@@ -356,7 +357,16 @@
           <option value="">Todas las etiquetas</option>
         </select>
       </div>
-      <div id="songsContainer">Cargando...</div>
+      <div class="songs-with-radar">
+        <div id="songsContainer">Cargando...</div>
+        <aside id="songRadarPanel" class="radar-panel" aria-live="polite">
+          <div class="radar-title">Gráfico de la canción</div>
+          <div class="radar-svg-wrap radar-empty">
+            <div class="radar-placeholder">Pasa el cursor sobre una canción para ver su gráfico de dificultad</div>
+          </div>
+          <div class="radar-foot"><span id="radarFootSong">—</span> · <span id="radarFootDiff">—</span></div>
+        </aside>
+      </div>
     </div>
   </div>
 </div>
@@ -422,7 +432,9 @@
     <span class="combo-number" id="hudComboNumber">0</span>
     <span class="combo-label">COMBO</span>
   </div>
-  <div id="countdown" class="hidden"></div>
+  <!-- Countdown: integrado en el canvas (ver render() en
+       stepmania-web/js/game.js, bloque "if (audioTime < 0)"). No hay
+       overlay HTML — la usuaria prefiere countdown sobrio dentro de la pista. -->
   <!-- PAUSE OVERLAY — menú canónico SM5/ITG arcade: Reanudar / Reiniciar /
        Salir. Se abre con ESC durante la partida. El estado de la canción
        queda CONGELADO (audio parado, gameLoop saltando lógica via guard
@@ -475,6 +487,7 @@
 <script src="stepmania-web/js/parser.js"></script>
 <script src="stepmania-web/js/difficulty-tiers.js"></script>
 <script src="stepmania-web/js/audio-metadata.js"></script>
+<script src="stepmania-web/js/radar.js"></script>
 <script src="stepmania-web/js/library.js"></script>
 <script src="stepmania-web/js/backup.js"></script>
 <script src="stepmania-web/js/song-select.js"></script>

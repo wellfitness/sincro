@@ -131,7 +131,7 @@ function renderSongList() {
     const grade = s._bestGrade ? `<span class="grade-pill grade-${s._bestGrade.grade}">${s._bestGrade.grade}</span>` : '<span style="color:#444">—</span>';
     const isMarked = selectedSongIds.has(s.id);
     html += `<div class="queue-row${isMarked ? ' in-playlist' : ''}" style="cursor:pointer;grid-template-columns:${COLS}"
-      onmouseenter="scheduleSongPreview(${s.id})"
+      onmouseenter="scheduleSongPreview(${s.id}); updateRadarPanel(${s.id})"
       onmouseleave="cancelSongPreview()">
       <div onclick="event.stopPropagation()">
         <input type="checkbox" class="playlist-checkbox" ${isMarked ? 'checked' : ''}
@@ -338,6 +338,9 @@ function onGlobalDiffChange() {
   const sel = document.getElementById('globalDiff');
   if (sel) _globalDiffKey = sel.value;
   updateDiffDensityIndicator();
+  // Refresca el radar para la canción que ya esté visible — la dif activa
+  // ha cambiado, así que el polígono también.
+  if (_lastRadarSongId != null) updateRadarPanel(_lastRadarSongId);
 }
 
 // Leyenda de densidad por dificultad. Combina:
@@ -1274,4 +1277,139 @@ function continueSessionNow() {
     _sessionCountdownTimer = null;
   }
   loadSessionSong(playSession.index + 1);
+}
+
+// ============================================================================
+//  GROOVE RADAR — panel lateral con pentágono de dificultad estilo SM5
+// ============================================================================
+// El cálculo es al vuelo: leemos el chart activo del sscText persistido,
+// extraemos su campo #NOTES y se lo pasamos a Radar.computeRadarSM. Cache en
+// memoria por (songId, chartKey) — un chart en biblioteca se calcula una vez
+// y el resto de hovers usan el resultado memoizado.
+//
+// Sticky: el panel nunca se vacía al mouseleave; mantiene la última canción
+// para que sigas viendo el gráfico mientras suena el preview.
+const _radarCache = new Map();   // key: `${songId}:${chartKey}` → {densidad, ...}
+let _lastRadarSongId = null;     // última canción mostrada (para refrescar al cambiar globalDiff)
+
+function _radarChartKey(songId, chart) { return `${songId}:${chart.key || chart.name || ''}`; }
+
+// Extrae el bloque #NOTES del chart correspondiente desde el sscText completo.
+// Devuelve { notesText, numLanes } o null si no se encuentra.
+function _extractChartNotes(song, chart) {
+  if (!song || !song.sscText || !chart) return null;
+  // Reusamos el parser SSC/SM ya cargado (parser.js → window.parseSscOrSm).
+  if (typeof parseSscOrSm !== 'function') return null;
+  const parsed = parseSscOrSm(song.sscText);
+  if (!parsed.charts || !parsed.charts.length) return null;
+  // Match por DIFFICULTY (string en .ssc, p.ej. "Medium"). Si no se encuentra
+  // exacto, intentamos por índice equivalente al `charts[i]` del objeto song.
+  let target = parsed.charts.find(c => (c.DIFFICULTY || '').toLowerCase() === (chart.key || '').toLowerCase());
+  if (!target) {
+    const idx = song.charts.indexOf(chart);
+    if (idx >= 0 && idx < parsed.charts.length) target = parsed.charts[idx];
+  }
+  if (!target || !target.NOTES) return null;
+  const stepType = target.STEPSTYPE || chart.stepType || 'dance-single';
+  const numLanes = (typeof lanesFromStepType === 'function') ? lanesFromStepType(stepType) : (chart.numLanes || 4);
+  return { notesText: target.NOTES, numLanes };
+}
+
+function _computeRadarFor(song, chart) {
+  if (!song || !chart) return null;
+  const cacheKey = _radarChartKey(song.id, chart);
+  if (_radarCache.has(cacheKey)) return _radarCache.get(cacheKey);
+  if (typeof window.Radar !== 'object') return null;
+
+  // Si el chart trae radar persistido (campo radar: {...}) lo usamos.
+  // Si trae #RADARVALUES como string (autostepper guarda CSV en chart.radar),
+  // lo parseamos. Si no, calculamos al vuelo desde sscText.
+  let result = null;
+  if (chart.radar && typeof chart.radar === 'object' && 'densidad' in chart.radar) {
+    result = chart.radar;
+  } else if (typeof chart.radar === 'string') {
+    result = window.Radar.parseRadarString(chart.radar);
+  }
+  if (!result) {
+    const ext = _extractChartNotes(song, chart);
+    if (ext) {
+      result = window.Radar.computeRadarSM({
+        notesText: ext.notesText,
+        numLanes: ext.numLanes,
+        bpm: song.bpm || 120,
+        songSeconds: song.duration || 60
+      });
+    }
+  }
+  if (result) _radarCache.set(cacheKey, result);
+  return result;
+}
+
+// Pinta el radar de la canción `songId` en el panel lateral. Usa la dif
+// activa (_globalDiffKey) — si la canción no la tiene, cae al chart más
+// cercano (mismo pickClosestChart que el flow normal).
+async function updateRadarPanel(songId) {
+  const wrap = document.querySelector('#songRadarPanel .radar-svg-wrap');
+  const footSong = document.getElementById('radarFootSong');
+  const footDiff = document.getElementById('radarFootDiff');
+  if (!wrap) return;
+
+  _lastRadarSongId = songId;
+
+  // Buscar la canción en cache; si no, ir a IndexedDB.
+  let song = _allSongsCache.find(s => s.id === songId);
+  if (!song || !song.sscText) {
+    try { song = await dbGet(songId); } catch (e) { song = null; }
+  }
+  if (!song) {
+    wrap.classList.add('radar-empty');
+    wrap.innerHTML = '<div class="radar-placeholder">No se pudo cargar la canción.</div>';
+    return;
+  }
+
+  const chart = pickClosestChart(song, _globalDiffKey);
+  if (!chart) {
+    wrap.classList.add('radar-empty');
+    wrap.innerHTML = '<div class="radar-placeholder">Esta canción no tiene charts.</div>';
+    if (footSong) footSong.textContent = song.title || '—';
+    if (footDiff) footDiff.textContent = '—';
+    return;
+  }
+
+  const radar = _computeRadarFor(song, chart);
+  if (footSong) footSong.textContent = song.title || '—';
+  if (footDiff) footDiff.textContent = chart.name || chart.key || '—';
+
+  if (!radar) {
+    wrap.classList.add('radar-empty');
+    wrap.innerHTML = '<div class="radar-placeholder">Sin datos suficientes para calcular el gráfico.</div>';
+    return;
+  }
+  const values = [radar.densidad, radar.intensidad, radar.saltos, radar.sostenidos, radar.caos];
+  wrap.classList.remove('radar-empty');
+  wrap.innerHTML = window.Radar.renderRadarSVG({
+    values,
+    labels: window.Radar.LABELS_SM,
+    size: 240,
+    accentColor: '#00bec8'
+  });
+}
+
+// Elige una canción al azar entre las visibles (respeta los filtros activos)
+// y arranca la partida con la configuración global (dif + mods + speed).
+// Si la lista está vacía, muestra mensaje y no hace nada.
+function randomSelectSong() {
+  if (!_visibleSongIds || !_visibleSongIds.length) {
+    alert('No hay canciones visibles. Ajusta los filtros o importa canciones.');
+    return;
+  }
+  const idx = Math.floor(Math.random() * _visibleSongIds.length);
+  const id = _visibleSongIds[idx];
+  selectSong(id);
+}
+
+// Expone para el HTML inline-handler
+if (typeof window !== 'undefined') {
+  window.updateRadarPanel = updateRadarPanel;
+  window.randomSelectSong = randomSelectSong;
 }
