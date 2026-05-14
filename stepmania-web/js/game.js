@@ -149,6 +149,17 @@ function applyMatCalibrationToConfig(cfg) {
 }
 
 let gameState = null;
+// Pause state — global de módulo porque togglePause/restartSong/quitToMenu se
+// llaman desde el overlay (onclick) y desde onKeyDown. Vive fuera de gameState
+// para sobrevivir a stopGame() + startGame() (caso restart) sin tener que
+// re-inicializarlo en dos sitios. stopGame() y startGame() lo resetean a
+// estado limpio. pausedAtCtxTime guarda el reloj del audioCtx en el momento
+// de pausar; al reanudar, calculamos el delta y lo SUMAMOS a gameState.startTime
+// para que `audioTime = audioCtx.currentTime - gameState.startTime` siga
+// devolviendo el mismo valor que justo antes de pausar (congelación efectiva).
+let isPaused = false;
+let pausedAtCtxTime = 0;
+const LEAD_IN_SEC = 3.0; // mismo lead-in usado en startGame() para alinear audio↔chart
 const canvas = document.getElementById('gameCanvas');
 const ctx2d = canvas.getContext('2d');
 let canvasW = 0, canvasH = 0;
@@ -353,6 +364,12 @@ resizeCanvas();
 // `diff` con mensaje accionable, no como pantalla negra silenciosa.
 async function startGame() {
   if (!selectedSong || !selectedChart) { goto('songs'); return; }
+  // Reset de pausa al arrancar (cubre restart y entrada desde songs). Sin esto,
+  // si la partida anterior quedó pausada y la usuaria pulsó "Salir al menú",
+  // el flag isPaused sobreviviría y la siguiente partida arrancaría congelada.
+  isPaused = false;
+  const _pauseOverlayInit = document.getElementById('pauseOverlay');
+  if (_pauseOverlayInit) _pauseOverlayInit.classList.remove('show');
   const myNavToken = currentNavToken();
   const aborted = () => !isCurrentNav(myNavToken);
   try {
@@ -442,7 +459,8 @@ async function startGame() {
   const src = audioCtx.createBufferSource();
   src.buffer = audioBuffer;
   src.connect(audioCtx.destination);
-  const LEAD_IN_SEC = 3.0;
+  // LEAD_IN_SEC declarado a nivel módulo: togglePause() necesita la misma
+  // constante al recrear el AudioBufferSourceNode tras una pausa.
   const audioStartAt = audioCtx.currentTime;
   const startAt = audioStartAt + LEAD_IN_SEC;
   src.start(audioStartAt);
@@ -624,8 +642,109 @@ function stopGame() {
   // play-screen, no parar la canción ya iniciada).
   const cd = document.getElementById('countdown');
   if (cd) { cd.className = 'hidden'; }
+  // Reset de pausa: cualquier vía de salida (quit, end natural, navegación
+  // fuera) debe dejar el módulo en estado "no pausado" para la próxima partida.
+  isPaused = false;
+  const _pauseOverlay = document.getElementById('pauseOverlay');
+  if (_pauseOverlay) _pauseOverlay.classList.remove('show');
   gameState = null;
 }
+
+// ----- Pause / Restart / Quit (menú de pausa) -------------------------------
+// Patrón canónico SM5/ITG arcade: ESC durante la partida abre menú con 3
+// opciones (Reanudar / Reiniciar / Salir). El estado de la partida se
+// CONGELA — gameLoop sigue corriendo pero entra/sale por el guard isPaused
+// sin avanzar la lógica de juicio, holds ni render. El audio se para y se
+// recrea al reanudar (Web Audio buffer sources son one-shot).
+//
+// Truco del shift de startTime: `audioTime = audioCtx.currentTime - startTime`
+// es la fórmula maestra del motor. Para que `audioTime` quede congelado en
+// `tFreeze` durante la pausa, sumamos la duración pausada a startTime al
+// reanudar. Así el reloj efectivo del chart "no sintió" la pausa.
+function togglePause() {
+  if (!gameState || gameState.finished) return;
+  isPaused = !isPaused;
+  const overlay = document.getElementById('pauseOverlay');
+  if (overlay) overlay.classList.toggle('show', isPaused);
+
+  if (isPaused) {
+    // PAUSAR — parar el audio y memorizar el instante. El gameLoop ya
+    // estaba en marcha; al detectar isPaused=true en su próxima iteración,
+    // hará return temprano sin avanzar lógica.
+    pausedAtCtxTime = audioCtx.currentTime;
+    if (gameState.src) {
+      gameState.src.onended = null; // ver stopGame() para el porqué
+      try { gameState.src.stop(); } catch(e) {}
+    }
+    // Focus en "Reanudar" para que ENTER lo dispare (atajo natural). El
+    // atributo HTML autofocus no funciona en elementos revelados via toggle
+    // de clase — hay que forzarlo manualmente al mostrar el overlay.
+    const resumeBtn = document.getElementById('pauseResumeBtn');
+    if (resumeBtn) resumeBtn.focus();
+  } else {
+    // REANUDAR — calcular delta y shiftear startTime para congelar audioTime.
+    const pauseDuration = audioCtx.currentTime - pausedAtCtxTime;
+    gameState.startTime += pauseDuration;
+
+    // Recrear AudioBufferSourceNode. Los buffer sources son one-shot: una vez
+    // stop()'d no pueden reutilizarse. Recreamos a partir del mismo buffer.
+    const newSrc = audioCtx.createBufferSource();
+    newSrc.buffer = gameState.audioBuffer;
+    newSrc.connect(audioCtx.destination);
+    // Nuevo onended con guard de identidad: si la usuaria pausa de nuevo
+    // antes de que termine el audio, el viejo onended (este) no debe disparar
+    // endGame sobre el nuevo src de la siguiente reanudación.
+    newSrc.onended = () => {
+      if (gameState && !gameState.finished && gameState.src === newSrc) {
+        setTimeout(() => endGame(), 500);
+      }
+    };
+    gameState.src = newSrc;
+
+    // El audio original arrancó en `audioStartAt = startTime - LEAD_IN_SEC`.
+    // Tras el shift, ese punto se mueve al futuro junto con startTime, pero
+    // el audio YA sonó durante pauseDuration menos los segundos pausados.
+    // audioElapsed = cuánto del audio "debería" haber sonado ya, en
+    // referencia al startTime nuevo.
+    const audioStartAt = gameState.startTime - LEAD_IN_SEC;
+    const audioElapsed = audioCtx.currentTime - audioStartAt;
+    if (audioElapsed >= 0 && audioElapsed < gameState.audioBuffer.duration) {
+      // Caso normal: la canción está sonando → arrancar desde el offset correcto.
+      newSrc.start(0, audioElapsed);
+    } else if (audioElapsed < 0) {
+      // Caso lead-in: la usuaria pausó antes de que el audio empezara a sonar
+      // (segundos -3..0 del chart). Programar el start en el futuro para que
+      // coincida con t=0 del audio.
+      newSrc.start(audioCtx.currentTime + (-audioElapsed));
+    }
+    // (audioElapsed >= duration → la canción ya terminó; no recreamos
+    // source, el endGame lo manejará el loop al detectar audioTime > duration.)
+  }
+}
+
+// Reiniciar la canción actual desde el principio. Limpio: stopGame() hace
+// teardown completo + reset isPaused; startGame() reaprovecha selectedSong /
+// selectedChart / activeMods que viven a nivel módulo en song-select.js.
+// NO usamos goto('play') porque eso bumpea el navToken y abortaría el
+// startGame que estamos a punto de lanzar (la promise vería isCurrentNav=false
+// en su primer await). El currentScreen sigue siendo 'play' — no estamos
+// navegando, estamos reiniciando dentro de la misma pantalla.
+function restartSong() {
+  stopGame();
+  startGame();
+}
+
+// Salir al menú de dificultad (= comportamiento previo de ESC). Aquí sí
+// usamos goto() porque cambiamos de pantalla.
+function quitToMenu() {
+  stopGame();
+  goto('diff');
+}
+
+// Exponer al overlay HTML (onclick="togglePause()" etc.)
+window.togglePause = togglePause;
+window.restartSong = restartSong;
+window.quitToMenu  = quitToMenu;
 
 // ----- Touch overlay para móvil ---------------------------------------------
 // La PWA se instala en Android y se enlaza desde la landing móvil ("Pisa el
@@ -679,7 +798,7 @@ function _ensureTouchOverlay() {
     // modernos. Mantenemos touchstart como fallback explícito iOS Safari viejo.
     const press = (e) => {
       e.preventDefault();
-      if (!gameState || gameState.finished) return;
+      if (!gameState || gameState.finished || isPaused) return;
       const lane = parseInt(b.dataset.lane);
       if (gameState.keyHeld[lane]) return;
       gameState.keyHeld[lane] = true;
@@ -691,7 +810,7 @@ function _ensureTouchOverlay() {
     };
     const release = (e) => {
       e.preventDefault();
-      if (!gameState) return;
+      if (!gameState || isPaused) return;
       const lane = parseInt(b.dataset.lane);
       gameState.keyHeld[lane] = false;
       if (!gamepadButtonState[gameState.laneConfig.padMap[lane]]) {
@@ -730,7 +849,14 @@ function hideTouchControls() {
 
 function onKeyDown(e) {
   if (!gameState || gameState.finished) return;
-  if (e.code === 'Escape') { e.preventDefault(); stopGame(); goto('diff'); return; }
+  // ESC = abrir/cerrar menú de pausa (canónico SM5/ITG arcade). Antes
+  // destruía la partida directamente; ahora la usuaria puede Reanudar,
+  // Reiniciar o Salir desde el overlay.
+  if (e.code === 'Escape') { e.preventDefault(); togglePause(); return; }
+  // Durante pausa, ignoramos cualquier otra tecla — no se juzgan pisadas,
+  // no se marcan flashes, no se actualiza keyHeld (los holds quedan
+  // congelados en el estado pre-pausa hasta que el flujo se reanude).
+  if (isPaused) return;
   const lane = gameState.laneConfig.keyMap.indexOf(e.code);
   if (lane === -1) return;
   e.preventDefault();
@@ -742,6 +868,10 @@ function onKeyDown(e) {
 }
 function onKeyUp(e) {
   if (!gameState) return;
+  // Durante pausa NO procesamos releases: un hold que la usuaria seguía
+  // pisando antes de pausar debe sobrevivir a la pausa. Si soltara y volviera
+  // a pisar durante el menú, eso es input fantasma que ignoramos.
+  if (isPaused) return;
   const lane = gameState.laneConfig.keyMap.indexOf(e.code);
   if (lane === -1) return;
   gameState.keyHeld[lane] = false;
@@ -754,7 +884,7 @@ function onKeyUp(e) {
 // Lift notes are judged when the player RELEASES the lane (instead of pressing).
 // We pick the closest unjudged lift in window, like handleLanePress does.
 function handleLaneRelease(lane) {
-  if (!gameState || gameState.finished) return;
+  if (!gameState || gameState.finished || isPaused) return;
   const audioTime = (audioCtx.currentTime - gameState.startTime) - settings.globalOffset / 1000;
   const T = gameState.timing;
   let best = null, bestDist = Infinity;
@@ -781,6 +911,13 @@ function handleLaneRelease(lane) {
 
 function gameLoop() {
   if (!gameState) return;
+  // PAUSE GUARD — congelar TODO: lógica de juicio, polling pad, render, holds.
+  // Seguimos pidiendo frames para que el motor reanude limpio cuando la
+  // usuaria cierre el overlay (con togglePause). Sin requestAnimationFrame
+  // aquí, al reanudar tendríamos que re-kickear el loop manualmente. La
+  // pantalla queda congelada en el último frame renderizado — feedback
+  // visual deseable que indica "estado pausado".
+  if (isPaused) { requestAnimationFrame(gameLoop); return; }
   // audioTime adjusted by user calibration (positive globalOffset = user hits late = subtract)
   const audioTime = (audioCtx.currentTime - gameState.startTime) - settings.globalOffset / 1000;
   const T = gameState.timing;
@@ -890,7 +1027,7 @@ function gameLoop() {
 }
 
 function handleLanePress(lane) {
-  if (!gameState || gameState.finished) return;
+  if (!gameState || gameState.finished || isPaused) return;
   const audioTime = (audioCtx.currentTime - gameState.startTime) - settings.globalOffset / 1000;
   const T = gameState.timing;
   let best = null, bestDist = Infinity;

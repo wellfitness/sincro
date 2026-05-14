@@ -423,6 +423,22 @@
     <span class="combo-label">COMBO</span>
   </div>
   <div id="countdown" class="hidden"></div>
+  <!-- PAUSE OVERLAY — menú canónico SM5/ITG arcade: Reanudar / Reiniciar /
+       Salir. Se abre con ESC durante la partida. El estado de la canción
+       queda CONGELADO (audio parado, gameLoop saltando lógica via guard
+       isPaused) hasta que la usuaria elige opción. La ruta de focus inicial
+       es "Reanudar" — ENTER lo dispara automáticamente, igual que ESC. -->
+  <div class="pause-overlay" id="pauseOverlay" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+    <div class="pause-panel">
+      <h2 id="pauseTitle">⏸ Pausa</h2>
+      <p class="pause-hint">La canción está congelada. Elige una opción:</p>
+      <div class="pause-actions">
+        <button class="action-btn pause-resume" id="pauseResumeBtn" onclick="togglePause()">▶ Reanudar <span class="kbd">ESC</span></button>
+        <button class="action-btn secondary" onclick="restartSong()">↻ Reiniciar canción</button>
+        <button class="action-btn secondary pause-quit" onclick="quitToMenu()">✕ Salir al menú</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- RESULTS -->
