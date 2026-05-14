@@ -718,10 +718,11 @@
 const CHART_RESOLUTION = 192;  // ticks per quarter note (SM y CH usan ambos 192)
 
 const {
-  decodeFile, toMono, bassEmphasize,
+  decodeFile, toMono, bassEmphasize, midEmphasize,
   computeEnergyEnvelope, computeODF,
   pickPeaks, detectBPM, detectOffset,
-  ensureAudioContext
+  ensureAudioContext,
+  computeBandEnvelopes, getPitchBandAtFrame
 } = window.AudioPipeline;
 
 // ---- Estado ----
@@ -978,7 +979,7 @@ const DIFFICULTIES = [
 //   bpm: tempo en BPM (constante por toda la canción para MVP)
 //   offsetSec: instante del primer downbeat
 //   presetMul: multiplicador del preset suave/normal/intenso (1.0 default)
-function generateNotesForDifficulty(onsetTicks, diff, chordProb, sustainProb, bpm, offsetSec, presetMul) {
+function generateNotesForDifficulty(onsetTicks, diff, chordProb, sustainProb, bpm, offsetSec, presetMul, pitchBandForTick) {
   if (onsetTicks.length === 0) return [];
   const notes = [];
 
@@ -991,7 +992,8 @@ function generateNotesForDifficulty(onsetTicks, diff, chordProb, sustainProb, bp
     const tick = filtered[i];
     const nextTick = filtered[i + 1];
 
-    const fret = pickNextFret(lastFret, diff.fretRange);
+    const pitchBand = pitchBandForTick ? (pitchBandForTick.get(tick) ?? 2) : undefined;
+    const fret = pickNextFret(lastFret, diff.fretRange, pitchBand);
     const fretsThisNote = [fret];
 
     if (diff.chordMul > 0 && Math.random() < chordProb * diff.chordMul) {
@@ -1019,30 +1021,40 @@ function generateNotesForDifficulty(onsetTicks, diff, chordProb, sustainProb, bp
   return notes;
 }
 
-// Heurística: 65% adjacent, 25% jump 2, 10% random within range.
-function pickNextFret(last, range) {
+// Asigna el siguiente fret. Con pitchBand (0-4): 70% guiado por pitch,
+// 30% paseo aleatorio — el contorno melódico se percibe sin ser mecánico.
+// Sin pitchBand (undefined): comportamiento original (65/25/10).
+function pickNextFret(last, range, pitchBand) {
   const [lo, hi] = range;
+  const hasPitch = pitchBand !== undefined;
+  // target fret mapeado linealmente desde banda de pitch al rango disponible
+  const target = hasPitch ? lo + Math.round(pitchBand * (hi - lo) / 4) : lo;
+
   if (last < 0) {
-    // Primera nota: bias hacia verde/rojo (más fácil empezar bajo)
-    return lo + Math.floor(Math.random() * Math.min(2, hi - lo + 1));
+    // Primera nota: directo al target si hay pitch, sino bias bajo
+    return hasPitch
+      ? Math.max(lo, Math.min(hi, target))
+      : lo + Math.floor(Math.random() * Math.min(2, hi - lo + 1));
   }
-  const r = Math.random();
+
   let candidate;
-  if (r < 0.65) {
-    candidate = last + (Math.random() < 0.5 ? -1 : 1);
-  } else if (r < 0.90) {
-    candidate = last + (Math.random() < 0.5 ? -2 : 2);
+  if (hasPitch && Math.random() < 0.70) {
+    // Pitch-guided: avanzar un paso hacia el target
+    if (last < target)      candidate = last + 1;
+    else if (last > target) candidate = last - 1;
+    else                    candidate = last + (Math.random() < 0.5 ? -1 : 1);
   } else {
-    candidate = lo + Math.floor(Math.random() * (hi - lo + 1));
+    // Paseo aleatorio original
+    const r = Math.random();
+    if (r < 0.65)       candidate = last + (Math.random() < 0.5 ? -1 : 1);
+    else if (r < 0.90)  candidate = last + (Math.random() < 0.5 ? -2 : 2);
+    else                candidate = lo + Math.floor(Math.random() * (hi - lo + 1));
   }
-  // Wrap dentro del rango
+  // Wrap y anti-repeat (lógica original intacta)
   if (candidate < lo) candidate = lo + (lo - candidate);
   if (candidate > hi) candidate = hi - (candidate - hi);
-  if (candidate === last) {
-    candidate = (candidate < hi) ? candidate + 1 : candidate - 1;
-  }
-  candidate = Math.max(lo, Math.min(hi, candidate));
-  return candidate;
+  if (candidate === last) candidate = (candidate < hi) ? candidate + 1 : candidate - 1;
+  return Math.max(lo, Math.min(hi, candidate));
 }
 
 // ============================================================================
@@ -1204,23 +1216,37 @@ async function processOne(q, opts) {
   const sr = buffer.sampleRate;
   log(`  decode OK · ${buffer.duration.toFixed(1)}s · ${sr} Hz · ${buffer.numberOfChannels} ch`);
 
-  // 2. Pipeline análisis (compartida)
+  // 2. Pipeline análisis multi-banda para GH.
+  // Bass ODF (0-200 Hz): capta bombo. Mid ODF (200-2500 Hz): capta guitarra,
+  // voz y caja. Se mezclan 40/60 a nivel de ODF (antes de pickPeaks) para
+  // que tanto strums de guitarra como golpes de bombo generen notas.
   const monoData = toMono(buffer);
-  const bassData = bassEmphasize(monoData, sr);
-  const { env, framesPerSec } = computeEnergyEnvelope(bassData, sr);
-  const odf = computeODF(env);
-  const peakFrames = pickPeaks(odf, framesPerSec, opts.sensitivity);
+  const { env: bassEnv, framesPerSec } = computeEnergyEnvelope(bassEmphasize(monoData, sr), sr);
+  const { env: midEnv }                = computeEnergyEnvelope(midEmphasize(monoData, sr),  sr);
+  const bassOdf = computeODF(bassEnv);
+  const midOdf  = computeODF(midEnv);
+  // Blend 40% bass + 60% mid y renormalizar a [0,1]
+  const blendedOdf = new Float32Array(bassOdf.length);
+  let blendMax = 0;
+  for (let i = 0; i < blendedOdf.length; i++) {
+    blendedOdf[i] = 0.4 * bassOdf[i] + 0.6 * midOdf[i];
+    if (blendedOdf[i] > blendMax) blendMax = blendedOdf[i];
+  }
+  if (blendMax > 0) for (let i = 0; i < blendedOdf.length; i++) blendedOdf[i] /= blendMax;
 
-  // 3. BPM + offset
+  const peakFrames = pickPeaks(blendedOdf, framesPerSec, opts.sensitivity);
+
+  // 3. BPM + offset — usamos la blended ODF para mejor detección en música
+  // con guitarra (la autocorrelación responde mejor al mid-band que al bass solo).
   let bpm;
   if (q.bpmOverride && parseFloat(q.bpmOverride) > 0) {
     bpm = parseFloat(q.bpmOverride);
     log(`  BPM (override): ${bpm.toFixed(1)}`);
   } else {
-    bpm = detectBPM(odf, framesPerSec);
+    bpm = detectBPM(blendedOdf, framesPerSec);
     log(`  BPM detectado: ${bpm.toFixed(1)}`);
   }
-  const offsetSec = detectOffset(odf, framesPerSec, bpm);
+  const offsetSec = detectOffset(blendedOdf, framesPerSec, bpm);
   log(`  Offset: ${offsetSec.toFixed(3)}s · ${peakFrames.length} onsets`);
 
   // 3.b. Cap de duración (Completa / 90s / 120s / 180s) — recorta el chart Y
@@ -1258,6 +1284,23 @@ async function processOne(q, opts) {
   // Eliminar duplicados después de quantizar
   const uniqueTicks = [...new Set(quantized)].sort((a, b) => a - b);
 
+  // 5.b. Pitch band por onset — se construye DESPUÉS de quantizar para que las
+  // claves del Map coincidan con los ticks de uniqueTicks (post-quantización).
+  // Si varios frames caen en el mismo tick quantizado, se conserva el primero.
+  const bandEnvs = computeBandEnvelopes(monoData, sr);
+  const pitchBandForTick = new Map();
+  for (const f of peakFrames) {
+    const sec = f / framesPerSec;
+    if (sec >= effectiveDuration) continue;
+    const relSec = sec - offsetSec;
+    if (relSec < 0) continue;
+    const rawTick = Math.round((relSec / beatSec) * CHART_RESOLUTION);
+    const qTick = Math.round(rawTick / subdivTicks) * subdivTicks;
+    if (!pitchBandForTick.has(qTick)) {
+      pitchBandForTick.set(qTick, getPitchBandAtFrame(bandEnvs, f));
+    }
+  }
+
   // Multiplicador del preset activo — modula uniformemente NPS target y minGap
   // de las 4 dificultades. Los presets actuales también ajustan sensitivity de
   // detección (cuántos onsets vienen del ODF), pero el filtrado por tier
@@ -1268,14 +1311,14 @@ async function processOne(q, opts) {
   const charts = DIFFICULTIES.map(d => ({
     name: d.name,
     section: d.section,
-    notes: generateNotesForDifficulty(uniqueTicks, d, opts.chordProb, opts.sustainProb, bpm, offsetSec, presetMul),
+    notes: generateNotesForDifficulty(uniqueTicks, d, opts.chordProb, opts.sustainProb, bpm, offsetSec, presetMul, pitchBandForTick),
     meter: d.meter
   }));
   for (const c of charts) {
     log(`  ${ghDiffLabel(c.name).padEnd(12)} · ${c.notes.length} notas`);
   }
 
-  // 5.b. Si hay cap activo, recorta el audio + re-encoda a WAV con fade-out
+  // 5.c. Si hay cap activo, recorta el audio + re-encoda a WAV con fade-out
   // de 1.5s. El blob queda en q.result.croppedAudio y la extensión final del
   // ZIP/biblioteca pasa a ser .wav.
   let croppedAudio = null;

@@ -53,11 +53,9 @@
     return out;
   }
 
-  // Bass-emphasis pre-filter — IIR low-pass 2-polo cascado a ~200 Hz.
-  // Aísla el kick + bajo, descarta voces, hi-hats, guitarras distorsionadas.
-  // El kick domina el envelope → BPM detection más estable.
-  function bassEmphasize(samples, sr) {
-    const fc = 200;
+  // IIR low-pass 2-polo cascado a fc Hz. Filtra in-place en dos pasadas.
+  // alpha = exp(-2π·fc/sr) — cuanto más bajo fc, más lento el rise del filtro.
+  function iirLowPass(samples, sr, fc) {
     const alpha = Math.exp(-2 * Math.PI * fc / sr);
     const oneMinus = 1 - alpha;
     const out = new Float32Array(samples.length);
@@ -66,13 +64,64 @@
       y = alpha * y + oneMinus * samples[i];
       out[i] = y;
     }
-    // Segunda pasada en cascada para ~12 dB/octava de rolloff
     y = 0;
     for (let i = 0; i < out.length; i++) {
       y = alpha * y + oneMinus * out[i];
       out[i] = y;
     }
     return out;
+  }
+
+  // Bass-emphasis pre-filter — low-pass a ~200 Hz.
+  // Aísla el kick + bajo, descarta voces, hi-hats, guitarras distorsionadas.
+  // El kick domina el envelope → BPM detection más estable en DDR/SM.
+  function bassEmphasize(samples, sr) {
+    return iirLowPass(samples, sr, 200);
+  }
+
+  // Mid-emphasis filter para GH — bandpass ~200–2500 Hz.
+  // Captura guitarra, voz y caja; descarta bombo puro y hiss/cymbals.
+  // Implementación: high-pass 200 Hz (samples - bass) + low-pass 2500 Hz.
+  function midEmphasize(samples, sr) {
+    const bass = iirLowPass(samples, sr, 200);
+    const hp = new Float32Array(samples.length);
+    for (let i = 0; i < samples.length; i++) hp[i] = samples[i] - bass[i];
+    return iirLowPass(hp, sr, 2500);
+  }
+
+  // Calcula 5 envolventes de energía por banda de frecuencia.
+  // Útil para detectar el pitch dominante en cada frame.
+  // Bandas: <250 Hz · 250-600 · 600-1500 · 1500-3500 · >3500 Hz.
+  // Devuelve array de 5 Float32Arrays (misma indexación de frames que el
+  // computeEnergyEnvelope estándar — hopMs=5ms, winMs=23ms).
+  function computeBandEnvelopes(mono, sr) {
+    const cuts = [250, 600, 1500, 3500];
+    const filters = cuts.map(fc => iirLowPass(mono, sr, fc));
+    const envelopes = [];
+    // Banda 0: todo lo que pasa el primer low-pass (<250 Hz)
+    envelopes.push(computeEnergyEnvelope(filters[0], sr).env);
+    // Bandas 1-3: diferencia entre low-passes consecutivos (bandpass)
+    for (let i = 1; i < cuts.length; i++) {
+      const band = new Float32Array(mono.length);
+      for (let j = 0; j < mono.length; j++) band[j] = filters[i][j] - filters[i-1][j];
+      envelopes.push(computeEnergyEnvelope(band, sr).env);
+    }
+    // Banda 4: lo que queda por encima de 3500 Hz
+    const hp = new Float32Array(mono.length);
+    for (let j = 0; j < mono.length; j++) hp[j] = mono[j] - filters[3][j];
+    envelopes.push(computeEnergyEnvelope(hp, sr).env);
+    return envelopes;
+  }
+
+  // Devuelve la banda (0-4) con mayor energía en el frame dado.
+  // 0 = graves (<250 Hz) → Verde; 4 = agudos (>3500 Hz) → Naranja.
+  function getPitchBandAtFrame(bandEnvs, frameIdx) {
+    let max = -1, band = 2;
+    for (let b = 0; b < bandEnvs.length; b++) {
+      const v = bandEnvs[b][frameIdx] ?? 0;
+      if (v > max) { max = v; band = b; }
+    }
+    return band;
   }
 
   // RMS energy envelope con ventanas de 23ms y hop de 5ms.
@@ -223,11 +272,14 @@
     decodeFile,
     toMono,
     bassEmphasize,
+    midEmphasize,
     computeEnergyEnvelope,
     computeODF,
     pickPeaks,
     detectBPM,
     detectOffset,
-    audioBufferToWav
+    audioBufferToWav,
+    computeBandEnvelopes,
+    getPitchBandAtFrame
   };
 })();
