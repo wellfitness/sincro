@@ -117,8 +117,8 @@ Decisión consciente: **sin bundler ni transpilación**. Doble click sobre cualq
 
 ### Setup
 ```bash
-git clone https://github.com/wellfitness/stepmania-web
-cd stepmania-web
+git clone https://github.com/wellfitness/sincro
+cd sincro
 pnpm install         # instala Vitest (única devDep)
 ```
 

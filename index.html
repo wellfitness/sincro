@@ -1621,6 +1621,48 @@ section { padding: 80px 24px; position: relative; }
         </details>
 
         <details class="faq-item">
+          <summary>¿En qué proyectos se apoya Sincro? (créditos open source)</summary>
+          <div class="faq-body">
+            <p>
+              Sincro <strong>no existiría sin la comunidad open source</strong> que lleva 20 años manteniendo
+              vivos los juegos rítmicos. No copiamos código directamente —Sincro está escrito desde cero
+              en JavaScript para navegador— pero sí heredamos formatos, constantes de timing y algoritmos
+              validados contra los repositorios oficiales. Aquí las atribuciones:
+            </p>
+            <ul>
+              <li>
+                <strong><a href="https://github.com/stepmania/stepmania" target="_blank" rel="noopener noreferrer">StepMania 5</a></strong>
+                — motor DDR de referencia (licencia MIT). De ahí salen el formato <code>.ssc/.sm</code> que
+                lee Sincro, la fórmula del <em>PredictMeter</em> que asigna dificultad a los charts y las
+                métricas <em>Stream</em> y <em>Voltage</em> que calibran nuestros NPS por tier.
+              </li>
+              <li>
+                <strong><a href="https://github.com/YARC-Official/YARG.Core" target="_blank" rel="noopener noreferrer">YARG.Core</a></strong>
+                — engine open-source compatible con Clone Hero (licencia LGPL). De ahí extraemos las
+                ventanas canónicas de hit (HopoLeniency 80 ms, StrumLeniency 50 ms, MaxWindow 140 ms) y
+                las reglas de natural HOPO que usa el simulador de guitarra de Sincro.
+              </li>
+              <li>
+                <strong><a href="https://github.com/phr00t/AutoStepper" target="_blank" rel="noopener noreferrer">AutoStepper</a></strong>
+                de phr00t — generador automático de charts en Java (licencia GPL-3). Es la referencia
+                conceptual del autostepper de Sincro: detección de onsets, BPM por autocorrelación,
+                quantización a 192nds. Nuestra versión reimplementa el pipeline en JavaScript y añade
+                bass-emphasis, ODF multi-banda y asignación pitch-aware de trastes.
+              </li>
+              <li>
+                <strong><a href="https://github.com/Geomitron/scan-chart" target="_blank" rel="noopener noreferrer">scan-chart</a></strong>
+                de Geomitron — validador oficial de la comunidad Clone Hero. Del que tomamos el umbral
+                canónico de HOPO (65 ticks a resolución 192) que usa nuestro motor.
+              </li>
+            </ul>
+            <p>
+              Si te gusta lo que hacen, <strong>apóyalos directamente</strong> con una estrella en GitHub
+              o contribuyendo a su código. Sincro existe gracias a ellos.
+            </p>
+          </div>
+        </details>
+
+        <details class="faq-item">
           <summary>¿Qué pasa si mi alfombra es vieja o china barata?</summary>
           <div class="faq-body">
             <p>
@@ -1741,6 +1783,7 @@ section { padding: 80px 24px; position: relative; }
   <div class="legal">
     <p class="copyright">
       © 2026 <strong>Movimiento Funcional</strong> — Sincro es una herramienta gratuita y de código abierto ·
+      <a href="https://github.com/wellfitness/sincro" target="_blank" rel="noopener noreferrer">Código fuente en GitHub</a> ·
       <a href="https://movimientofuncional.app" target="_blank" rel="noopener noreferrer">movimientofuncional.app</a> ·
       <a href="mailto:hola@movimientofuncional.app">hola@movimientofuncional.app</a>
     </p>
