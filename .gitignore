@@ -27,3 +27,12 @@ desktop.ini
 .DS_Store
 PLAN-versus-2-jugadores.md
 scripts/deploy.sh
+
+# Fuentes PNG de la landing — solo se trackean y despliegan los .webp.
+# Los .png originales viven localmente como fuente de re-export pero no
+# entran en git para evitar duplicar peso (los WebP equivalentes ahorran
+# ~92% del tamaño y son los que ve el usuario en producción).
+sincro-stepmania-neon.png
+sincro-guitar-neon.png
+cerebro-sincro.png
+corazon-sincro.png
