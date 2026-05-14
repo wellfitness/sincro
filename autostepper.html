@@ -842,15 +842,33 @@ fileInput.addEventListener('change', e => {
   e.target.value = ''; // allow re-selecting same file
 });
 
+// Límite duro de canciones por tanda. Mismo razonamiento que en GH (ver
+// gh-autostepper.html): la pipeline tiene ~300 MB transitorios por canción
+// y aunque resetAudioContext() libera el audio nativo entre canciones, en
+// PCs modestos tandas mayores pueden disparar swap. Tope 20 deja margen.
+const MAX_QUEUE_SIZE = 20;
+
 async function addFiles(files) {
   // Filtro por extensión, no por file.type: en Windows el file picker entrega
   // FLAC/M4A/OGG con type="" y se descartarían silenciosamente.
   const AUDIO_RE = /\.(mp3|wav|ogg|m4a|flac)$/i;
   const valid = Array.from(files).filter(f => AUDIO_RE.test(f.name));
   if (!valid.length) return;
+  // Tope: aplicar ANTES de leer metadatos para no procesar 1MB de archivos
+  // que vamos a rechazar. queue.length crece entre invocaciones de addFiles.
+  const slotsLibres = Math.max(0, MAX_QUEUE_SIZE - queue.length);
+  if (slotsLibres === 0) {
+    log(`Cola llena (máx ${MAX_QUEUE_SIZE} canciones por tanda). Procesa y vacía para añadir más.`, 'warn');
+    return;
+  }
+  const truncated = valid.length > slotsLibres;
+  const toAdd = truncated ? valid.slice(0, slotsLibres) : valid;
+  if (truncated) {
+    log(`Solo ${slotsLibres} de ${valid.length} canciones añadidas — tope de ${MAX_QUEUE_SIZE} por tanda.`, 'warn');
+  }
   // Procesamos los tags en paralelo (cada lectura solo toca ~1MB del File).
   // El ID se asigna sync ANTES del await para mantener correlatividad.
-  const items = await Promise.all(valid.map(async (file) => {
+  const items = await Promise.all(toAdd.map(async (file) => {
     const id = ++queueIdCounter;
     const meta = await AudioMetadata.extractMetadata(file);
     return {

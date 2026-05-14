@@ -813,13 +813,36 @@ fileInput.addEventListener('change', e => {
   e.target.value = ''; // permite re-seleccionar los mismos archivos sin recargar
 });
 
+// Límite duro de canciones por tanda. Justificación: la pipeline de análisis
+// (decode→ODF→bandEnvelopes) genera ~300 MB transitorios por canción + ~10-15
+// MB persistentes (q._audioBytes). Aunque resetAudioContext() libera el audio
+// nativo entre canciones, el peak transitorio acumulado con tandas grandes en
+// PCs de gama baja podía rebasar 1.5 GB y disparar swap del SO. Con tope 20
+// el comportamiento es determinista en cualquier hardware soportado (PC con
+// 4+ GB RAM). Para más canciones: procesar, descargar/guardar, vaciar cola,
+// cargar más. Coherente con el patrón "una sesión de trabajo = una tanda".
+const MAX_QUEUE_SIZE = 20;
+
 async function addFiles(files) {
   const valid = Array.from(files).filter(f => /\.(mp3|wav|ogg|m4a|flac)$/i.test(f.name));
   if (!valid.length) return;
+  // Aplicar tope antes del parseo de metadatos para no leer 1MB de cada
+  // fichero que vamos a rechazar. El "+ ya en cola" se suma porque addFiles
+  // puede llamarse múltiples veces sin vaciar (drag, después input, etc.).
+  const slotsLibres = Math.max(0, MAX_QUEUE_SIZE - queue.length);
+  if (slotsLibres === 0) {
+    log(`Cola llena (máx ${MAX_QUEUE_SIZE} canciones por tanda). Procesa, descarga y vacía para añadir más.`, 'warn');
+    return;
+  }
+  const truncated = valid.length > slotsLibres;
+  const toAdd = truncated ? valid.slice(0, slotsLibres) : valid;
+  if (truncated) {
+    log(`Solo ${slotsLibres} de ${valid.length} canciones añadidas — tope de ${MAX_QUEUE_SIZE} por tanda. Procesa y vuelve a cargar las restantes.`, 'warn');
+  }
   // Lectura de tags en paralelo (cada File solo se toca en sus primeros ~1MB).
   // Importante: ++queueIdCounter va ANTES del await para mantener IDs
   // correlativos aunque las promesas resuelvan en orden distinto.
-  const items = await Promise.all(valid.map(async (f) => {
+  const items = await Promise.all(toAdd.map(async (f) => {
     const id = ++queueIdCounter;
     const meta = await AudioMetadata.extractMetadata(f);
     return {
