@@ -163,20 +163,36 @@ html {
   #topbar .crumb { display: none; }
 }
 
-/* ==== Dashboard secciones (StepMania / Guitar Hero / Comunes) ==== */
+/* ==== Dashboard secciones (Bailar / Tocar) ====
+   Wrapper con border de marca por sección + título como BANDA full-width
+   dentro del wrapper (no pill). El title ocupa el ancho completo del
+   contenedor (=ancho del grid de 3 cards), pintado con el gradient turquesa
+   oscuro / dorado oscuro de marca. `overflow: hidden` en el wrapper es
+   imprescindible para que el background del title llene las esquinas
+   redondeadas del border — sin él aparecerían franjas del fondo decorativo
+   en las esquinas. */
 .dashboard-section {
-  margin-bottom: 28px;
-  padding: 20px 24px;
-  border-radius: 14px;
-  background: rgba(0,0,0,0.9);
-  border: 1px solid rgba(255,255,255,0.06);
+  max-width: 940px;
+  margin: 0 auto 28px;
+  border-radius: 16px;
+  overflow: hidden;
+  text-align: center;
 }
 .dashboard-section .section-title {
+  display: block;
+  width: 100%;
   font-family: var(--font-display);
-  font-size: 1.3em; letter-spacing: 0.02em;
-  margin-bottom: 14px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  font-size: 1.8em; letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin: 0;
+  padding: 14px 24px;
+  border: 0;
+  border-radius: 0;
+}
+.dashboard-section .menu-grid {
+  margin: 22px auto;
+  max-width: 900px;
+  padding: 0 16px;
 }
 .dashboard-section .section-subtitle {
   color: var(--gris-500); font-size: 0.7em;
@@ -184,20 +200,26 @@ html {
   font-family: var(--font-sans);
 }
 .dashboard-section.sm-section {
-  border-color: rgba(0,190,200,0.3);
-  background: linear-gradient(135deg, rgba(0,190,200,0.08), rgba(0,0,0,0.9));
+  border: 2px solid rgba(0,190,200,0.4);
 }
-.dashboard-section.sm-section .section-title { color: var(--turquesa-400); }
+.dashboard-section.sm-section .section-title {
+  color: var(--turquesa-400);
+  background: linear-gradient(135deg, rgba(8,139,150,0.55), rgba(2,40,45,0.92));
+}
 .dashboard-section.gh-section {
-  border-color: rgba(250,204,21,0.4);
-  background: linear-gradient(135deg, rgba(250,204,21,0.12), rgba(0,0,0,0.9));
+  border: 2px solid rgba(250,204,21,0.5);
 }
-.dashboard-section.gh-section .section-title { color: var(--tulip-tree-400); }
+.dashboard-section.gh-section .section-title {
+  color: var(--tulip-tree-400);
+  background: linear-gradient(135deg, rgba(202,138,4,0.55), rgba(35,25,0,0.92));
+}
 .dashboard-section.common-section {
-  border-color: rgba(255,255,255,0.1);
-  background: rgba(0,0,0,0.9);
+  border: 2px solid rgba(255,255,255,0.15);
 }
-.dashboard-section.common-section .section-title { color: var(--gris-300); }
+.dashboard-section.common-section .section-title {
+  color: var(--gris-300);
+  background: rgba(0,0,0,0.7);
+}
 
 /* Dashboard pegado al topbar: .screen lleva padding:24px global (lo necesitan
    otras vistas con sticky bars top:8px como #songs-screen) que aquí no nos
@@ -206,19 +228,19 @@ html {
    se vea como franja muerta (el dashboard ya no tiene h1+subtitle que dieran
    respiro propio — el branding "Sincro" vive en el logo del topbar).
 
-   Fondo decorativo: imagen WebP (2752×1536, 129KB tras conversión desde PNG de
-   4.6MB) cubriendo todo el .screen + overlay oscuro encima para garantizar
-   legibilidad de las cards y secciones (que ya añaden su propio rgba(0,0,0,0.3
-   ~0.5) sobre el overlay). `background-attachment: fixed` ata la imagen al
-   viewport — durante el scroll interno del .screen el fondo queda estático,
-   da sensación de "ventana al dashboard" en lugar de imagen que viaja. En
-   multi-background, el primer item de background-image es la capa SUPERIOR,
-   por eso el linear-gradient overlay precede a la url(). */
+   Fondo decorativo: imagen WebP (2752×1536, 129KB tras conversión desde PNG
+   de 4.6MB) cubriendo todo el .screen + overlay NEGRO al 70% que atenúa la
+   imagen lo justo para que las cards (rgba(0,0,0,0.8)) y pills (gradient
+   turquesa/dorado oscuro) destaquen como elementos accionables, mientras
+   las flechas neón siguen visibles "perforando" el overlay por su alta
+   luminancia. `background-attachment: fixed` ata la imagen al viewport para
+   que no scrollee con el contenido. En multi-background, el primer item es
+   la capa SUPERIOR (el overlay precede a la url() en background-image). */
 #menu-screen {
   padding-top: 16px;
   overflow: hidden;
   background-image:
-    linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)),
+    linear-gradient(rgba(0,0,0,0.80), rgba(0,0,0,0.80)),
     url('../../fondo_dashboard.webp');
   background-size: auto, cover;
   background-position: center, center;

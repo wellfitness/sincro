@@ -107,8 +107,8 @@
     <p class="subtitle">Rankings por canción y jugador. Todo se guarda en este navegador.</p>
 
     <div class="rankings-tabs-main">
-      <button id="tabSM" class="active" onclick="switchTab('sm')">🦶 StepMania</button>
-      <button id="tabGH" onclick="switchTab('gh')">🎸 Guitar Hero</button>
+      <button id="tabSM" class="active" onclick="switchTab('sm')">🦶 Bailar</button>
+      <button id="tabGH" onclick="switchTab('gh')">🎸 Tocar</button>
     </div>
 
     <div id="rankingsList"></div>
@@ -170,7 +170,7 @@ async function loadRankings(gameType) {
 
   if (!songs.length) {
     const otherUrl = gameType === 'sm' ? 'stepmania-play.html' : 'gh-play.html';
-    const label = gameType === 'sm' ? 'StepMania' : 'Guitar Hero';
+    const label = gameType === 'sm' ? 'Bailar' : 'Tocar';
     list.innerHTML = `
       <div class="rankings-empty-state">
         <div class="icon">📚</div>
