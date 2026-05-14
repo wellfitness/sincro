@@ -22,6 +22,7 @@
     <button class="topbar-link" onclick="window.location.href='stepmania-play.html'" title="Bailar con alfombra">🦶 Bailar</button>
     <button class="topbar-link" onclick="window.location.href='gh-play.html'" title="Tocar guitarra">🎸 Tocar</button>
     <button class="topbar-link" onclick="window.location.href='test-pad.html'" title="Probar hardware">🛠️ Equipo</button>
+    <button class="topbar-link" onclick="window.location.href='rankings.html'" title="Puntuaciones">🏆 Puntuaciones</button>
     <button class="topbar-link" onclick="window.location.href='tutorial.html'" title="Tutorial">📖 Tutorial</button>
   </div>
   <div class="pill off" id="padPill">alfombra: no detectada</div>
@@ -125,9 +126,6 @@
 <!-- MAIN MENU (dashboard) -->
 <div class="screen" id="menu-screen">
   <div class="container">
-    <h1>Sincro</h1>
-    <p class="subtitle">Crea, comprueba y juega coreografías directamente en el navegador</p>
-
     <!-- ===== SECCIÓN STEPMANIA (alfombra) ===== -->
     <section class="dashboard-section sm-section">
       <h2 class="section-title">🦶 StepMania <span class="section-subtitle">— alfombra de baile</span></h2>
@@ -172,31 +170,6 @@
       </div>
     </section>
 
-    <!-- ===== SECCIÓN COMUNES (ambos hardware) ===== -->
-    <section class="dashboard-section common-section">
-      <h2 class="section-title">🛠️ Comunes <span class="section-subtitle">— para los dos</span></h2>
-      <div class="menu-grid">
-        <div class="menu-card" onclick="window.location.href='test-pad.html'">
-          <div class="icon">🛠️</div>
-          <div class="title">Comprobar el equipo</div>
-          <div class="desc">Diagnóstico de alfombra y guitarra: calibración de mapping, latencia, saltos/chords, rasgueo, palanca, sensores pegados y <strong>sync de audio</strong> (mide tu desfase real con metrónomo y aplícalo a Ajustes).</div>
-        </div>
-        <div class="menu-card" onclick="window.location.href='rankings.html'">
-          <div class="icon">🏆</div>
-          <div class="title">Puntuaciones</div>
-          <div class="desc">Rankings arcade por canción y jugador (alfombra y guitarra). Exporta tu progreso en <code>.json</code> para no perderlo si borras los datos del navegador.</div>
-        </div>
-        <div class="menu-card" onclick="window.location.href='tutorial.html'">
-          <div class="icon">📖</div>
-          <div class="title">Tutorial</div>
-          <div class="desc">Cómo usar cada herramienta y cada ajuste, paso a paso.</div>
-        </div>
-      </div>
-    </section>
-
-    <p class="help" style="text-align:center;margin-top:30px">
-      Alfombra: ← ↓ ↑ → (teclado fallback). Guitarra: 1-5 trastes + Espacio strum. Ambas se detectan solas si están conectadas.
-    </p>
   </div>
 </div>
 

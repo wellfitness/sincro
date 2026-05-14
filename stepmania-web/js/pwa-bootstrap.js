@@ -73,6 +73,13 @@
         'html.in-shell body {' +
           'padding-top:0 !important;' +
           'margin-top:0 !important;' +
+        '}' +
+        // .screen del motor SM/GH usa `position:fixed; top:50px` para dejar
+        // hueco al #topbar interno. Cuando el topbar se oculta dentro del
+        // shell, esos 50px quedan como franja muerta arriba — el shell ya
+        // provee su propio header. Subimos .screen al borde del iframe.
+        'html.in-shell .screen {' +
+          'top:0 !important;' +
         '}';
       (document.head || document.documentElement).appendChild(s);
     };

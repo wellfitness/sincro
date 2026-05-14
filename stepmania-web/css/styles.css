@@ -59,6 +59,39 @@ body {
   user-select: none;
 }
 
+/* SCROLLBARS — integran con la paleta turquesa→dorado del logo Sincro.
+   API estándar (Firefox + Chromium moderno) sobre html para herencia global;
+   los pseudo-elementos WebKit aplican universalmente vía `*` para que toda
+   zona con overflow (.screen, .modal, listas, biblioteca, resultados…) herede
+   el styling sin enumerar selectores uno por uno. El padding visual del thumb
+   (2px alrededor) se consigue con border transparent + background-clip
+   padding-box — único patrón fiable para "estrechar" el thumb sin cambiar su
+   tamaño real ni usar márgenes negativos. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--turquesa-600) rgba(0,0,0,0.3);
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.25);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--turquesa-600), var(--turquesa-700));
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--turquesa-400), var(--turquesa-600));
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, var(--turquesa-400), var(--tulip-tree-500));
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
 /* TOP NAV */
 #topbar {
   position: fixed; top: 0; left: 0; right: 0; height: 50px;
@@ -135,7 +168,7 @@ body {
   margin-bottom: 28px;
   padding: 20px 24px;
   border-radius: 14px;
-  background: rgba(0,0,0,0.3);
+  background: rgba(0,0,0,0.9);
   border: 1px solid rgba(255,255,255,0.06);
 }
 .dashboard-section .section-title {
@@ -152,19 +185,46 @@ body {
 }
 .dashboard-section.sm-section {
   border-color: rgba(0,190,200,0.3);
-  background: linear-gradient(135deg, rgba(0,190,200,0.05), rgba(0,0,0,0.3));
+  background: linear-gradient(135deg, rgba(0,190,200,0.08), rgba(0,0,0,0.9));
 }
 .dashboard-section.sm-section .section-title { color: var(--turquesa-400); }
 .dashboard-section.gh-section {
-  border-color: rgba(249,115,22,0.3);
-  background: linear-gradient(135deg, rgba(249,115,22,0.05), rgba(0,0,0,0.3));
+  border-color: rgba(250,204,21,0.4);
+  background: linear-gradient(135deg, rgba(250,204,21,0.12), rgba(0,0,0,0.9));
 }
-.dashboard-section.gh-section .section-title { color: #f97316; }
+.dashboard-section.gh-section .section-title { color: var(--tulip-tree-400); }
 .dashboard-section.common-section {
   border-color: rgba(255,255,255,0.1);
-  background: rgba(0,0,0,0.35);
+  background: rgba(0,0,0,0.9);
 }
 .dashboard-section.common-section .section-title { color: var(--gris-300); }
+
+/* Dashboard pegado al topbar: .screen lleva padding:24px global (lo necesitan
+   otras vistas con sticky bars top:8px como #songs-screen) que aquí no nos
+   sirven — no hay sticky bar, solo cards. Reducimos padding-top a 16px para
+   que la primera dashboard-section tenga aire mínimo bajo el header sin que
+   se vea como franja muerta (el dashboard ya no tiene h1+subtitle que dieran
+   respiro propio — el branding "Sincro" vive en el logo del topbar).
+
+   Fondo decorativo: imagen WebP (2752×1536, 129KB tras conversión desde PNG de
+   4.6MB) cubriendo todo el .screen + overlay oscuro encima para garantizar
+   legibilidad de las cards y secciones (que ya añaden su propio rgba(0,0,0,0.3
+   ~0.5) sobre el overlay). `background-attachment: fixed` ata la imagen al
+   viewport — durante el scroll interno del .screen el fondo queda estático,
+   da sensación de "ventana al dashboard" en lugar de imagen que viaja. En
+   multi-background, el primer item de background-image es la capa SUPERIOR,
+   por eso el linear-gradient overlay precede a la url(). */
+#menu-screen {
+  padding-top: 16px;
+  overflow: hidden;
+  background-image:
+    linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)),
+    url('../../fondo_dashboard.webp');
+  background-size: auto, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+  background-attachment: fixed, fixed;
+}
 
 /* Card "próximamente" */
 .menu-card.disabled {
@@ -214,7 +274,7 @@ h1 {
   gap: 18px; margin: 30px auto; max-width: 900px;
 }
 .menu-card {
-  padding: 28px 22px; background: rgba(0,0,0,0.5);
+  padding: 28px 22px; background: rgba(0,0,0,0.8);
   border: 2px solid rgba(0,190,200,0.3);
   border-radius: 16px; cursor: pointer; transition: all 0.2s;
   text-align: center;
