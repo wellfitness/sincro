@@ -2743,14 +2743,18 @@ function startGame(diffOverride) {
   game.audioSource = ctx.createBufferSource();
   game.audioSource.buffer = song.audioBuffer;
   game.audioSource.connect(ctx.destination);
-  // Cuenta atrás 5s (visible, con beep) + lead-in 3s (notas cayendo en
-  // silencio antes del audio). El 2s anterior era insuficiente: ni la
-  // jugadora se centraba ni las primeras notas eran legibles antes de
-  // llegar al receptor.
+  // Cuenta atrás 5s con beep + el chart va retrasado NOTE_DELAY_SEC respecto
+  // al audio: la música arranca justo al terminar la cuenta y la primera
+  // nota llega al receptor 3s después. Durante esos 3s, las notas ya se ven
+  // cayendo desde el final de la pista PERO con la música sonando — sin esto
+  // se sentía absurdo (notas en silencio antes de oír nada).
   const COUNTDOWN_SEC = 5.0;
-  const LEAD_IN_SEC = 3.0;
-  game.audioStartTime = ctx.currentTime + COUNTDOWN_SEC + LEAD_IN_SEC;
-  game.audioSource.start(game.audioStartTime);
+  const audioRealStartAt = ctx.currentTime + COUNTDOWN_SEC;
+  game.audioSource.start(audioRealStartAt);
+  // game.audioStartTime es el cero del RELOJ DE JUEGO (no del audio). El audio
+  // real arranca NOTE_DELAY_SEC antes — pause/resume usa esa relación para
+  // calcular dónde seekear en el buffer al reanudar.
+  game.audioStartTime = audioRealStartAt + NOTE_DELAY_SEC;
   runGHCountdown(ctx);
 
   isPaused = false;
@@ -2760,9 +2764,10 @@ function startGame(diffOverride) {
 }
 
 // Countdown 5 pasos × 1000ms = 5s con scale-pop + tier de color + beep
-// auditivo. Tras los 5s, todavía quedan 3s de lead-in silencioso antes de
-// que arranque el audio (game.audioStartTime ya está calculado con ese
-// margen). El beep es Web Audio puro — sin assets, latencia <1ms.
+// auditivo. Al terminar la cuenta, el audio arranca de inmediato y el chart
+// queda retrasado NOTE_DELAY_SEC=3s — la jugadora oye 3s de groove antes de
+// que la primera nota toque el receptor. El beep es Web Audio puro — sin
+// assets, latencia <1ms.
 const GH_COUNTDOWN_STEPS = [
   { text: '¡PREPÁRATE!', cls: 'cd-prep', beep: { freq: 660,  dur: 0.10 } },
   { text: '3',           cls: 'cd-3',    beep: { freq: 880,  dur: 0.10 } },
@@ -2771,6 +2776,11 @@ const GH_COUNTDOWN_STEPS = [
   { text: '¡VAMOS!',     cls: 'cd-go',   beep: { freq: 1320, dur: 0.22 } },
 ];
 const GH_COUNTDOWN_STEP_MS = 1000;
+// Tras el countdown, la música suena pero el chart "comienza" NOTE_DELAY_SEC
+// después: la primera nota llega al receptor 3s tras arrancar el audio. Esto
+// da a la jugadora un compás-y-medio de groove antes de tener que tocar.
+// El reloj de juego (gameClock) = audioRealTime − NOTE_DELAY_SEC.
+const NOTE_DELAY_SEC = 3.0;
 function playGHCountdownBeep(ctx, freq, dur) {
   if (!ctx) return;
   try {
@@ -2886,11 +2896,18 @@ function togglePause() {
     // Restaurar detune del whammy en el source recién creado
     const hasSustain = game.activeSustains && game.activeSustains.some(s => !s.sustainBroken);
     game.audioSource.detune.value = hasSustain ? -inputState.whammy * 200 : 0;
-    const offsetIntoSong = ctx.currentTime - game.audioStartTime;
-    if (offsetIntoSong >= 0) {
-      game.audioSource.start(0, offsetIntoSong);
+    // El audio arranca NOTE_DELAY_SEC ANTES que el reloj de juego (game.audio
+    // StartTime es el cero del gameClock, no del audio). Para reanudar:
+    //   - audioRealOffset = dónde está la canción ahora en segundos absolutos
+    //   - si ≥ 0 → el audio debería estar sonando → seekear a ese punto
+    //   - si < 0 → todavía estamos antes del audio (pausa pre-arranque) →
+    //     programar el start en el futuro para que arranque en el momento
+    //     correcto cuando se reanude el flujo.
+    const audioRealOffset = (ctx.currentTime - game.audioStartTime) + NOTE_DELAY_SEC;
+    if (audioRealOffset >= 0) {
+      game.audioSource.start(0, audioRealOffset);
     } else {
-      game.audioSource.start(ctx.currentTime - offsetIntoSong);
+      game.audioSource.start(ctx.currentTime - audioRealOffset);
     }
   }
 }

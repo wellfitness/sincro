@@ -431,18 +431,21 @@ async function startGame() {
   await runCountdown(aborted);
   if (aborted()) { document.getElementById('countdown').classList.add('hidden'); return; }
 
-  // Start audio. LEAD_IN_SEC añade 3s de silencio entre el fin del countdown
-  // y el inicio del audio. Durante ese intervalo el gameLoop renderiza con
-  // audioTime negativo: las notas ya están scrolling hacia los receptores
-  // pero todavía no hay sonido — la jugadora ve qué viene antes de que
-  // empiece la música. Sin este lead-in, las primeras notas llegaban al
-  // receptor en menos de 1s y eran prácticamente imposibles de leer.
+  // Audio arranca YA (al terminar el countdown). LEAD_IN_SEC se aplica al
+  // CHART, no al audio: gameState.startTime queda 3s por delante del inicio
+  // real del audio, así audioTime es negativo durante los primeros 3s de
+  // música y las notas con n.time pequeñas aún no han alcanzado el receptor.
+  // La jugadora ESCUCHA la canción desde el primer instante y la primera
+  // nota llega cuando el audio lleva 3s sonando — orientación auditiva
+  // antes de pisar. Bug previo: arrancábamos el audio 3s en el futuro y
+  // las notas caían en silencio durante el lead-in.
   const src = audioCtx.createBufferSource();
   src.buffer = audioBuffer;
   src.connect(audioCtx.destination);
   const LEAD_IN_SEC = 3.0;
-  const startAt = audioCtx.currentTime + LEAD_IN_SEC;
-  src.start(startAt);
+  const audioStartAt = audioCtx.currentTime;
+  const startAt = audioStartAt + LEAD_IN_SEC;
+  src.start(audioStartAt);
 
   const N = laneConfig.lanes;
   gameState = {
@@ -517,9 +520,10 @@ async function startGame() {
 // auditivo en cada uno usando el AudioContext ya inicializado. El beep es un
 // oscilador sinusoidal de 12ms (corto, no enmascara la música pre-canción ni
 // la siguiente nota); ¡VAMOS! va con frecuencia más alta y duración doble
-// para subrayarlo. Tras esta cuenta se aplica además LEAD_IN_SEC=3 de silencio
-// con notas ya cayendo, así la primera nota llega cuando la jugadora está
-// realmente en posición.
+// para subrayarlo. Al terminar la cuenta atrás el audio arranca de inmediato
+// y se aplica LEAD_IN_SEC=3 sobre el chart (no sobre el audio): la jugadora
+// oye la música durante 3s antes de que llegue la primera nota — sin tener
+// que adivinar el ritmo de notas cayendo en silencio.
 const COUNTDOWN_STEPS_SM = [
   { text: '¡PREPÁRATE!', cls: 'cd-prep', beep: { freq: 660,  dur: 0.10 } },
   { text: '3',           cls: 'cd-3',    beep: { freq: 880,  dur: 0.10 } },
@@ -615,9 +619,9 @@ function stopGame() {
   const cm = document.getElementById('hudComboMeter');
   if (cm) cm.classList.remove('show', 'pulse', 'tier-1', 'tier-2', 'tier-3', 'tier-4', 'tier-5');
   _comboMeterLast = 0;
-  // Oculta countdown por si la usuaria abandona durante los 5s de cuenta o
-  // los 3s de lead-in (el aborted() check de runCountdown solo cubre navegar
-  // fuera de play-screen, no parar la canción ya iniciada).
+  // Oculta countdown por si la usuaria abandona durante los 5s de cuenta
+  // (el aborted() check de runCountdown solo cubre navegar fuera de
+  // play-screen, no parar la canción ya iniciada).
   const cd = document.getElementById('countdown');
   if (cd) { cd.className = 'hidden'; }
   gameState = null;
