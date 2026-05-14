@@ -352,6 +352,20 @@ h1 {
   padding: 20px 24px; border: 1px solid rgba(0,190,200,0.25);
   margin-bottom: 18px;
 }
+
+/* Banner de estado de calibración (alfombra/guitarra). Igual al de gh-play.html
+   pero ahora reusable desde el motor SM. Variantes: warn (default amarillo),
+   error (rojo) y ok (verde). El strong hereda el color del borde. */
+.calib-banner {
+  padding: 12px 16px; border-radius: 10px;
+  background: rgba(250,204,21,0.10); border-left: 4px solid var(--tulip-tree-500);
+  font-size: 0.9em; line-height: 1.5;
+}
+.calib-banner strong { color: var(--tulip-tree-500); }
+.calib-banner.error { background: rgba(239,68,68,0.10); border-left-color: var(--color-error); }
+.calib-banner.error strong { color: var(--color-error); }
+.calib-banner.ok { background: rgba(16,185,129,0.10); border-left-color: var(--color-success); }
+.calib-banner.ok strong { color: var(--color-success); }
 .card h2 {
   font-family: var(--font-display);
   color: var(--turquesa-400); font-size: 1.05em; margin-bottom: 14px;

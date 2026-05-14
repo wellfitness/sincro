@@ -27,7 +27,52 @@ let playSession = null;
 let _sessionCountdownTimer = null;
 let _visibleSongIds = [];
 
+// ---- Banner "Estado de la alfombra" en songs-screen ----
+// Réplica del banner de "Estado de la guitarra" de gh-play.html. Lee
+// localStorage['mat-mapping'] y avisa si faltan los 4 cardinales (mínimo
+// para jugar default 4-lane). Diagonales (modo Solo/Full) y start/back
+// (pausa) son opcionales — solo se mencionan si la calibración base está OK.
+function refreshMatCalibStatus() {
+  const el = document.getElementById('matCalibStatus');
+  if (!el) return;
+  let mapping = null;
+  try {
+    const raw = localStorage.getItem('mat-mapping');
+    if (raw) mapping = JSON.parse(raw);
+  } catch (e) { mapping = null; }
+  const linkCalib = '<a href="test-pad.html" style="color:var(--turquesa-400)">Comprobar el equipo → Alfombra → Calibrar</a>';
+  if (!mapping) {
+    el.innerHTML = '<div class="calib-banner error">' +
+      '<strong>⚠ Sin calibración.</strong> Tu alfombra no está calibrada todavía. ' +
+      'Ve a ' + linkCalib + ' antes de bailar. Mientras tanto puedes jugar con teclado: ' +
+      '<strong>← ↓ ↑ →</strong>.' +
+      '</div>';
+    return;
+  }
+  const CARDINALS = ['left','down','up','right'];
+  const DIAGONALS = ['upLeft','upRight','downLeft','downRight'];
+  const isSet = (k) => typeof mapping[k] === 'number' && mapping[k] >= 0;
+  const cardCount = CARDINALS.filter(isSet).length;
+  const diagCount = DIAGONALS.filter(isSet).length;
+  if (cardCount < 4) {
+    el.innerHTML = `<div class="calib-banner error">` +
+      `<strong>⚠ Calibración incompleta:</strong> ${cardCount}/4 cardinales detectados. ` +
+      `Re-calibra en ${linkCalib} para poder bailar.` +
+      `</div>`;
+    return;
+  }
+  const diagNote = diagCount === 4
+    ? 'Diagonales también calibradas — modos Solo y Full disponibles.'
+    : diagCount > 0
+      ? `${diagCount}/4 diagonales calibradas (necesarias para modos Solo/Full).`
+      : 'Sin diagonales — modos Solo y Full deshabilitados.';
+  el.innerHTML = `<div class="calib-banner ok">` +
+    `<strong>✓ Lista.</strong> ${cardCount}/4 cardinales configurados. ` + diagNote +
+    `</div>`;
+}
+
 async function refreshSongs() {
+  refreshMatCalibStatus();
   const songs = await dbAll();
   _allSongsCache = songs;
   document.getElementById('songsSubtitle').textContent = `${songs.length} canciones en tu librería`;
