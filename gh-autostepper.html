@@ -830,7 +830,6 @@ async function addFiles(files) {
       bpmOverride: '',
       status: 'pending',
       result: null,
-      zipBlob: null,
       error: null
     };
   }));
@@ -1422,30 +1421,60 @@ async function processOne(q, opts) {
     genre: opts.genre,
     diffGuitar: 4
   };
-  const chartText = buildChartFile(meta, charts);
-  const iniText = buildSongIni(meta);
-
-  // 7. ZIP empaquetado: <slug>/{notes.chart, song.ini, song.<ext>}
+  // 7. Cargar audio raw en memoria para empaquetar bajo demanda.
+  // Almacenamos SOLO los bytes (~5-10 MB), no el ZIP construido. El ZIP
+  // se genera lazy en downloadOne/downloadAllZip/saveOneToLibrary — antes
+  // se construía aquí y se guardaba en q.zipBlob, duplicando el audio
+  // (~5-10 MB extra por canción persistente, porque el ZIP usa modo store
+  // sin compresión). Para tandas de 50-100+ canciones eso era memoria
+  // innecesaria que reducía el techo efectivo a la mitad.
   const slug = slugify((q.artist ? q.artist + ' - ' : '') + q.title) || 'song';
   const sourceAudioBlob = croppedAudio || q.file;
-  const audioBytes = new Uint8Array(await sourceAudioBlob.arrayBuffer());
-  q._audioBytes = audioBytes;
-  const zipFiles = [
-    { name: `${slug}/notes.chart`, data: new TextEncoder().encode(chartText) },
-    { name: `${slug}/song.ini`,    data: new TextEncoder().encode(iniText) },
-    { name: `${slug}/${audioFilename}`, data: audioBytes }
-  ];
-  const zipBytes = makeZip(zipFiles);
-  q.zipBlob = new Blob([zipBytes], { type: 'application/zip' });
-  q.zipFilename = `${slug}.zip`;
+  q._audioBytes = new Uint8Array(await sourceAudioBlob.arrayBuffer());
   q.result = {
     bpm, offsetSec, charts,
     duration: effectiveDuration,
     originalDuration: buffer.duration,
     croppedAudio,
     audioExt,
+    slug,
+    tickTimeline,        // necesario para reconstruir [SyncTrack] en buildZipForSong
+    audioFilename,
   };
-  log(`  ✓ ZIP listo: ${q.zipFilename} (${(q.zipBlob.size/1024/1024).toFixed(2)} MB)`, 'ok');
+  const totalNotes = charts.reduce((s, c) => s + c.notes.length, 0);
+  log(`  ✓ Chart listo: ${totalNotes} notas (4 dificultades)`, 'ok');
+}
+
+// Empaqueta una canción ya procesada en un ZIP <slug>/{notes.chart, song.ini, song.<ext>}.
+// Lazy: se invoca al descargar/guardar, no al final de processOne. Devuelve
+// { blob, filename } o null si la canción no está completa.
+function buildZipForSong(q) {
+  if (!q || !q.result || !q._audioBytes) return null;
+  const r = q.result;
+  const charter = document.getElementById('charter').value || 'Sincro';
+  const genre   = document.getElementById('genre').value || '';
+  const meta = {
+    name: q.title || 'Untitled',
+    artist: q.artist || 'Unknown',
+    charter,
+    bpm: r.bpm,
+    tickTimeline: r.tickTimeline,
+    duration: r.duration,
+    audioFilename: r.audioFilename,
+    genre,
+    diffGuitar: 4
+  };
+  const enc = new TextEncoder();
+  const zipFiles = [
+    { name: `${r.slug}/notes.chart`,        data: enc.encode(buildChartFile(meta, r.charts)) },
+    { name: `${r.slug}/song.ini`,           data: enc.encode(buildSongIni(meta)) },
+    { name: `${r.slug}/${r.audioFilename}`, data: q._audioBytes }
+  ];
+  const zipBytes = makeZip(zipFiles);
+  return {
+    blob: new Blob([zipBytes], { type: 'application/zip' }),
+    filename: `${r.slug}.zip`
+  };
 }
 
 function slugify(s) {
@@ -1462,7 +1491,7 @@ function renderDownloads() {
   const el = document.getElementById('downloads');
   el.innerHTML = '';
   for (const q of queue) {
-    if (!q.zipBlob) continue;
+    if (!q.result || !q._audioBytes) continue;
     const div = document.createElement('div');
     div.className = 'difficulty-card';
     const totalNotes = q.result.charts.reduce((s, c) => s + c.notes.length, 0);
@@ -1482,10 +1511,11 @@ function renderDownloads() {
 }
 window.downloadOne = function(id) {
   const q = queue.find(x => x.id === id);
-  if (!q || !q.zipBlob) return;
-  const url = URL.createObjectURL(q.zipBlob);
+  const pkg = buildZipForSong(q);
+  if (!pkg) return;
+  const url = URL.createObjectURL(pkg.blob);
   const a = document.createElement('a');
-  a.href = url; a.download = q.zipFilename;
+  a.href = url; a.download = pkg.filename;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 };
@@ -1558,7 +1588,7 @@ function downloadAllZip() {
     const enc = new TextEncoder();
     const allFiles = [];
     for (const q of queue) {
-      if (!q.zipBlob || !q._audioBytes) continue;
+      if (!q.result || !q._audioBytes) continue;
       const audioExt = q.result.audioExt
         || (q.file.name.match(/\.([^.]+)$/) || ['', 'mp3'])[1].toLowerCase();
       const slug = slugify((q.artist ? q.artist + ' - ' : '') + q.title) || `song-${q.id}`;
@@ -1583,7 +1613,7 @@ function downloadAllZip() {
     }
     const zipBytes = makeZip(allFiles);
     const blob = new Blob([zipBytes], { type: 'application/zip' });
-    const n = queue.filter(q => q.zipBlob).length;
+    const n = queue.filter(q => q.result && q._audioBytes).length;
     const fn = `sincro-gh-${n}-charts.zip`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
