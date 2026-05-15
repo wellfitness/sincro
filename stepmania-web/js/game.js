@@ -5,6 +5,55 @@
 //  Timing windows scale per settings.timingWindow (J4..J7 = SM5/ITG presets).
 // ============================================================================
 
+// ============================================================================
+// DIAG TEMPORAL — instrumentación de volumen (2026-05-15).
+// Inserta un AnalyserNode passthrough entre src y destination, loguea RMS +
+// peak + rango rolling 5s cada 1s a la consola. Si Δ > 6 dB marca ⚠️INESTABLE.
+// El AnalyserNode no modifica la señal (es passthrough). Quitar tras detectar
+// la causa del "volumen variable durante playback".
+// ============================================================================
+function _instrumentAudio(src, ctx, label) {
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  src.connect(analyser);
+  analyser.connect(ctx.destination);
+  const buf = new Float32Array(analyser.fftSize);
+  const window5s = [];
+  let logCounter = 0;
+  const interval = setInterval(() => {
+    analyser.getFloatTimeDomainData(buf);
+    let sumSq = 0, peak = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = buf[i];
+      sumSq += v * v;
+      const a = v < 0 ? -v : v;
+      if (a > peak) peak = a;
+    }
+    const rms = Math.sqrt(sumSq / buf.length);
+    const now = ctx.currentTime;
+    window5s.push({ t: now, rms });
+    while (window5s.length && now - window5s[0].t > 5) window5s.shift();
+    let minR = window5s[0].rms, maxR = window5s[0].rms;
+    for (const x of window5s) { if (x.rms < minR) minR = x.rms; if (x.rms > maxR) maxR = x.rms; }
+    const toDB = v => 20 * Math.log10(Math.max(v, 1e-9));
+    const delta = toDB(maxR) - toDB(minR);
+    if (++logCounter % 2 === 0) {
+      const alert = delta > 6 ? '  ⚠️INESTABLE' : '';
+      console.log(
+        `[SINCRO-AUDIO] ${label} t=${now.toFixed(1)}s rms=${toDB(rms).toFixed(1)}dB peak=${toDB(peak).toFixed(1)}dB ` +
+        `roll5s ${toDB(minR).toFixed(1)} → ${toDB(maxR).toFixed(1)} (Δ=${delta.toFixed(1)}dB)${alert}`
+      );
+    }
+  }, 500);
+  return {
+    cleanup() {
+      clearInterval(interval);
+      try { src.disconnect(analyser); } catch(e){}
+      try { analyser.disconnect(ctx.destination); } catch(e){}
+    }
+  };
+}
+
 // Base windows match SM5 J5 (in seconds); scale with TIMING_SCALE per judge level.
 const TIMING_BASE = {
   marvelous: 0.0225, perfect: 0.045, great: 0.090, good: 0.135, bad: 0.180, mine: 0.071
@@ -479,7 +528,8 @@ async function startGame() {
   // (LEAD_IN_SEC=5s tras el src.start).
   const src = audioCtx.createBufferSource();
   src.buffer = audioBuffer;
-  src.connect(audioCtx.destination);
+  // DIAG TEMPORAL — instrumenta el output (analyser passthrough + log RMS).
+  const _diag = _instrumentAudio(src, audioCtx, 'SM');
   // LEAD_IN_SEC declarado a nivel módulo: togglePause() necesita la misma
   // constante al recrear el AudioBufferSourceNode tras una pausa.
   const audioStartAt = audioCtx.currentTime;
@@ -489,6 +539,7 @@ async function startGame() {
   const N = laneConfig.lanes;
   gameState = {
     notes, audioBuffer, src,
+    _diag, // DIAG TEMPORAL
     startTime: startAt,
     bpm: selectedSong.bpm,
     timingEngine: tEngine,
@@ -573,6 +624,8 @@ function stopGame() {
     gameState.src.onended = null;
     try { gameState.src.stop(); } catch(e) {}
   }
+  // DIAG TEMPORAL — parar el log periódico al cerrar la partida.
+  if (gameState._diag) { gameState._diag.cleanup(); gameState._diag = null; }
   // Restore user mods snapshot so attacks don't bleed into the next play
   if (gameState.baseMods) Object.assign(activeMods, gameState.baseMods);
   window.removeEventListener('keydown', onKeyDown);
@@ -623,6 +676,8 @@ function togglePause() {
       gameState.src.onended = null; // ver stopGame() para el porqué
       try { gameState.src.stop(); } catch(e) {}
     }
+    // DIAG TEMPORAL — parar log durante la pausa (silencio = ruido en el log).
+    if (gameState._diag) { gameState._diag.cleanup(); gameState._diag = null; }
     // Focus en "Reanudar" para que ENTER lo dispare (atajo natural). El
     // atributo HTML autofocus no funciona en elementos revelados via toggle
     // de clase — hay que forzarlo manualmente al mostrar el overlay.
@@ -637,7 +692,9 @@ function togglePause() {
     // stop()'d no pueden reutilizarse. Recreamos a partir del mismo buffer.
     const newSrc = audioCtx.createBufferSource();
     newSrc.buffer = gameState.audioBuffer;
-    newSrc.connect(audioCtx.destination);
+    // DIAG TEMPORAL — reinstrumentar el nuevo source.
+    if (gameState._diag) gameState._diag.cleanup();
+    gameState._diag = _instrumentAudio(newSrc, audioCtx, 'SM');
     // Nuevo onended con guard de identidad: si la usuaria pausa de nuevo
     // antes de que termine el audio, el viejo onended (este) no debe disparar
     // endGame sobre el nuevo src de la siguiente reanudación.
