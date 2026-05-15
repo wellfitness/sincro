@@ -3195,20 +3195,17 @@ function tick() {
       if (game.starPower <= 0) game.starPowerActive = false;
     }
 
-    // Whammy → detune (solo durante sustain activo). Usa setTargetAtTime para
-    // que el detune sea una rampa exponencial suave (Web Audio interpola en el
-    // grafo) en lugar de un escalón por frame con `.value = ...`. Asignaciones
-    // directas cada frame generan microclics/aliasing audibles ("rasgado") al
-    // re-muestrear el AudioBuffer; setTargetAtTime usa una time-constant de
-    // 50 ms que filtra el jitter del potenciómetro y respeta cambios reales
-    // de la palanca en <100 ms.
-    if (game.audioSource && game.audioSource.detune) {
-      const hasSustain = game.activeSustains.some(s => !s.sustainBroken);
-      const detuneTarget = hasSustain ? -inputState.whammy * 200 : 0;
-      const ctx = window.AudioPipeline.ensureAudioContext();
-      game.audioSource.detune.setTargetAtTime(detuneTarget, ctx.currentTime, 0.05);
-    }
-
+    // Whammy: SIN efecto pitch sobre el audio. La GH PS2 vía receptor Sony
+    // (y la mayoría de mats baratas) tiene el strum y el whammy compartiendo
+    // eje físico — al rasguear, el axis salta a ±0.85 y vuelve oscilando a
+    // reposo. Aunque `normalizeWhammy` aplica deadzone, durante el "ringing"
+    // post-strum la palanca sigue saliendo de la zona neutra unos frames y
+    // mueve `inputState.whammy` aleatoriamente. Cualquier modulación del
+    // `detune` del AudioBufferSourceNode con valores oscilantes provoca que
+    // el resampler interno reprocese el buffer en bucle → microclics audibles
+    // ("rasgado") mientras se mantiene un sustain. Decisión 2026-05-15:
+    // eliminar el efecto pitch. La lectura de `inputState.whammy` se mantiene
+    // por si en el futuro la usamos para visuales (no toca el grafo de audio).
     processInput(t);
     processSustains(t);
     processMisses(t);
@@ -3245,12 +3242,6 @@ function togglePause() {
     game.audioSource = ctx.createBufferSource();
     game.audioSource.buffer = song.audioBuffer;
     game.audioSource.connect(ctx.destination);
-    // Restaurar detune del whammy en el source recién creado. setValueAtTime
-    // (no setTargetAtTime) para arrancar SIN rampa desde el detune objetivo —
-    // así no hay glissando audible al reanudar la pausa.
-    const hasSustain = game.activeSustains && game.activeSustains.some(s => !s.sustainBroken);
-    const resumeDetune = hasSustain ? -inputState.whammy * 200 : 0;
-    game.audioSource.detune.setValueAtTime(resumeDetune, ctx.currentTime);
     // El audio arranca NOTE_DELAY_SEC ANTES que el reloj de juego (game.audio
     // StartTime es el cero del gameClock, no del audio). Para reanudar:
     //   - audioRealOffset = dónde está la canción ahora en segundos absolutos
