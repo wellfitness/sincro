@@ -1274,10 +1274,21 @@ async function processOne(q, opts) {
   log(`  decode OK · ${originalDuration.toFixed(1)}s · ${sr} Hz · ${buffer.numberOfChannels} ch`);
   // Análisis de estabilidad de nivel — ver autostepper.html (SM) para la
   // racional completa. Reaprovecha el buffer antes de toMono/EQ. Umbral 10 dB.
-  const audioFlags = window.AudioPipeline.detectLevelJump(buffer);
-  if (audioFlags.hasLevelJump) {
-    const sign = audioFlags.deltaDb > 0 ? '+' : '';
-    log(`  ⚠️ Salto de volumen ${sign}${audioFlags.deltaDb.toFixed(1)} dB a ${audioFlags.tSec.toFixed(1)}s`);
+  // DEFENSIVO: cualquier fallo del análisis (función ausente por SW caché
+  // viejo, audio raro) NO debe romper el flujo de generación del chart. Sin
+  // este wrap, un throw aquí impedía llegar a `q.result = {...}` y la
+  // canción no aparecía como guardable en la biblioteca.
+  let audioFlags = { hasLevelJump: false };
+  try {
+    if (window.AudioPipeline && window.AudioPipeline.detectLevelJump) {
+      audioFlags = window.AudioPipeline.detectLevelJump(buffer);
+      if (audioFlags.hasLevelJump) {
+        const sign = audioFlags.deltaDb > 0 ? '+' : '';
+        log(`  ⚠️ Salto de volumen ${sign}${audioFlags.deltaDb.toFixed(1)} dB a ${audioFlags.tSec.toFixed(1)}s`);
+      }
+    }
+  } catch (e) {
+    console.warn('detectLevelJump falló (no bloqueante):', e);
   }
 
   // 2. Pipeline análisis bass-only (revertido el 2026-05-15 desde la versión

@@ -1494,10 +1494,20 @@ async function analyzeOne(q) {
   // (filtrando intros silenciosos), marcamos la canción como problemática.
   // Coste: ~10 ms por canción al iterar el Float32Array. Se reaprovecha el
   // buffer ya decodificado — no hay decode extra.
-  const audioFlags = window.AudioPipeline.detectLevelJump(buffer);
-  if (audioFlags.hasLevelJump) {
-    const sign = audioFlags.deltaDb > 0 ? '+' : '';
-    log(`  ⚠️ Salto de volumen ${sign}${audioFlags.deltaDb.toFixed(1)} dB a ${audioFlags.tSec.toFixed(1)}s`, 'warn');
+  // DEFENSIVO: el análisis NO debe poder romper el flujo de generación del
+  // chart bajo ningún supuesto (SW caché vieja, audio raro). Cualquier
+  // throw se loggea como warning y se sigue con audioFlags = no flag.
+  let audioFlags = { hasLevelJump: false };
+  try {
+    if (window.AudioPipeline && window.AudioPipeline.detectLevelJump) {
+      audioFlags = window.AudioPipeline.detectLevelJump(buffer);
+      if (audioFlags.hasLevelJump) {
+        const sign = audioFlags.deltaDb > 0 ? '+' : '';
+        log(`  ⚠️ Salto de volumen ${sign}${audioFlags.deltaDb.toFixed(1)} dB a ${audioFlags.tSec.toFixed(1)}s`, 'warn');
+      }
+    }
+  } catch (e) {
+    console.warn('detectLevelJump falló (no bloqueante):', e);
   }
   // Cacheamos lo que necesitemos del AudioBuffer ANTES de liberarlo más
   // abajo. El AudioBuffer estéreo float32 son ~85-200 MB nativos que Chrome
