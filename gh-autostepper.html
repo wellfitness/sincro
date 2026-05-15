@@ -718,12 +718,11 @@
 const CHART_RESOLUTION = 192;  // ticks per quarter note (SM y CH usan ambos 192)
 
 const {
-  decodeFile, toMono, bassEmphasize, midEmphasize,
+  decodeFile, toMono, bassEmphasize,
   computeEnergyEnvelope, computeODF,
   pickPeaks, detectBPM, detectBPMSegments, detectOffset,
   normalizeODFLocally,
-  ensureAudioContext,
-  computeBandEnvelopes, getPitchBandAtFrame
+  ensureAudioContext
 } = window.AudioPipeline;
 
 // ---- Estado ----
@@ -1032,9 +1031,7 @@ const DIFFICULTIES = [
 
 // Devuelve un array de notas para la dificultad dada.
 //   onsetTicks: array de ticks (int) de cada onset detectado
-//   bandEnvs: envolventes de 5 bandas de frecuencia para sustains por audio
-//   framesPerSec: para calcular frames correspondientes al gap
-function generateNotesForDifficulty(onsetTicks, diff, chordProb, sustainProb, bpm, offsetSec, presetMul, pitchBandForTick, bandEnvs, framesPerSec) {
+function generateNotesForDifficulty(onsetTicks, diff, chordProb, sustainProb, bpm, offsetSec, presetMul) {
   if (onsetTicks.length === 0) return [];
   const notes = [];
 
@@ -1047,18 +1044,10 @@ function generateNotesForDifficulty(onsetTicks, diff, chordProb, sustainProb, bp
     const tick = filtered[i];
     const nextTick = filtered[i + 1];
 
-    const pbEntry  = pitchBandForTick ? pitchBandForTick.get(tick) : undefined;
-    const pitchBand = pbEntry !== undefined ? pbEntry.band  : undefined;
-    const pitchFrame = pbEntry !== undefined ? pbEntry.frame : undefined;
-    const fret = pickNextFret(lastFret, diff.fretRange, pitchBand);
+    const fret = pickNextFret(lastFret, diff.fretRange);
+    let fretsThisNote = [fret];
 
-    // Open notes (fret 7): ~5% en Hard/Expert cuando el pitch es grave (banda 0)
-    const isOpen = (diff.tier === 'hard' || diff.tier === 'expert')
-                && pitchBand === 0
-                && Math.random() < 0.05;
-    let fretsThisNote = isOpen ? [7] : [fret];
-
-    if (!isOpen && diff.chordMul > 0 && Math.random() < chordProb * diff.chordMul) {
+    if (diff.chordMul > 0 && Math.random() < chordProb * diff.chordMul) {
       const adj = (Math.random() < 0.5 && fret > diff.fretRange[0]) ? fret - 1
                 : (fret < diff.fretRange[1] ? fret + 1 : fret - 1);
       if (adj !== fret && adj >= diff.fretRange[0] && adj <= diff.fretRange[1]) {
@@ -1066,79 +1055,33 @@ function generateNotesForDifficulty(onsetTicks, diff, chordProb, sustainProb, bp
       }
     }
 
-    // Sustain basado en energía audio mid-band + fallback probabilístico.
-    // Si la guitarra/voz sigue sonando entre onset y siguiente → biás a sustain.
     let sustain = 0;
-    if (!isOpen && diff.sustainsAllowed && nextTick !== undefined) {
+    if (diff.sustainsAllowed && nextTick !== undefined) {
       const gap = nextTick - tick;
-      if (gap >= CHART_RESOLUTION / 2) {
-        let audioProb = sustainProb;
-        if (bandEnvs && pitchFrame !== undefined) {
-          const nextEntry = pitchBandForTick ? pitchBandForTick.get(nextTick) : undefined;
-          const nextFrame = nextEntry !== undefined ? nextEntry.frame : undefined;
-          if (nextFrame !== undefined) {
-            const sustained = isMidEnergySustained(bandEnvs, pitchFrame, nextFrame);
-            audioProb = sustained ? Math.max(0.70, sustainProb) : Math.min(0.15, sustainProb);
-          }
-        }
-        if (Math.random() < audioProb) sustain = Math.floor(gap * 0.8);
+      if (gap >= CHART_RESOLUTION / 2 && Math.random() < sustainProb) {
+        sustain = Math.floor(gap * 0.8);
       }
     }
 
     notes.push({ tick, frets: fretsThisNote, sustain });
-    if (!isOpen) lastFret = fret;  // no contaminar lastFret con fret 7
+    lastFret = fret;
   }
   return notes;
 }
 
-// Si la energía mid-band (250-1500 Hz) se mantiene ≥40% de la energía en el
-// onset durante al menos el 50% del gap → el audio "suena sostenido" → sustain.
-function isMidEnergySustained(bandEnvs, startFrame, endFrame) {
-  if (!bandEnvs || endFrame <= startFrame) return false;
-  const dur = endFrame - startFrame;
-  let onsetE = 0;
-  for (const b of [1, 2]) onsetE += (bandEnvs[b]?.[startFrame] ?? 0);
-  if (onsetE < 1e-6) return false;
-  const thr = onsetE * 0.40;
-  let sustained = 0;
-  for (let f = startFrame; f < endFrame; f++) {
-    let e = 0;
-    for (const b of [1, 2]) e += (bandEnvs[b]?.[f] ?? 0);
-    if (e >= thr) sustained++;
-  }
-  return sustained / dur >= 0.50;
-}
-
-// Asigna el siguiente fret. Con pitchBand (0-4): 70% guiado por pitch,
-// 30% paseo aleatorio — el contorno melódico se percibe sin ser mecánico.
-// Sin pitchBand (undefined): comportamiento original (65/25/10).
-function pickNextFret(last, range, pitchBand) {
+// Walk de trastes random con bias 65% adyacente, 25% jump de 2, 10% random
+// global. Anti-repeat al final. Era pitch-aware (2026-05-14) pero se revirtió
+// con la multi-banda — ver comentario del análisis bass-only en processOne.
+function pickNextFret(last, range) {
   const [lo, hi] = range;
-  const hasPitch = pitchBand !== undefined;
-  // target fret mapeado linealmente desde banda de pitch al rango disponible
-  const target = hasPitch ? lo + Math.round(pitchBand * (hi - lo) / 4) : lo;
-
   if (last < 0) {
-    // Primera nota: directo al target si hay pitch, sino bias bajo
-    return hasPitch
-      ? Math.max(lo, Math.min(hi, target))
-      : lo + Math.floor(Math.random() * Math.min(2, hi - lo + 1));
+    return lo + Math.floor(Math.random() * Math.min(2, hi - lo + 1));
   }
-
   let candidate;
-  if (hasPitch && Math.random() < 0.70) {
-    // Pitch-guided: avanzar un paso hacia el target
-    if (last < target)      candidate = last + 1;
-    else if (last > target) candidate = last - 1;
-    else                    candidate = last + (Math.random() < 0.5 ? -1 : 1);
-  } else {
-    // Paseo aleatorio original
-    const r = Math.random();
-    if (r < 0.65)       candidate = last + (Math.random() < 0.5 ? -1 : 1);
-    else if (r < 0.90)  candidate = last + (Math.random() < 0.5 ? -2 : 2);
-    else                candidate = lo + Math.floor(Math.random() * (hi - lo + 1));
-  }
-  // Wrap y anti-repeat (lógica original intacta)
+  const r = Math.random();
+  if (r < 0.65)       candidate = last + (Math.random() < 0.5 ? -1 : 1);
+  else if (r < 0.90)  candidate = last + (Math.random() < 0.5 ? -2 : 2);
+  else                candidate = lo + Math.floor(Math.random() * (hi - lo + 1));
   if (candidate < lo) candidate = lo + (lo - candidate);
   if (candidate > hi) candidate = hi - (candidate - hi);
   if (candidate === last) candidate = (candidate < hi) ? candidate + 1 : candidate - 1;
@@ -1319,46 +1262,35 @@ async function processOne(q, opts) {
   const originalDuration = buffer.duration;
   log(`  decode OK · ${originalDuration.toFixed(1)}s · ${sr} Hz · ${buffer.numberOfChannels} ch`);
 
-  // 2. Pipeline análisis multi-banda para GH.
-  // Bass ODF (0-200 Hz): capta bombo. Mid ODF (200-2500 Hz): capta guitarra,
-  // voz y caja. Se mezclan 40/60 a nivel de ODF (antes de pickPeaks) para
-  // que tanto strums de guitarra como golpes de bombo generen notas.
-  // monoData se mantiene vivo hasta computeBandEnvelopes (más abajo). Los
-  // resultados de bass/midEmphasize NO se nombran — pasan inline a
-  // computeEnergyEnvelope y se liberan inmediatamente. Sin esto, los 3
-  // buffers internos de midEmphasize (~42 MB cada uno) podían convivir con
-  // monoData + AudioBuffer + bandEnvs y agotar el heap del navegador.
+  // 2. Pipeline análisis bass-only (revertido el 2026-05-15 desde la versión
+  // multi-banda 40/60 introducida en 13905cb). El pipeline multi-banda
+  // duplicaba el trabajo de filtrado y combinado con computeBandEnvelopes
+  // (más abajo) producía picos de memoria que colgaban el navegador a la
+  // 2ª-3ª canción de la tanda incluso tras las mitigaciones (cierre de
+  // AudioContext entre canciones, tope de 20 en cola). Si en el futuro se
+  // reintroduce, antes hay que perfilar memoria con DevTools y validar que
+  // el peak retenido cabe en el budget móvil/Safari (~50 MB).
   let monoData = toMono(buffer);
-  const { env: bassEnv, framesPerSec } = computeEnergyEnvelope(bassEmphasize(monoData, sr), sr);
-  const { env: midEnv }                = computeEnergyEnvelope(midEmphasize(monoData, sr),  sr);
-  const bassOdf = computeODF(bassEnv);
-  const midOdf  = computeODF(midEnv);
-  // Blend 40% bass + 60% mid y renormalizar a [0,1]
-  const blendedOdf = new Float32Array(bassOdf.length);
-  let blendMax = 0;
-  for (let i = 0; i < blendedOdf.length; i++) {
-    blendedOdf[i] = 0.4 * bassOdf[i] + 0.6 * midOdf[i];
-    if (blendedOdf[i] > blendMax) blendMax = blendedOdf[i];
-  }
-  if (blendMax > 0) for (let i = 0; i < blendedOdf.length; i++) blendedOdf[i] /= blendMax;
+  const { env, framesPerSec } = computeEnergyEnvelope(bassEmphasize(monoData, sr), sr);
+  const odf = computeODF(env);
 
   // Normalización local: permite capturar onsets en tramos quiet (intro, break)
-  // que quedarían bajo el umbral global. BPM/offset usan la ODF global (blendedOdf).
-  const localOdf = normalizeODFLocally(blendedOdf, framesPerSec);
+  // que quedarían bajo el umbral global. BPM/offset usan la ODF global.
+  const localOdf = normalizeODFLocally(odf, framesPerSec);
   const peakFrames = pickPeaks(localOdf, framesPerSec, opts.sensitivity);
 
-  // 3. BPM variable + offset — usamos la blended ODF.
+  // 3. BPM variable + offset.
   // detectBPMSegments devuelve [{timeSec, bpm}]: 1 elemento = tempo constante.
   let bpmSegments;
   if (q.bpmOverride && parseFloat(q.bpmOverride) > 0) {
     bpmSegments = [{ timeSec: 0, bpm: parseFloat(q.bpmOverride) }];
     log(`  BPM (override): ${bpmSegments[0].bpm.toFixed(1)}`);
   } else {
-    bpmSegments = detectBPMSegments(blendedOdf, framesPerSec);
+    bpmSegments = detectBPMSegments(odf, framesPerSec);
     log(`  BPM: ${bpmSegments.map((s, i) => s.bpm.toFixed(1) + (i > 0 ? `@${s.timeSec.toFixed(0)}s` : '')).join(' → ')}`);
   }
   const bpm = bpmSegments[0].bpm;
-  const offsetSec = detectOffset(blendedOdf, framesPerSec, bpm);
+  const offsetSec = detectOffset(odf, framesPerSec, bpm);
   log(`  Offset: ${offsetSec.toFixed(3)}s · ${peakFrames.length} onsets`);
 
   // Tick timeline para BPM variable — convierte segundos → ticks correctamente.
@@ -1393,23 +1325,13 @@ async function processOne(q, opts) {
   // Eliminar duplicados después de quantizar
   const uniqueTicks = [...new Set(quantized)].sort((a, b) => a - b);
 
-  // 5.b. Pitch band + frame por onset — {band, frame} para que generateNotes
-  // pueda consultar la energía mid-band al decidir sustains (isMidEnergySustained).
-  // Claves = ticks quantizados (coinciden con uniqueTicks). Primer frame gana.
-  const bandEnvs = computeBandEnvelopes(monoData, sr);
-  monoData = null;  // ya no se vuelve a usar — liberar ~42 MB antes de generar charts
-  const pitchBandForTick = new Map();
-  for (const f of peakFrames) {
-    const sec = f / framesPerSec;
-    if (sec >= effectiveDuration) continue;
-    const relSec = sec - offsetSec;
-    if (relSec < 0) continue;
-    const rawTick = relSecToTick(relSec, tickTimeline, CHART_RESOLUTION);
-    const qTick = Math.round(rawTick / subdivTicks) * subdivTicks;
-    if (!pitchBandForTick.has(qTick)) {
-      pitchBandForTick.set(qTick, { band: getPitchBandAtFrame(bandEnvs, f), frame: f });
-    }
-  }
+  // 5.b. Frets pitch-aware revertido el 2026-05-15 (bandEnvs/pitchBandForTick).
+  // computeBandEnvelopes ejecutaba 4 IIR low-pass adicionales sobre monoData
+  // (~42 MB cada una a 4 min/44.1 kHz) y retenía 5 envelopes — sumidero de
+  // memoria principal del cuelgue. generateNotesForDifficulty tiene guards
+  // que degradan a walk de frets aleatorio + sustains heurísticos cuando los
+  // 3 últimos params son null.
+  monoData = null;  // liberar ~42 MB antes de generar charts
 
   // Multiplicador del preset activo — modula uniformemente NPS target y minGap
   // de las 4 dificultades. Los presets actuales también ajustan sensitivity de
@@ -1421,7 +1343,7 @@ async function processOne(q, opts) {
   const charts = DIFFICULTIES.map(d => ({
     name: d.name,
     section: d.section,
-    notes: generateNotesForDifficulty(uniqueTicks, d, opts.chordProb, opts.sustainProb, bpm, offsetSec, presetMul, pitchBandForTick, bandEnvs, framesPerSec),
+    notes: generateNotesForDifficulty(uniqueTicks, d, opts.chordProb, opts.sustainProb, bpm, offsetSec, presetMul),
     meter: d.meter
   }));
   for (const c of charts) {

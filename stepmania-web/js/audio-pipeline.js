@@ -92,57 +92,6 @@
     return iirLowPass(samples, sr, 200);
   }
 
-  // Mid-emphasis filter para GH — bandpass ~200–2500 Hz.
-  // Captura guitarra, voz y caja; descarta bombo puro y hiss/cymbals.
-  // Implementación: high-pass 200 Hz (samples - bass) + low-pass 2500 Hz.
-  function midEmphasize(samples, sr) {
-    const bass = iirLowPass(samples, sr, 200);
-    const hp = new Float32Array(samples.length);
-    for (let i = 0; i < samples.length; i++) hp[i] = samples[i] - bass[i];
-    return iirLowPass(hp, sr, 2500);
-  }
-
-  // Calcula 5 envolventes de energía por banda de frecuencia.
-  // Útil para detectar el pitch dominante en cada frame.
-  // Bandas: <250 Hz · 250-600 · 600-1500 · 1500-3500 · >3500 Hz.
-  // Devuelve array de 5 Float32Arrays (misma indexación de frames que el
-  // computeEnergyEnvelope estándar — hopMs=5ms, winMs=23ms).
-  //
-  // Memoria: cascada con solo `prev` + `cur` + `band` vivos a la vez (3
-  // buffers del tamaño de mono). La versión previa retenía los 4 low-passes
-  // simultáneamente, lo que para una canción de 4 min a 44.1 kHz suponía
-  // ~336 MB de pico y colgaba el navegador a la 2ª-3ª canción de la cola.
-  function computeBandEnvelopes(mono, sr) {
-    const cuts = [250, 600, 1500, 3500];
-    const N = mono.length;
-    const envelopes = [];
-    let prev = iirLowPass(mono, sr, cuts[0]);
-    // Banda 0: todo lo que pasa el primer low-pass (<250 Hz)
-    envelopes.push(computeEnergyEnvelope(prev, sr).env);
-    const band = new Float32Array(N);  // buffer reutilizable para diferencias
-    for (let i = 1; i < cuts.length; i++) {
-      const cur = iirLowPass(mono, sr, cuts[i]);
-      for (let j = 0; j < N; j++) band[j] = cur[j] - prev[j];
-      envelopes.push(computeEnergyEnvelope(band, sr).env);
-      prev = cur;
-    }
-    // Banda 4: lo que queda por encima de 3500 Hz = mono - prev
-    for (let j = 0; j < N; j++) band[j] = mono[j] - prev[j];
-    envelopes.push(computeEnergyEnvelope(band, sr).env);
-    return envelopes;
-  }
-
-  // Devuelve la banda (0-4) con mayor energía en el frame dado.
-  // 0 = graves (<250 Hz) → Verde; 4 = agudos (>3500 Hz) → Naranja.
-  function getPitchBandAtFrame(bandEnvs, frameIdx) {
-    let max = -1, band = 2;
-    for (let b = 0; b < bandEnvs.length; b++) {
-      const v = bandEnvs[b][frameIdx] ?? 0;
-      if (v > max) { max = v; band = b; }
-    }
-    return band;
-  }
-
   // RMS energy envelope con ventanas de 23ms y hop de 5ms.
   function computeEnergyEnvelope(samples, sr) {
     const winMs = 23, hopMs = 5;
@@ -216,7 +165,15 @@
       for (let i = 0; i < N; i++) s += odf[i] * odf[i + lag];
       if (s > best.score) best = { lag, score: s };
     }
+    // Guard: si la ODF está degenerada (silencio, intro quiet, ventana corta)
+    // todos los lags dan score 0 y best.lag se queda en 0. Sin guard,
+    // 60/0 = Infinity y `while (bpm > 180) bpm /= 2` cuelga el navegador
+    // en bucle infinito (Infinity / 2 = Infinity). Devolver 120 BPM (4/4
+    // pop/dance medio) es un default razonable; el usuario puede sobreescribir
+    // con bpmOverride si la canción real difiere mucho.
+    if (best.lag === 0 || !isFinite(best.score) || best.score === 0) return 120;
     let bpm = 60 * framesPerSec / best.lag;
+    if (!isFinite(bpm) || bpm <= 0) return 120;
     while (bpm < 90) bpm *= 2;
     while (bpm > 180) bpm /= 2;
     return bpm;
@@ -277,6 +234,15 @@
     for (let start = 0; start < odf.length; start += stepFrames) {
       const end = Math.min(odf.length, start + winFrames);
       if (end - start < Math.floor(framesPerSec * 2)) break;
+      // Skip de ventanas con energía despreciable (intros quiet, breaks).
+      // Sin skip, detectBPM sobre ODF ~0 antes devolvía Infinity y colgaba
+      // el navegador en bucle infinito (caso real: intro de "L'amour
+      // Toujours" Eurodance). Ahora detectBPM ya tiene guard que devuelve
+      // 120, pero seguimos saltando estas ventanas para no contaminar el
+      // merge con BPMs ficticios — si no hay nada audible, no hay tempo.
+      let energy = 0;
+      for (let i = start; i < end; i++) energy += odf[i];
+      if (energy < 1e-3) continue;
       raw.push({ timeSec: start / framesPerSec, bpm: detectBPM(odf.slice(start, end), framesPerSec) });
     }
     if (!raw.length) return [{ timeSec: 0, bpm: detectBPM(odf, framesPerSec) }];
@@ -342,7 +308,6 @@
     decodeFile,
     toMono,
     bassEmphasize,
-    midEmphasize,
     computeEnergyEnvelope,
     computeODF,
     pickPeaks,
@@ -350,8 +315,6 @@
     detectBPMSegments,
     detectOffset,
     audioBufferToWav,
-    computeBandEnvelopes,
-    getPitchBandAtFrame,
     normalizeODFLocally
   };
 })();

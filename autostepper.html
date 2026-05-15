@@ -1062,7 +1062,7 @@ function closeTapSync() {
 // gh-autostepper.html. Ver ese módulo para detalles de cada algoritmo.
 // Aquí solo destructuramos para mantener llamadas sin prefijo.
 const {
-  decodeFile, toMono, bassEmphasize, midEmphasize,
+  decodeFile, toMono, bassEmphasize,
   computeEnergyEnvelope, computeODF,
   pickPeaks, detectBPM, detectBPMSegments, detectOffset,
   normalizeODFLocally
@@ -1487,40 +1487,19 @@ async function analyzeOne(q) {
   const sr = buffer.sampleRate;
   const monoData = toMono(buffer);
 
-  // Pipeline análisis multi-banda. Bass ODF (0–200 Hz) capta bombo y bajo.
-  // Mid ODF (200–2500 Hz) capta voz, caja, guitarra, sintes melódicos y
-  // percusión latina (congas, timbales, cencerro, clave). Blend 40/60 al
-  // nivel de ODF (antes de pickPeaks) — calibrado para rock/pop/latina/
-  // trance; en electrónica de bombo dominante, los onsets extra del mid
-  // (snare en 2/4) los acota el filtro de NPS de DifficultyTiers en
-  // tiers bajos. BPM y offset también se calculan sobre la blended para
-  // consistencia entre tempo y picos (sin drift de fase).
-  // Liberamos bassData/midData tras computeEnergyEnvelope porque son
-  // Float32Array del tamaño completo del audio (~42 MB cada uno a 4 min /
-  // 44.1 kHz). Sin null-earlos, la suma de monoData + bassData + midData +
-  // AudioBuffer original superaba 250 MB vivos durante el resto del
-  // pipeline y se acumulaba entre canciones.
+  // Pipeline bass-only (revertido el 2026-05-15 desde la multi-banda 40/60
+  // de e243d93). El doble pipeline duplicaba el trabajo de filtrado y
+  // contribuía al cuelgue del navegador en tandas de varias canciones —
+  // en SM el síntoma era idéntico al de GH (donde además había
+  // computeBandEnvelopes para frets pitch-aware). Si en el futuro se
+  // reintroduce, hay que perfilar memoria con DevTools y validar el peak
+  // retenido contra el budget móvil/Safari.
   let bassData = bassEmphasize(monoData, sr);
   await yieldUI();
-  let midData = midEmphasize(monoData, sr);
-  await yieldUI();
-  const { env: bassEnv, framesPerSec } = computeEnergyEnvelope(bassData, sr);
+  const { env, framesPerSec } = computeEnergyEnvelope(bassData, sr);
   bassData = null;
-  const { env: midEnv }                = computeEnergyEnvelope(midData, sr);
-  midData = null;
   await yieldUI();
-  const bassOdf = computeODF(bassEnv);
-  const midOdf  = computeODF(midEnv);
-  await yieldUI();
-
-  // Blend 40% bass + 60% mid y renormalizar a [0,1].
-  const odf = new Float32Array(bassOdf.length);
-  let blendMax = 0;
-  for (let i = 0; i < odf.length; i++) {
-    odf[i] = 0.4 * bassOdf[i] + 0.6 * midOdf[i];
-    if (odf[i] > blendMax) blendMax = odf[i];
-  }
-  if (blendMax > 0) for (let i = 0; i < odf.length; i++) odf[i] /= blendMax;
+  const odf = computeODF(env);
   await yieldUI();
 
   const sensitivity = parseFloat(document.getElementById('sensitivity').value);
@@ -1653,17 +1632,48 @@ async function analyzeAll() {
   let i = 0;
   for (const q of queue) {
     if (cancelRequested) { log('Análisis cancelado.', 'warn'); break; }
-    await analyzeOne(q);
+    try {
+      await analyzeOne(q);
+    } catch (e) {
+      // Defensivo: si analyzeOne se cae (decodeAudioData, audioBufferToWav,
+      // o un método del closure que falta por cache stale del SW), marcamos
+      // la canción como error y CONTINUAMOS el batch en vez de dejar el
+      // bucle colgado con `analyzing=true` y el botón disabled. El bug
+      // observado en v70 era window.AudioPipeline.resetAudioContext no
+      // siendo función (SW cacheado servía audio-pipeline.js viejo) — la
+      // rejection volaba al unhandledrejection y la usuaria veía "se cuelga
+      // tras la primera". Loggear con console.error para que quede en
+      // DevTools sin bloquear UI.
+      console.error('analyzeOne fallo en', q.file?.name, e);
+      q.status = 'error';
+      q.error = (e && e.message) || String(e);
+      renderQueue();
+      log(`  ✗ ${q.file?.name || '?'}: ${q.error}`, 'bad');
+    }
     i++;
     document.getElementById('analyzeProgress').style.width = (100*i/queue.length) + '%';
     // CRÍTICO: cerrar el AudioContext libera lo del thread nativo de audio
     // (AudioBuffer decodificados, scratch internos). Los Float32Array grandes
-    // de monoData/bassData/midData van a "old space" en V8 y el GC menor del
+    // de monoData/bassData van a "old space" en V8 y el GC menor del
     // setTimeout NO los limpia — solo un GC mayor lo haría, pero no corre
     // automáticamente. Cerrar el contexto fuerza la liberación nativa y deja
     // que el GC menor recoja las refs JS pendientes. Sin esto la pestaña
     // acumula ~300 MB por canción y se cuelga a partir de la 3ª.
-    await window.AudioPipeline.resetAudioContext();
+    //
+    // Guard: si una versión vieja del audio-pipeline.js no expone
+    // resetAudioContext (SW cache stale), cerramos el AudioContext directo
+    // desde el HTML como fallback — la referencia local `audioCtx` apunta al
+    // mismo singleton del closure. El próximo decodeFile() llamará a
+    // ensureAudioContext() que en versión vieja devuelve el ya cerrado;
+    // por eso solo cerramos cuando NO hay resetAudioContext (el closure
+    // viejo no se entera, pero al menos liberamos memoria del thread audio).
+    try {
+      if (typeof window.AudioPipeline?.resetAudioContext === 'function') {
+        await window.AudioPipeline.resetAudioContext();
+      } else if (audioCtx && audioCtx.state !== 'closed') {
+        await audioCtx.close();
+      }
+    } catch (e) { console.warn('reset AudioContext fallo (ignorable):', e); }
     audioCtx = null;  // invalida la cache local — el preview reabrirá uno nuevo si hace falta
     await new Promise(r => setTimeout(r, 100));
   }
