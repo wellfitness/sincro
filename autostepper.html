@@ -1488,6 +1488,17 @@ async function analyzeOne(q) {
     renderQueue();
     return;
   }
+  // Análisis de estabilidad de nivel: detecta SALTOS bruscos de volumen
+  // (escalones sostenidos, no oscilaciones rápidas). Si el RMS rolling salta
+  // > 10 dB entre ventanas consecutivas y ambas están por encima de -40 dB
+  // (filtrando intros silenciosos), marcamos la canción como problemática.
+  // Coste: ~10 ms por canción al iterar el Float32Array. Se reaprovecha el
+  // buffer ya decodificado — no hay decode extra.
+  const audioFlags = window.AudioPipeline.detectLevelJump(buffer);
+  if (audioFlags.hasLevelJump) {
+    const sign = audioFlags.deltaDb > 0 ? '+' : '';
+    log(`  ⚠️ Salto de volumen ${sign}${audioFlags.deltaDb.toFixed(1)} dB a ${audioFlags.tSec.toFixed(1)}s`, 'warn');
+  }
   // Cacheamos lo que necesitemos del AudioBuffer ANTES de liberarlo más
   // abajo. El AudioBuffer estéreo float32 son ~85-200 MB nativos que Chrome
   // no libera mientras quede una referencia JS — por eso lo nuleamos tras
@@ -1615,6 +1626,7 @@ async function analyzeOne(q) {
     charts, sampleStart,
     sampleRate: sr,
     audioExt, audioName,
+    audioFlags,
   };
   q.status = 'done';
   log(`  ✓ ${q.file.name}: BPM ${bpm.toFixed(1)}, ${charts.reduce((s,c)=>s+c.count,0)} pasos totales`, 'ok');
@@ -2058,6 +2070,7 @@ async function saveOneToLibrary(id) {
       duration:   q.result.duration,
       sampleStart: q.result.sampleStart,
       charts,
+      audioFlags: q.result.audioFlags,
       tags: [],
       addedAt: Date.now(),
     });

@@ -184,7 +184,7 @@ function renderSongList() {
           title="Marcar para sesión continua" aria-label="Marcar ${escapeHtml(s.title)}">
       </div>
       <div onclick="selectSong(${s.id})">
-        <div style="font-weight:700">${escapeHtml(s.title)}</div>
+        <div style="font-weight:700">${escapeHtml(s.title)}${audioFlagBadge(s.audioFlags)}</div>
         <div style="color:var(--gris-400);font-size:0.82em">${escapeHtml(s.artist||'—')} · ${s.charts.length} dif.</div></div>
       <div onclick="selectSong(${s.id})">${s.bpm.toFixed(0)}</div>
       <div onclick="selectSong(${s.id})">${formatTime(s.duration)}</div>

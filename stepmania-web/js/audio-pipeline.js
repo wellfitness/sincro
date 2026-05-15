@@ -262,6 +262,65 @@
     return best.phase / framesPerSec;
   }
 
+  // Detector de SALTOS BRUSCOS de nivel en el audio (no oscilaciones rápidas,
+  // sino "escalones": el volumen sube y se queda alto, o baja y se queda bajo).
+  // Calcula RMS en ventanas de `windowSec` con paso `stepSec`. Mira la
+  // derivada entre ventanas consecutivas y devuelve el salto absoluto más
+  // grande si supera `thresholdDb`.
+  //
+  // Ignora ventanas con RMS < -40 dB (silencio o intros muy bajos): evita el
+  // falso positivo del "silencio → música" al inicio de la canción.
+  //
+  // Devuelve { hasLevelJump: bool, tSec: number, deltaDb: number }. deltaDb
+  // tiene SIGNO (positivo = sube, negativo = baja). Si no hay salto, los
+  // campos extra son undefined.
+  function detectLevelJump(audioBuffer, opts) {
+    const o = opts || {};
+    const windowSec = o.windowSec || 1.0;
+    const stepSec = o.stepSec || 0.5;
+    const thresholdDb = o.thresholdDb || 10;
+    const silenceDb = o.silenceDb || -40;
+    const sr = audioBuffer.sampleRate;
+    // Promediamos canales para una sola pasada de RMS (mono efectivo).
+    const numCh = audioBuffer.numberOfChannels;
+    const data = audioBuffer.getChannelData(0);
+    const data2 = numCh > 1 ? audioBuffer.getChannelData(1) : null;
+    const winSamples = Math.max(1, Math.floor(windowSec * sr));
+    const stepSamples = Math.max(1, Math.floor(stepSec * sr));
+    let prevDb = null;
+    let maxAbs = 0, bestDelta = 0, bestTSec = 0;
+    for (let start = 0; start + winSamples <= data.length; start += stepSamples) {
+      let sumSq = 0;
+      if (data2) {
+        for (let i = 0; i < winSamples; i++) {
+          const v = (data[start + i] + data2[start + i]) * 0.5;
+          sumSq += v * v;
+        }
+      } else {
+        for (let i = 0; i < winSamples; i++) {
+          const v = data[start + i];
+          sumSq += v * v;
+        }
+      }
+      const rms = Math.sqrt(sumSq / winSamples);
+      const dB = 20 * Math.log10(Math.max(rms, 1e-9));
+      if (prevDb !== null && prevDb >= silenceDb && dB >= silenceDb) {
+        const delta = dB - prevDb;
+        const abs = Math.abs(delta);
+        if (abs > maxAbs) {
+          maxAbs = abs;
+          bestDelta = delta;
+          bestTSec = start / sr;
+        }
+      }
+      prevDb = dB;
+    }
+    if (maxAbs > thresholdDb) {
+      return { hasLevelJump: true, tSec: bestTSec, deltaDb: bestDelta };
+    }
+    return { hasLevelJump: false };
+  }
+
   // Normaliza la ODF localmente por secciones de 1s con ventana de ±2s.
   // Permite detectar onsets en tramos dinámicamente quietos (intro, break) que
   // quedarían aplastados por el umbral global. BPM y offset usan la ODF global.
@@ -383,6 +442,7 @@
     detectBPM,
     detectBPMSegments,
     detectOffset,
+    detectLevelJump,
     audioBufferToWav,
     normalizeODFLocally
   };

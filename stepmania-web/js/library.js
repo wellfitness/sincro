@@ -146,7 +146,7 @@ function renderLibraryFromCache() {
         onchange="togglePlaylistSelectionLibrary(${s.id})" title="Marcar para eliminar en grupo"
         aria-label="Marcar ${escapeHtml(s.title || 'canción')}">
       <div style="flex:1;min-width:0">
-        <div style="color:#fff;font-weight:600">${escapeHtml(s.title || 'Sin título')}</div>
+        <div style="color:#fff;font-weight:600">${escapeHtml(s.title || 'Sin título')}${audioFlagBadge(s.audioFlags)}</div>
         <div style="color:var(--gris-400);font-size:0.85em">${escapeHtml(s.artist || 'Unknown')} · ${s.bpm ? s.bpm.toFixed(1) + ' BPM' : '? BPM'} · ${dur} · ${chartCount} chart${chartCount === 1 ? '' : 's'}</div>
         ${championHtml}
       </div>

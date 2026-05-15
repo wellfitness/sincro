@@ -452,6 +452,7 @@ Ver descripción detallada en sección de `autostepper.html`. Resumen:
 6. `pickPeaks` → ventana 75 ms.
 7. `detectBPM` → autocorrelación, rango 90-180 BPM, corrección de octava.
 8. `detectOffset` → correlación de fase.
+9. `detectLevelJump(audioBuffer, opts?)` → analiza estabilidad de nivel para flagear canciones con saltos bruscos de volumen ("escalones" sostenidos, no oscilaciones rápidas). Ventana 1s, paso 0.5s, umbral default 10 dB (configurable). Ignora ventanas con RMS < -40 dB para no flagear el "silencio → música" del inicio de canciones con intro silencioso. Devuelve `{ hasLevelJump, tSec, deltaDb }`; `deltaDb` con signo (+ sube, − baja). El resultado se persiste como `audioFlags` en cada entry de IndexedDB (SM `songs` / GH `gh-songs`) y se renderiza con un badge `⚠️` (helper `audioFlagBadge` en `core.js`) en las pantallas "Tocar" y "Mis canciones" de ambos juegos. Tooltip muestra timestamp `MM:SS` + magnitud `±N dB`. Canciones anteriores al deploy del feature no se reanalizan (campo ausente = sin badge). Llamada directa desde ambos autosteppers tras `decodeFile`, coste ~10 ms por canción reaprovechando el buffer ya decodificado.
 
 ### Filtrado por dificultad (`difficulty-tiers.js`)
 

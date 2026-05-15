@@ -19,7 +19,21 @@
 
 import { describe, it, expect } from 'vitest';
 import AudioPipeline from '../stepmania-web/js/audio-pipeline.js';
-const { bassEmphasize } = AudioPipeline;
+const { bassEmphasize, detectLevelJump } = AudioPipeline;
+
+// Helper: AudioBuffer mock — replica solo la API que usa detectLevelJump
+// (sampleRate, numberOfChannels, getChannelData). Suficiente en Node/Vitest
+// sin necesidad de AudioContext real.
+function makeBuffer(samples, sr) {
+  const ch0 = samples instanceof Float32Array ? samples : Float32Array.from(samples);
+  return {
+    sampleRate: sr,
+    numberOfChannels: 1,
+    length: ch0.length,
+    duration: ch0.length / sr,
+    getChannelData: (idx) => idx === 0 ? ch0 : null
+  };
+}
 
 function makeSinusoid(freqHz, sr, durationSec, amp = 1) {
   const N = Math.floor(sr * durationSec);
@@ -114,5 +128,84 @@ describe('bassEmphasize', () => {
     for (let i = 0; i < output.length; i++) {
       expect(Number.isFinite(output[i])).toBe(true);
     }
+  });
+});
+
+describe('detectLevelJump', () => {
+  const SR = 22050; // SR bajo: tests rápidos sin perder resolución de ventana (1s)
+
+  it('señal estable (seno 440 Hz a amplitud constante) → no flag', () => {
+    // 4 segundos de seno a amplitud 0.3 (RMS ≈ 0.21 → ~-13 dB). Sin cambios.
+    const samples = makeSinusoid(440, SR, 4, 0.3);
+    const result = detectLevelJump(makeBuffer(samples, SR));
+    expect(result.hasLevelJump).toBe(false);
+  });
+
+  it('salto súbito de +20 dB a mitad → flag con deltaDb > 0', () => {
+    // 2s a amp 0.05 (~-29 dB), 2s a amp 0.5 (~-9 dB). Diferencia "limpia"
+    // entre ventanas puras = 20 dB; tras blur del paso de 0.5s que cae a
+    // caballo de la transición, el Δ máximo observable cae a ~17 dB.
+    const a = makeSinusoid(440, SR, 2, 0.05);
+    const b = makeSinusoid(440, SR, 2, 0.5);
+    const combined = new Float32Array(a.length + b.length);
+    combined.set(a, 0);
+    combined.set(b, a.length);
+    const result = detectLevelJump(makeBuffer(combined, SR));
+    expect(result.hasLevelJump).toBe(true);
+    expect(result.deltaDb).toBeGreaterThan(10);
+    // El salto está en t=2s; con paso 0.5s la ventana cae cerca de ahí.
+    expect(result.tSec).toBeGreaterThan(1.0);
+    expect(result.tSec).toBeLessThan(2.5);
+  });
+
+  it('salto súbito a la baja → flag con deltaDb < 0', () => {
+    const a = makeSinusoid(440, SR, 2, 0.5);
+    const b = makeSinusoid(440, SR, 2, 0.05);
+    const combined = new Float32Array(a.length + b.length);
+    combined.set(a, 0);
+    combined.set(b, a.length);
+    const result = detectLevelJump(makeBuffer(combined, SR));
+    expect(result.hasLevelJump).toBe(true);
+    expect(result.deltaDb).toBeLessThan(-10);
+  });
+
+  it('silencio intro (1.5s) → música (2.5s) NO debe flagear (ignorado < -40 dB)', () => {
+    // Sin el guard, el salto silencio→música sería enorme (∞ dB) y dispararía
+    // todas las canciones con intro silencioso.
+    const silence = new Float32Array(Math.floor(SR * 1.5)); // ceros
+    const music = makeSinusoid(440, SR, 2.5, 0.3);
+    const combined = new Float32Array(silence.length + music.length);
+    combined.set(silence, 0);
+    combined.set(music, silence.length);
+    const result = detectLevelJump(makeBuffer(combined, SR));
+    expect(result.hasLevelJump).toBe(false);
+  });
+
+  it('fade gradual de -20 dB a -8 dB en 4s → no flag (cada paso < 10 dB)', () => {
+    // Crescendo: cada paso de 0.5s sube ≈ 1.5 dB. Δ por ventana < 2 dB.
+    const N = SR * 4;
+    const samples = new Float32Array(N);
+    const omega = 2 * Math.PI * 440 / SR;
+    for (let i = 0; i < N; i++) {
+      const t = i / SR;
+      const amp = 0.1 + (0.4 - 0.1) * (t / 4);
+      samples[i] = amp * Math.sin(omega * i);
+    }
+    const result = detectLevelJump(makeBuffer(samples, SR));
+    expect(result.hasLevelJump).toBe(false);
+  });
+
+  it('umbral configurable: salto intermedio supera 5 dB pero no 10 dB', () => {
+    // amp 0.15 → 0.5: salto "limpio" ≈ +10.5 dB, tras blur ≈ +7.9 dB en la
+    // ventana de la transición. Threshold 5 → flag; threshold 10 → no flag.
+    const a = makeSinusoid(440, SR, 2, 0.15);
+    const b = makeSinusoid(440, SR, 2, 0.5);
+    const combined = new Float32Array(a.length + b.length);
+    combined.set(a, 0);
+    combined.set(b, a.length);
+    const lo = detectLevelJump(makeBuffer(combined, SR), { thresholdDb: 5 });
+    expect(lo.hasLevelJump).toBe(true);
+    const hi = detectLevelJump(makeBuffer(combined, SR), { thresholdDb: 10 });
+    expect(hi.hasLevelJump).toBe(false);
   });
 });

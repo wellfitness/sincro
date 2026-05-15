@@ -1770,7 +1770,7 @@ function renderGhLibraryFromCache() {
         onchange="togglePlaylistSelection(${e.id})" title="Marcar para sesión continua"
         aria-label="Marcar ${escHtml(e.title || 'partitura')}">
       <div style="flex:1;min-width:0">
-        <div style="color:#fff;font-weight:600">${escHtml(e.title || 'Sin título')}</div>
+        <div style="color:#fff;font-weight:600">${escHtml(e.title || 'Sin título')}${audioFlagBadge(e.audioFlags)}</div>
         <div style="color:var(--gris-400);font-size:0.85em">${escHtml(e.artist || 'Unknown')} · ${e.bpm ? e.bpm.toFixed(1) + ' BPM' : ''} · ${dur} · ${e.totalNotes || 0} notas</div>
         ${championHtml}
       </div>
@@ -4656,7 +4656,7 @@ function renderManageListFromCache() {
         onchange="toggleManageSelection(${e.id})" title="Marcar para eliminar"
         aria-label="Marcar ${escHtml(e.title || 'chart')} para eliminar">
       <div style="flex:1;min-width:0">
-        <div style="color:#fff;font-weight:600">${escHtml(e.title || 'Sin título')}</div>
+        <div style="color:#fff;font-weight:600">${escHtml(e.title || 'Sin título')}${audioFlagBadge(e.audioFlags)}</div>
         <div style="color:var(--gris-400);font-size:0.85em">${escHtml(e.artist || 'Unknown')} · ${e.bpm ? e.bpm.toFixed(1) + ' BPM' : ''} · ${dur} · ${e.totalNotes || 0} notas</div>
       </div>
       <div style="display:flex;gap:6px">

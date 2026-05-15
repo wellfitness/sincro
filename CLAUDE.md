@@ -22,7 +22,7 @@ Suite de juego rítmico en navegador para alfombra de baile (RedOctane USB Pad V
 ### Módulos JS (`stepmania-web/js/`)
 
 - **`core.js`** — Helpers, AudioContext, `pollGamepad()`, IndexedDB wrappers, `settings`, `navToken`. Cargado por TODOS los HTMLs.
-- **`audio-pipeline.js`** — Pipeline de detección (bassEmphasize bass+mid en una pasada → ODF → BPM → offset). Compartido por SM y GH autosteppers.
+- **`audio-pipeline.js`** — Pipeline de detección (bassEmphasize bass+mid en una pasada → ODF → BPM → offset) + `detectLevelJump` (RMS rolling para detectar saltos bruscos de volumen). Compartido por SM y GH autosteppers.
 - **`audio-metadata.js`** — Parser binario ID3v2.3/v2.4/v1 (MP3) + Vorbis Comments (FLAC). Sin deps.
 - **`sm-flow.js`** — Motor de flow biomecánico (alternancia L/R, anti-crossover, drills automáticos). Reemplaza al `Math.random()` del SM autostepper.
 - **`mat-layout.js`** — Detección automática de diagonales (`'up' | 'down'`) según `mat-mapping`.
@@ -101,6 +101,17 @@ Landing (`index.html`) bloquea con modal `#req-modal` enlaces al motor si viewpo
 
 `src.start()` ANTES de `await runCountdown`, así la música suena durante todo el countdown. `LEAD_IN_SEC = 5.0` (= duración countdown). Pasos numéricos `5 → 4 → 3 → 2 → 1` (sin palabras), beep ascendente 660→740→820→900→1320 Hz. Aplicado simétrico en SM (`game.js`) y GH (`gh-play.html`).
 
+### Aviso de salto de volumen en la biblioteca (2026-05-15)
+
+`audio-pipeline.js → detectLevelJump(audioBuffer, opts?)` calcula RMS en ventanas de 1s con paso 0.5s, devuelve el mayor salto absoluto entre ventanas consecutivas si supera el umbral (default **10 dB**, configurable). Ignora ventanas con RMS < -40 dB (evita el falso positivo del "silencio → música" en intros). Devuelve `{ hasLevelJump, tSec, deltaDb }` — `deltaDb` con signo (positivo = sube, negativo = baja).
+
+Se ejecuta automáticamente al decodificar el audio en ambos autosteppers (`autostepper.html` SM, `gh-autostepper.html` GH) — coste ~10 ms, reaprovecha el buffer ya decodificado. El resultado se persiste como `audioFlags` en el entry de IndexedDB (`songs` para SM, `gh-songs` para GH) y se muestra como badge `⚠️` junto al título en:
+
+- SM: pantalla "Tocar" (`song-select.js`) y "Mis canciones" (`library.js`).
+- GH: pantalla "Tocar" y "Mis canciones" (ambas en `gh-play.html`).
+
+Helper `audioFlagBadge(audioFlags)` en `core.js` — tooltip indica timestamp + magnitud. Las canciones anteriores a este deploy no se reanalizan (campo `audioFlags` ausente = sin badge).
+
 ---
 
 ## Constantes canónicas (resumen)
@@ -158,7 +169,7 @@ Para tests: `pnpm install` → `pnpm test` (~450ms, 167 tests). Ver sección Tes
 
 ## Tests
 
-Suite con **Vitest**. Filosofía: testeamos lo matemáticamente verificable sin navegador; lo demás (render, Web Audio, Gamepad, IndexedDB) se valida jugando. **Total: 167 tests, ~450ms.**
+Suite con **Vitest**. Filosofía: testeamos lo matemáticamente verificable sin navegador; lo demás (render, Web Audio, Gamepad, IndexedDB) se valida jugando. **Total: 173 tests, ~700ms.**
 
 - `tests/parser.test.mjs` — 23 tests del parser `.ssc/.sm`.
 - `tests/difficulty-tiers.test.mjs` — 23 tests del filtrado por dificultad.
@@ -167,7 +178,7 @@ Suite con **Vitest**. Filosofía: testeamos lo matemáticamente verificable sin 
 - `tests/sm-flow.test.mjs` — 24 tests del flow biomecánico.
 - `tests/scores.test.mjs` — 23 tests del sistema de scores (helpers puros).
 - `tests/radar.test.mjs` — 28 tests del Groove Radar.
-- `tests/audio-pipeline.test.mjs` — 8 tests de respuesta en frecuencia de `bassEmphasize` (bass+mid en una pasada).
+- `tests/audio-pipeline.test.mjs` — 14 tests: respuesta en frecuencia de `bassEmphasize` (8) + detector de saltos de volumen `detectLevelJump` (6).
 
 **Doble export CJS** en archivos source para que Vitest pueda `import`: `if (typeof module !== 'undefined' && module.exports) module.exports = api;` al final del módulo (ver `parser.js:275-289`, `difficulty-tiers.js:259-274`).
 

@@ -1272,6 +1272,13 @@ async function processOne(q, opts) {
   const sr = buffer.sampleRate;
   const originalDuration = buffer.duration;
   log(`  decode OK · ${originalDuration.toFixed(1)}s · ${sr} Hz · ${buffer.numberOfChannels} ch`);
+  // Análisis de estabilidad de nivel — ver autostepper.html (SM) para la
+  // racional completa. Reaprovecha el buffer antes de toMono/EQ. Umbral 10 dB.
+  const audioFlags = window.AudioPipeline.detectLevelJump(buffer);
+  if (audioFlags.hasLevelJump) {
+    const sign = audioFlags.deltaDb > 0 ? '+' : '';
+    log(`  ⚠️ Salto de volumen ${sign}${audioFlags.deltaDb.toFixed(1)} dB a ${audioFlags.tSec.toFixed(1)}s`);
+  }
 
   // 2. Pipeline análisis bass-only (revertido el 2026-05-15 desde la versión
   // multi-banda 40/60 introducida en 13905cb). El pipeline multi-banda
@@ -1412,6 +1419,7 @@ async function processOne(q, opts) {
     slug,
     tickTimeline,        // necesario para reconstruir [SyncTrack] en buildZipForSong
     audioFilename,
+    audioFlags,
   };
   const totalNotes = charts.reduce((s, c) => s + c.notes.length, 0);
   log(`  ✓ Chart listo: ${totalNotes} notas (4 dificultades)`, 'ok');
@@ -1533,6 +1541,7 @@ async function saveOneToLibrary(id) {
       audioName: audioFilename,
       diffs: q.result.charts.map(c => c.section || c.name + 'Single'),
       totalNotes,
+      audioFlags: q.result.audioFlags,
       genre, charter: charterName
     });
     q.savedToLibrary = true;

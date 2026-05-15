@@ -11,6 +11,17 @@ function formatTime(s) {
   const m = Math.floor(s/60), sec = Math.floor(s%60);
   return `${m}:${sec.toString().padStart(2,'0')}`;
 }
+// Render del badge ⚠️ para canciones cuyo audio tiene un salto de volumen
+// detectado al importar/generar. `audioFlags` viene del entry persistido en
+// IndexedDB (SM `songs` / GH `gh-songs`). Devuelve string HTML vacío si no
+// hay flag — seguro para concatenar al título. El tooltip indica timestamp y
+// magnitud; el cursor:help lo señala como pista interactiva.
+function audioFlagBadge(audioFlags) {
+  if (!audioFlags || !audioFlags.hasLevelJump) return '';
+  const sign = audioFlags.deltaDb > 0 ? '+' : '';
+  const tip = `Salto de volumen ${sign}${audioFlags.deltaDb.toFixed(1)} dB a ${formatTime(audioFlags.tSec || 0)}`;
+  return ` <span class="audio-flag-badge" title="${escapeHtml(tip)}" style="cursor:help;font-size:0.9em" aria-label="${escapeHtml(tip)}">⚠️</span>`;
+}
 function safeFn(s) { return String(s).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim() || 'song'; }
 function getExt(n) { const m = n.match(/\.[^.]+$/); return m ? m[0] : '.mp3'; }
 function yieldUI() { return new Promise(r => setTimeout(r, 0)); }
