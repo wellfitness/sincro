@@ -3146,11 +3146,34 @@ function startGame(diffOverride) {
   // real arranca NOTE_DELAY_SEC antes — pause/resume usa esa relación para
   // calcular dónde seekear en el buffer al reanudar.
   game.audioStartTime = audioRealStartAt + NOTE_DELAY_SEC;
+  // Cuando el AudioBufferSourceNode termina (audio agotado), cerrar la partida
+  // con 500 ms de cola para que el último frame de notas siga visible. Antes:
+  // el juego solo terminaba si lastNote.sustainEnd+1.0 había pasado Y todas
+  // las notas estaban juzgadas — si el chart tenía su última nota antes del
+  // fin del audio (caso típico de CH community charts y outros largos), el
+  // highway seguía vivo 5-10 s tras callar la música porque NOTE_DELAY_SEC=5
+  // de buffer visual + cola del chart hasta lastNote.sustainEnd. Patrón
+  // canónico replicado de stepmania-web/js/game.js:528-532.
+  attachAudioEndedHandler(game.audioSource);
 
   isPaused = false;
   document.getElementById('pauseOverlay').classList.remove('show');
   if (rafId) cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(tick);
+}
+
+// Cierra la partida cuando el AudioBufferSourceNode termina (audio agotado).
+// Guard `game.finished` evita reentradas — `finishGame()` se setea la primera
+// llamada. Cuando llamamos a `audioSource.stop()` por pausa/quit/restart hay
+// que anular este handler ANTES del stop() (igual que en SM, game.js:568-571):
+// stop() también dispara onended y, sin la anulación, terminaríamos la partida
+// al pausar.
+function attachAudioEndedHandler(src) {
+  src.onended = () => {
+    if (game && !game.finished) {
+      setTimeout(() => { if (game && !game.finished) finishGame(); }, 500);
+    }
+  };
 }
 
 // La música arranca YA al pulsar Iniciar y el chart "comienza"
@@ -3213,7 +3236,21 @@ function tick() {
 
   render(t);
 
-  // Fin si terminamos las notas Y ya pasó el último sustainEnd o el audio
+  // Fin por audio agotado — guard explícito por duración (análogo a SM,
+  // game.js:881). audioElapsed = tiempo real desde audioSource.start; cuando
+  // supera la duración del buffer + 1 s de cola, cerramos la partida aunque
+  // el chart todavía tenga sustains o notas no juzgadas pendientes. El
+  // src.onended también dispara finishGame con 500 ms de cola, pero este
+  // guard cubre los casos en que onended no llega (p. ej. AudioContext
+  // suspendido por la pestaña en background, restart manual del audio).
+  const audioElapsed = t + NOTE_DELAY_SEC;
+  if (song && song.audioBuffer && audioElapsed > song.audioBuffer.duration + 1) {
+    finishGame();
+    return;
+  }
+  // Fin natural del chart: todas las notas juzgadas y la última sustain
+  // cerrada + 1 s. Cubre el caso opuesto al anterior — chart más corto que
+  // el audio (outros instrumentales largos) y el usuario ha jugado todo.
   const lastNote = game.notes[game.notes.length - 1];
   if (lastNote && t > lastNote.sustainEnd + 1.0 && game.notes.every(n => n.judged)) {
     finishGame();
@@ -3229,7 +3266,12 @@ function togglePause() {
   const ctx = window.AudioPipeline.ensureAudioContext();
   if (isPaused) {
     pausedAt = ctx.currentTime;
-    if (game.audioSource) try { game.audioSource.stop(); } catch(e){}
+    // Anular onended ANTES de stop(): stop() lo dispara y, sin esta línea,
+    // pausar cerraría la partida (setTimeout(finishGame, 500)).
+    if (game.audioSource) {
+      game.audioSource.onended = null;
+      try { game.audioSource.stop(); } catch(e){}
+    }
     // Focus en "Reanudar" para que ENTER lo dispare (atajo natural). El
     // atributo HTML autofocus no funciona en elementos revelados via toggle
     // de clase — hay que forzarlo manualmente al mostrar el overlay.
@@ -3255,6 +3297,10 @@ function togglePause() {
     } else {
       game.audioSource.start(ctx.currentTime - audioRealOffset);
     }
+    // Re-adjuntar onended al nuevo BufferSourceNode — la pausa lo anuló en
+    // el anterior, y sin esta línea el fin natural del audio tras una pausa
+    // dejaría el highway sin cerrarse.
+    attachAudioEndedHandler(game.audioSource);
   }
 }
 function resumeGame() { if (isPaused) togglePause(); }
@@ -3290,7 +3336,11 @@ function restartSong() {
 }
 
 function quitGame() {
-  if (game && game.audioSource) try { game.audioSource.stop(); } catch(e){}
+  // Anular onended ANTES de stop(): salir al menú no debe agendar finishGame.
+  if (game && game.audioSource) {
+    game.audioSource.onended = null;
+    try { game.audioSource.stop(); } catch(e){}
+  }
   if (rafId) cancelAnimationFrame(rafId);
   game = null;
   // Oculta combo meter si quedó visible al salir (pausa/quit antes del fin
@@ -3962,7 +4012,17 @@ function render(t) {
 // ============================================================================
 async function finishGame() {
   if (!game) return;
-  if (game.audioSource) try { game.audioSource.stop(); } catch(e){}
+  if (game.finished) return;
+  game.finished = true;
+  // Anular onended ANTES de stop(): stop() también dispara onended y, sin
+  // esta anulación, agendaríamos un segundo setTimeout(finishGame) que
+  // entraría con game.finished=true (no-op gracias al guard) o con game=null
+  // (no-op por el guard inicial). El no-op es seguro, pero anular en origen
+  // es más limpio. Mismo patrón que stopGame() de SM (game.js:568-575).
+  if (game.audioSource) {
+    game.audioSource.onended = null;
+    try { game.audioSource.stop(); } catch(e){}
+  }
   if (rafId) cancelAnimationFrame(rafId);
 
   const total = game.notes.length;
