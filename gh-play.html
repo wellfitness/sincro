@@ -4590,6 +4590,7 @@ let _visibleManageIds = [];
 // inputs solo llaman a `renderManageListFromCache()`.
 let _ghManageCache = [];
 let _ghManageStorageInfo = null;
+let _ghManageRunsBySong = new Map();
 
 // `navigator.storage.estimate()` agrega IndexedDB + localStorage + caches.
 // Duplicado mínimo del helper que vive en library.js para no acoplar este
@@ -4608,9 +4609,20 @@ async function getGHStorageInfo() {
 async function refreshManageList() {
   const el = document.getElementById('manageList');
   if (!el || !window.GHLibrary) return;
-  const [entries, info] = await Promise.all([window.GHLibrary.all(), getGHStorageInfo()]);
+  const [entries, info, allRuns] = await Promise.all([
+    window.GHLibrary.all(),
+    getGHStorageInfo(),
+    dbRunsAll(),
+  ]);
   // Sort UNA vez aquí; el render solo filtra y pinta.
   entries.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+  // Mapa songId → runs[], igual que en refreshLibraryList. Permite mostrar
+  // el chip de líder en la columna derecha del título sin N+1 transacciones.
+  _ghManageRunsBySong = new Map();
+  for (const r of filterRunsByGame(allRuns, 'gh')) {
+    if (!_ghManageRunsBySong.has(r.songId)) _ghManageRunsBySong.set(r.songId, []);
+    _ghManageRunsBySong.get(r.songId).push(r);
+  }
   _ghManageCache = entries;
   _ghManageStorageInfo = info;
   renderManageListFromCache();
@@ -4665,6 +4677,22 @@ function renderManageListFromCache() {
   for (const e of entries) {
     const dur = e.duration ? `${Math.floor(e.duration/60)}:${('0'+Math.floor(e.duration%60)).slice(-2)}` : '?';
     const isMarked = selectedManageIds.has(e.id);
+    // Líder de la canción en columna a la derecha del título: 👑 jugador
+    // · diff · grade · score. Paridad con `library.js` de SM.
+    const songRuns = _ghManageRunsBySong.get(e.id) || [];
+    let championHtml;
+    if (songRuns.length > 0) {
+      const champ = rankRuns(songRuns)[0];
+      const tip = `${songRuns.length} partida${songRuns.length === 1 ? '' : 's'} guardada${songRuns.length === 1 ? '' : 's'}`;
+      championHtml = `<div class="lib-row-champion-col" title="${escHtml(tip)}">
+        👑 <strong>${escHtml(champ.playerName || 'Anónimo')}</strong>
+        <span class="champ-sep">·</span><span class="champ-diff">${escHtml(ghDiffLabel(champ.chartKey))}</span>
+        <span class="champ-sep">·</span><span class="champ-grade g-${(champ.grade || '').toLowerCase()}">${escHtml(champ.grade || '')}</span>
+        <span class="champ-score">${(champ.score || 0).toLocaleString()}</span>
+      </div>`;
+    } else {
+      championHtml = `<div class="lib-row-champion-col empty">— Sin partidas</div>`;
+    }
     html += `<div class="lib-row${isMarked ? ' in-playlist' : ''}"
       onmouseenter="scheduleGHAudioPreview(${e.id})"
       onmouseleave="cancelGHAudioPreview()">
@@ -4675,6 +4703,7 @@ function renderManageListFromCache() {
         <div style="color:#fff;font-weight:600">${escHtml(e.title || 'Sin título')}${audioFlagBadge(e.audioFlags)}</div>
         <div style="color:var(--gris-400);font-size:0.85em">${escHtml(e.artist || 'Unknown')} · ${e.bpm ? e.bpm.toFixed(1) + ' BPM' : ''} · ${dur} · ${e.totalNotes || 0} notas</div>
       </div>
+      ${championHtml}
       <div style="display:flex;gap:6px">
         <button class="action-btn secondary" style="padding:8px 14px;font-size:0.95em;background:linear-gradient(90deg,var(--color-error),#9f1239)" onclick="deleteFromManage(${e.id})" title="Eliminar este chart">🗑 Eliminar</button>
       </div>
