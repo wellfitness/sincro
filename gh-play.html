@@ -1559,6 +1559,55 @@ const SUSTAIN_POINTS_PER_SEC = 25; // mientras se mantiene el sustain
 const AXIS_STRUM_FIRE   = 0.85;
 const AXIS_NEUTRAL_ZONE = 0.30;
 
+// ============================================================================
+// DIAG TEMPORAL — instrumentación de volumen (2026-05-15).
+// Inserta un AnalyserNode passthrough entre src y destination, loguea RMS +
+// peak + rango rolling 5s cada 1s a la consola. Si Δ > 6 dB marca ⚠️INESTABLE.
+// El AnalyserNode no modifica la señal (es passthrough). Quitar tras detectar
+// la causa del "volumen variable durante playback".
+// ============================================================================
+function _instrumentAudio(src, ctx, label) {
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  src.connect(analyser);
+  analyser.connect(ctx.destination);
+  const buf = new Float32Array(analyser.fftSize);
+  const window5s = [];
+  let logCounter = 0;
+  const interval = setInterval(() => {
+    analyser.getFloatTimeDomainData(buf);
+    let sumSq = 0, peak = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = buf[i];
+      sumSq += v * v;
+      const a = v < 0 ? -v : v;
+      if (a > peak) peak = a;
+    }
+    const rms = Math.sqrt(sumSq / buf.length);
+    const now = ctx.currentTime;
+    window5s.push({ t: now, rms });
+    while (window5s.length && now - window5s[0].t > 5) window5s.shift();
+    let minR = window5s[0].rms, maxR = window5s[0].rms;
+    for (const x of window5s) { if (x.rms < minR) minR = x.rms; if (x.rms > maxR) maxR = x.rms; }
+    const toDB = v => 20 * Math.log10(Math.max(v, 1e-9));
+    const delta = toDB(maxR) - toDB(minR);
+    if (++logCounter % 2 === 0) {
+      const alert = delta > 6 ? '  ⚠️INESTABLE' : '';
+      console.log(
+        `[SINCRO-AUDIO] ${label} t=${now.toFixed(1)}s rms=${toDB(rms).toFixed(1)}dB peak=${toDB(peak).toFixed(1)}dB ` +
+        `roll5s ${toDB(minR).toFixed(1)} → ${toDB(maxR).toFixed(1)} (Δ=${delta.toFixed(1)}dB)${alert}`
+      );
+    }
+  }, 500);
+  return {
+    cleanup() {
+      clearInterval(interval);
+      try { src.disconnect(analyser); } catch(e){}
+      try { analyser.disconnect(ctx.destination); } catch(e){}
+    }
+  };
+}
+
 // ---- Estado global ----
 let song = null;        // { meta, syncTrack, charts: { ExpertSingle, ... }, audioBuffer, audioBlob }
 let game = null;        // estado del juego en curso (creado al startGame)
@@ -3029,7 +3078,7 @@ function applyKeyboardFallback() {
 // ============================================================================
 //                          GAME LOOP
 // ============================================================================
-function startGame(diffOverride) {
+async function startGame(diffOverride) {
   if (!song) return;
   // Parar el preview-loop al arrancar partida real para no tener dos rAF
   // queues activos simultáneamente.
@@ -3132,10 +3181,20 @@ function startGame(diffOverride) {
 
   // Start audio
   const ctx = window.AudioPipeline.ensureAudioContext();
-  if (ctx.state === 'suspended') ctx.resume();
+  // AWAIT explícito al resume — matches SM (`ensureAudioCtxRunning` en
+  // core.js:48). Fire-and-forget hacía que capturáramos `audioRealStartAt =
+  // ctx.currentTime` con el contexto aún suspended (frozen time); el audio
+  // arrancaba decenas de ms después cuando el resume completaba, mientras
+  // el reloj de juego avanzaba normal → desync chico al inicio (notas
+  // ligeramente adelantadas vs. música). Caso reportado: una canción
+  // arrancó "tarde" porque el resume tardó más de lo habitual.
+  if (ctx.state === 'suspended') {
+    try { await ctx.resume(); } catch (e) { /* puede fallar sin gesto */ }
+  }
   game.audioSource = ctx.createBufferSource();
   game.audioSource.buffer = song.audioBuffer;
-  game.audioSource.connect(ctx.destination);
+  // DIAG TEMPORAL — instrumenta el output (analyser passthrough + log RMS).
+  game._diag = _instrumentAudio(game.audioSource, ctx, 'GH');
   // La música arranca YA al pulsar Iniciar y el countdown 5→1 corre EN
   // PARALELO durante NOTE_DELAY_SEC=5s. La primera nota llega al receptor
   // justo cuando el countdown desaparece. Antes: countdown silencioso 5s +
@@ -3272,6 +3331,8 @@ function togglePause() {
       game.audioSource.onended = null;
       try { game.audioSource.stop(); } catch(e){}
     }
+    // DIAG TEMPORAL — parar log durante la pausa (silencio = ruido en el log).
+    if (game._diag) { game._diag.cleanup(); game._diag = null; }
     // Focus en "Reanudar" para que ENTER lo dispare (atajo natural). El
     // atributo HTML autofocus no funciona en elementos revelados via toggle
     // de clase — hay que forzarlo manualmente al mostrar el overlay.
@@ -3283,7 +3344,8 @@ function togglePause() {
     game.audioStartTime += pauseDuration;
     game.audioSource = ctx.createBufferSource();
     game.audioSource.buffer = song.audioBuffer;
-    game.audioSource.connect(ctx.destination);
+    // DIAG TEMPORAL — reinstrumentar el nuevo source tras la pausa.
+    game._diag = _instrumentAudio(game.audioSource, ctx, 'GH');
     // El audio arranca NOTE_DELAY_SEC ANTES que el reloj de juego (game.audio
     // StartTime es el cero del gameClock, no del audio). Para reanudar:
     //   - audioRealOffset = dónde está la canción ahora en segundos absolutos
@@ -3320,6 +3382,8 @@ function restartSong() {
     game.audioSource.onended = null;
     try { game.audioSource.stop(); } catch(e) {}
   }
+  // DIAG TEMPORAL — parar el log periódico al reiniciar.
+  if (game._diag) { game._diag.cleanup(); game._diag = null; }
   if (rafId) cancelAnimationFrame(rafId);
   game = null;
   // Limpiar UI residual: combo meter, countdown, pause overlay. Mismo
@@ -3341,6 +3405,8 @@ function quitGame() {
     game.audioSource.onended = null;
     try { game.audioSource.stop(); } catch(e){}
   }
+  // DIAG TEMPORAL — parar el log periódico al salir.
+  if (game && game._diag) { game._diag.cleanup(); game._diag = null; }
   if (rafId) cancelAnimationFrame(rafId);
   game = null;
   // Oculta combo meter si quedó visible al salir (pausa/quit antes del fin
@@ -4023,6 +4089,8 @@ async function finishGame() {
     game.audioSource.onended = null;
     try { game.audioSource.stop(); } catch(e){}
   }
+  // DIAG TEMPORAL — parar el log periódico al fin natural.
+  if (game._diag) { game._diag.cleanup(); game._diag = null; }
   if (rafId) cancelAnimationFrame(rafId);
 
   const total = game.notes.length;
