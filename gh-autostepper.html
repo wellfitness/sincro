@@ -1329,10 +1329,31 @@ async function processOne(q, opts) {
   // el audio. effectiveDuration manda en TODO el resto del pipeline para que
   // song.ini, density y ZIP queden coherentes con el WAV cropeado.
   const maxDurationSec = activeMaxDurationSec;
-  const effectiveDuration = (maxDurationSec > 0 && originalDuration > maxDurationSec)
+  let effectiveDuration = (maxDurationSec > 0 && originalDuration > maxDurationSec)
     ? maxDurationSec : originalDuration;
   if (effectiveDuration < originalDuration) {
     log(`  Duración recortada: ${effectiveDuration.toFixed(1)}s / ${originalDuration.toFixed(1)}s`);
+  }
+
+  // 3.c. Auto-trim de outros sin onsets: si el último onset detectado queda
+  // muy lejos del fin del audio (outros instrumentales, fade-outs, aplausos,
+  // ambientes), recortamos para que MÚSICA Y NOTAS terminen a la vez. Sin
+  // esto la usuaria oye 10-30s de música sin notas al final — fix paralelo
+  // al de autostepper.html (SM) introducido el 2026-05-16. Guard de 8s
+  // evita activarlo en outros normales con algún hit suelto; tail de 2s
+  // deja respirar la última nota antes del fade-out de 1.5s que añade
+  // audioBufferToWav. Operamos sobre peakFrames porque onsetTicks aún no
+  // está construido.
+  const AUTO_TRIM_GUARD_SEC = 8;
+  const AUTO_TRIM_TAIL_SEC = 2;
+  if (peakFrames.length) {
+    let lastOnsetSec = peakFrames[peakFrames.length - 1] / framesPerSec;
+    if (lastOnsetSec > effectiveDuration) lastOnsetSec = effectiveDuration;
+    if (effectiveDuration - lastOnsetSec > AUTO_TRIM_GUARD_SEC) {
+      const trimmed = Math.min(effectiveDuration, lastOnsetSec + AUTO_TRIM_TAIL_SEC);
+      log(`  ✂️ Auto-trim outro: ${effectiveDuration.toFixed(1)}s → ${trimmed.toFixed(1)}s (último onset @ ${lastOnsetSec.toFixed(1)}s)`);
+      effectiveDuration = trimmed;
+    }
   }
 
   // 4. Convertir onsets frames → ticks usando el tick timeline (BPM variable).

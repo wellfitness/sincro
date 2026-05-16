@@ -1557,10 +1557,30 @@ async function analyzeOne(q) {
   // de #durationGrid (data-duration en segundos, "0" = completa).
   const activeDurEl = document.querySelector('#durationGrid .preset.selected');
   const maxDurationSec = activeDurEl ? (parseFloat(activeDurEl.dataset.duration) || 0) : 0;
-  const effectiveDuration = (maxDurationSec > 0 && originalDuration > maxDurationSec)
+  let effectiveDuration = (maxDurationSec > 0 && originalDuration > maxDurationSec)
     ? maxDurationSec : originalDuration;
   if (effectiveDuration < originalDuration) {
     onsetTimesSec = onsetTimesSec.filter(t => t < effectiveDuration);
+  }
+
+  // Auto-trim de outros sin onsets: si el último onset detectado queda muy
+  // lejos del fin del audio (outros instrumentales, fade-outs, aplausos,
+  // ambientes), recortamos para que MÚSICA Y FLECHAS terminen a la vez.
+  // Sin esto la usuaria oye 10-30s de música sobre compases vacíos al final
+  // — fix para la queja "las flechas acaban antes que la música" (2026-05-16).
+  // Aplica ENCIMA del cap manual (solo reduce, nunca extiende). Guard de 8s
+  // evita activarlo en outros normales con un par de hits sueltos al final;
+  // tail de 2s deja respirar la última flecha antes del fade-out de 1.5s
+  // que añade audioBufferToWav.
+  const AUTO_TRIM_GUARD_SEC = 8;
+  const AUTO_TRIM_TAIL_SEC = 2;
+  if (onsetTimesSec.length) {
+    const lastOnsetSec = onsetTimesSec[onsetTimesSec.length - 1];
+    if (effectiveDuration - lastOnsetSec > AUTO_TRIM_GUARD_SEC) {
+      const trimmed = Math.min(effectiveDuration, lastOnsetSec + AUTO_TRIM_TAIL_SEC);
+      log(`  ✂️ Auto-trim outro: ${effectiveDuration.toFixed(1)}s → ${trimmed.toFixed(1)}s (último onset @ ${lastOnsetSec.toFixed(1)}s)`);
+      effectiveDuration = trimmed;
+    }
   }
 
   // Beats list

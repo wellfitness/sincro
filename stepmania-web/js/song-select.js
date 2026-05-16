@@ -794,7 +794,7 @@ async function startSongPreview(songId) {
   // La pantalla "Mis canciones" carga sin pasar por renderSongList, así que
   // _allSongsCache puede estar vacío. Fallback a IndexedDB sin afectar el caché
   // de la lista (evita efectos secundarios en el orden de renderizado).
-  if (!song) song = await dbGet('songs', songId);
+  if (!song) song = await dbGet(songId);
   if (!song || !song.audioBlob) return;
   stopSongPreview();
   _previewCurrentId = songId;

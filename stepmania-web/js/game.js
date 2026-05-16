@@ -1487,8 +1487,13 @@ function render(audioTime) {
     }
   }
 
-  // Progress bar
-  const pct = Math.min(1, audioTime / gameState.duration);
+  // Progress bar — la barra debe medir el AUDIO real (0..duration), no el
+  // reloj de juego. audioTime arranca en -LEAD_IN_SEC=-5s (countdown) y al
+  // fin natural del audio queda en duration-5, así que sin compensar la
+  // barra solo llega a (duration-5)/duration (91-97% según largo). Sumamos
+  // LEAD_IN_SEC para que `audio elapsed` = 0 en el primer frame del
+  // countdown y = duration cuando suena el último sample.
+  const pct = Math.min(1, Math.max(0, (audioTime + LEAD_IN_SEC) / gameState.duration));
   ctx2d.fillStyle = 'rgba(255,255,255,0.1)';
   ctx2d.fillRect(0, 0, W, 4);
   const grad2 = ctx2d.createLinearGradient(0,0,W,0);
