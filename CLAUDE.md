@@ -112,6 +112,23 @@ Se ejecuta automáticamente al decodificar el audio en ambos autosteppers (`auto
 
 Helper `audioFlagBadge(audioFlags)` en `core.js` — tooltip indica timestamp + magnitud. Las canciones anteriores a este deploy no se reanalizan (campo `audioFlags` ausente = sin badge).
 
+### Fade-out por fin de chart en runtime (2026-05-19)
+
+Cuando el WAV se alarga más allá de la última nota de la dificultad activa (típico Easy/Medium con outros instrumentales: el filtrado por dificultad elimina onsets de baja prioridad rítmica y la última nota puede quedar 15-25 s antes que el último onset detectado, que es lo que mira el auto-trim del autostepper), el motor arranca un fade-out de **1.2 s** sobre un GainNode insertado en la cadena `src → gain → analyser → destination` y cierra la partida.
+
+Constantes (SM `game.js` `gameLoop`, GH `gh-play.html` `tick`):
+- `GRACE_AFTER_LAST_NOTE_SEC = 5` — margen aceptable de "música sin flechas". Compromiso entre dejar respirar la última nota y no aburrir.
+- `FADE_SEC = 1.2` — duración del `linearRampToValueAtTime` sobre `audioGain.gain`.
+- Guard: solo se activa si `audioDuration - lastNoteSec > GRACE + FADE`. Si el audio ya estaba bien recortado (auto-trim del autostepper hizo su trabajo en Challenge), el flujo normal (`audioTime > duration + 1` o `src.onended`) cierra la partida.
+
+`lastNoteSec` se calcula al construir gameState:
+- SM: `max(notes, n => n.endTime ?? n.time)` (incluye sustain de holds/rolls).
+- GH: `max(notes, n => n.sustainEnd)` (ya incluye sustain por construcción).
+
+`togglePause()` ignora pausa si `fadingOut === true` (la partida se cierra en pocos segundos y reanudar re-arrancaría audio con gain a 0). Tras pausa, `togglePause` reasigna `audioGain` desde la nueva instrumentación.
+
+Importante: este fix funciona sobre canciones ya en biblioteca (no requiere regenerar) porque actúa en runtime sobre el chart filtrado de la dificultad activa, no sobre el WAV exportado. Complementa el `auto-trim outro` del autostepper (que sigue siendo útil para reducir tamaño de archivo cuando los onsets crudos del fin son escasos).
+
 ---
 
 ## Constantes canónicas (resumen)

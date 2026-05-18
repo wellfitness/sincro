@@ -1567,9 +1567,15 @@ const AXIS_NEUTRAL_ZONE = 0.30;
 // la causa del "volumen variable durante playback".
 // ============================================================================
 function _instrumentAudio(src, ctx, label) {
+  // Cadena: src → gain → analyser → destination. Gain intermedio para fadear
+  // el audio cuando la dificultad activa se queda sin notas pero el WAV
+  // sigue (paridad con stepmania-web/js/game.js — fix de "música sin notas").
+  const gain = ctx.createGain();
+  gain.gain.value = 1;
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 2048;
-  src.connect(analyser);
+  src.connect(gain);
+  gain.connect(analyser);
   analyser.connect(ctx.destination);
   const buf = new Float32Array(analyser.fftSize);
   const window5s = [];
@@ -1600,9 +1606,11 @@ function _instrumentAudio(src, ctx, label) {
     }
   }, 500);
   return {
+    gain,
     cleanup() {
       clearInterval(interval);
-      try { src.disconnect(analyser); } catch(e){}
+      try { src.disconnect(gain); } catch(e){}
+      try { gain.disconnect(analyser); } catch(e){}
       try { analyser.disconnect(ctx.destination); } catch(e){}
     }
   };
@@ -3159,6 +3167,15 @@ async function startGame(diffOverride) {
     sustainBroken: false  // se soltaron los frets durante el sustain → no más puntos
   }));
 
+  // Último instante con "actividad" del chart de la dificultad activa:
+  // usamos sustainEnd (incluye sustain de la última nota). Lo emplea tick()
+  // para fadear el audio cuando el WAV se extiende más allá de la última
+  // nota — mismo patrón que SM (game.js) para outros largos.
+  let lastNoteSec = 0;
+  for (const n of runtimeNotes) {
+    if (n.sustainEnd > lastNoteSec) lastNoteSec = n.sustainEnd;
+  }
+
   game = {
     notes: runtimeNotes,
     diff,
@@ -3181,6 +3198,9 @@ async function startGame(diffOverride) {
     spPhrases: masterNotes.spPhrases || [],
     audioStartTime: 0,
     audioSource: null,
+    audioGain: null, // se asigna en startGame y se reasigna en togglePause
+    lastNoteSec, // segundos absolutos del último evento del chart (incluye sustain)
+    fadingOut: false, // se activa al arrancar el fade final
     nextNoteIdx: 0,
     activeSustains: []   // notas con sustain activo (frets correctos siendo mantenidos)
   };
@@ -3228,6 +3248,7 @@ async function startGame(diffOverride) {
   game.audioSource.buffer = song.audioBuffer;
   // DIAG TEMPORAL — instrumenta el output (analyser passthrough + log RMS).
   game._diag = _instrumentAudio(game.audioSource, ctx, 'GH');
+  game.audioGain = game._diag.gain;
   // La música arranca YA al pulsar Iniciar y el countdown 5→1 corre EN
   // PARALELO durante NOTE_DELAY_SEC=5s. La primera nota llega al receptor
   // justo cuando el countdown desaparece. Antes: countdown silencioso 5s +
@@ -3340,6 +3361,33 @@ function tick() {
     finishGame();
     return;
   }
+  // Fade-out por fin de chart de la dificultad activa: si el chart ya no
+  // tiene más notas pero el WAV se alarga (outros instrumentales), arrancamos
+  // un fade de 1.2 s sobre el GainNode y cerramos. Distinto del bloque
+  // "todas judged" siguiente: aquí no exigimos que la usuaria haya tocado
+  // todas las notas — si se saltó alguna o falló y ya no hay nada más que
+  // jugar, igual cerramos. GRACE_AFTER_LAST_NOTE_SEC = 5 s es lo aceptado.
+  if (!game.fadingOut && game.audioGain && song && song.audioBuffer) {
+    const GRACE_AFTER_LAST_NOTE_SEC = 5;
+    const FADE_SEC = 1.2;
+    const margin = song.audioBuffer.duration - (game.lastNoteSec + NOTE_DELAY_SEC);
+    if (margin > GRACE_AFTER_LAST_NOTE_SEC + FADE_SEC
+        && t > game.lastNoteSec + GRACE_AFTER_LAST_NOTE_SEC) {
+      game.fadingOut = true;
+      const ctxNow = ctx.currentTime;
+      try {
+        game.audioGain.gain.cancelScheduledValues(ctxNow);
+        game.audioGain.gain.setValueAtTime(game.audioGain.gain.value, ctxNow);
+        game.audioGain.gain.linearRampToValueAtTime(0.0001, ctxNow + FADE_SEC);
+      } catch (e) { /* ignorar — finishGame igual cierra */ }
+      if (game.audioSource) game.audioSource.onended = null;
+      setTimeout(() => {
+        if (game && !game.finished) finishGame();
+      }, Math.round(FADE_SEC * 1000) + 50);
+      rafId = requestAnimationFrame(tick);
+      return;
+    }
+  }
   // Fin natural del chart: todas las notas juzgadas y la última sustain
   // cerrada + 1 s. Cubre el caso opuesto al anterior — chart más corto que
   // el audio (outros instrumentales largos) y el usuario ha jugado todo.
@@ -3353,6 +3401,10 @@ function tick() {
 
 function togglePause() {
   if (!game) return;
+  // Si ya arrancó el fade-out final (chart sin más notas), ignorar pausa:
+  // la partida se cierra en pocos segundos y reanudar re-arrancaría el
+  // audio con gain a 0. Patrón equivalente al de SM game.js.
+  if (game.fadingOut) return;
   isPaused = !isPaused;
   document.getElementById('pauseOverlay').classList.toggle('show', isPaused);
   const ctx = window.AudioPipeline.ensureAudioContext();
@@ -3379,6 +3431,7 @@ function togglePause() {
     game.audioSource.buffer = song.audioBuffer;
     // DIAG TEMPORAL — reinstrumentar el nuevo source tras la pausa.
     game._diag = _instrumentAudio(game.audioSource, ctx, 'GH');
+    game.audioGain = game._diag.gain;
     // El audio arranca NOTE_DELAY_SEC ANTES que el reloj de juego (game.audio
     // StartTime es el cero del gameClock, no del audio). Para reanudar:
     //   - audioRealOffset = dónde está la canción ahora en segundos absolutos

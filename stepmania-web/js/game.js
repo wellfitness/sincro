@@ -13,9 +13,18 @@
 // la causa del "volumen variable durante playback".
 // ============================================================================
 function _instrumentAudio(src, ctx, label) {
+  // Cadena: src → gain → analyser → destination. El gain sirve para fadear
+  // el audio al final de la dificultad activa (ver applyEndOfChartFade en
+  // gameLoop). Sin gain intermedio, el motor solo podría cortar abrupto o
+  // esperar al fin natural del audio — feo si el chart filtrado por
+  // dificultad acaba 15-25 s antes que el WAV (típico Easy/Medium en
+  // canciones con outro largo).
+  const gain = ctx.createGain();
+  gain.gain.value = 1;
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 2048;
-  src.connect(analyser);
+  src.connect(gain);
+  gain.connect(analyser);
   analyser.connect(ctx.destination);
   const buf = new Float32Array(analyser.fftSize);
   const window5s = [];
@@ -46,9 +55,11 @@ function _instrumentAudio(src, ctx, label) {
     }
   }, 500);
   return {
+    gain,
     cleanup() {
       clearInterval(interval);
-      try { src.disconnect(analyser); } catch(e){}
+      try { src.disconnect(gain); } catch(e){}
+      try { gain.disconnect(analyser); } catch(e){}
       try { analyser.disconnect(ctx.destination); } catch(e){}
     }
   };
@@ -510,6 +521,19 @@ async function startGame() {
   }
   notes.sort((a,b) => a.time - b.time);
 
+  // Último instante en que hay "actividad" del chart: para holds/rolls
+  // contamos el final del sustain, para el resto el time de la cabeza.
+  // Lo usamos en gameLoop para fadear el audio cuando la dificultad activa
+  // ya no tiene más notas y el WAV se alarga con outro instrumental — fix
+  // para "música sin flechas" reportado en Medium (el filtrado por
+  // dificultad puede dejar la última nota 15-25 s antes del último onset
+  // detectado, que es lo que mira el auto-trim del autostepper).
+  let lastNoteSec = 0;
+  for (const n of notes) {
+    const t = (n.endTime !== null && n.endTime !== undefined) ? n.endTime : n.time;
+    if (t > lastNoteSec) lastNoteSec = t;
+  }
+
   // Compute beat times for receptor pulse
   const beatTimes = [];
   const totalBeats = Math.ceil((audioBuffer.duration + 2) * tEngine.bpmAtBeat(0) / 60);
@@ -529,6 +553,7 @@ async function startGame() {
   const src = audioCtx.createBufferSource();
   src.buffer = audioBuffer;
   // DIAG TEMPORAL — instrumenta el output (analyser passthrough + log RMS).
+  // Devuelve también el GainNode insertado en la cadena para el fade final.
   const _diag = _instrumentAudio(src, audioCtx, 'SM');
   // LEAD_IN_SEC declarado a nivel módulo: togglePause() necesita la misma
   // constante al recrear el AudioBufferSourceNode tras una pausa.
@@ -540,6 +565,9 @@ async function startGame() {
   gameState = {
     notes, audioBuffer, src,
     _diag, // DIAG TEMPORAL
+    audioGain: _diag.gain, // para fade-out cuando la dificultad activa se queda sin notas
+    lastNoteSec, // segundos absolutos del último evento del chart (incluye sustain)
+    fadingOut: false, // se activa cuando arrancamos el fade final
     startTime: startAt,
     bpm: selectedSong.bpm,
     timingEngine: tEngine,
@@ -663,6 +691,10 @@ function stopGame() {
 // reanudar. Así el reloj efectivo del chart "no sintió" la pausa.
 function togglePause() {
   if (!gameState || gameState.finished) return;
+  // Si ya arrancó el fade-out final (chart sin más notas), ignorar pausa: la
+  // partida se está cerrando en pocos segundos y un resume re-arrancaría
+  // audio con gain a 0. La usuaria no nota nada — el menú no se abrió.
+  if (gameState.fadingOut) return;
   isPaused = !isPaused;
   const overlay = document.getElementById('pauseOverlay');
   if (overlay) overlay.classList.toggle('show', isPaused);
@@ -695,6 +727,7 @@ function togglePause() {
     // DIAG TEMPORAL — reinstrumentar el nuevo source.
     if (gameState._diag) gameState._diag.cleanup();
     gameState._diag = _instrumentAudio(newSrc, audioCtx, 'SM');
+    gameState.audioGain = gameState._diag.gain;
     // Nuevo onended con guard de identidad: si la usuaria pausa de nuevo
     // antes de que termine el audio, el viejo onended (este) no debe disparar
     // endGame sobre el nuevo src de la siguiente reanudación.
@@ -934,6 +967,40 @@ function gameLoop() {
   updateComboMeter(gameState.combo);
 
   render(audioTime);
+
+  // Fade-out por fin de chart de la dificultad activa: si el chart filtrado
+  // ya no tiene más notas (Easy/Medium suelen acabar 15-25 s antes que el
+  // WAV en outros largos), arrancamos un fade de 1.2 s sobre el GainNode
+  // del audio y cerramos. GRACE_AFTER_LAST_NOTE_SEC es el margen aceptable
+  // de "música sin flechas" — 5 s respeta el outro corto típico sin que la
+  // usuaria perciba canción colgada.
+  // Guard: solo activar si el chart termina materialmente antes que el WAV
+  // (margen > GRACE). Si la canción está ya bien recortada, el flujo normal
+  // (audioTime > duration+1 o src.onended) cierra la partida.
+  if (!gameState.fadingOut && gameState.audioGain && gameState.lastNoteSec) {
+    const GRACE_AFTER_LAST_NOTE_SEC = 5;
+    const FADE_SEC = 1.2;
+    const margin = gameState.duration - gameState.lastNoteSec;
+    if (margin > GRACE_AFTER_LAST_NOTE_SEC + FADE_SEC
+        && audioTime > gameState.lastNoteSec + GRACE_AFTER_LAST_NOTE_SEC) {
+      gameState.fadingOut = true;
+      const now = audioCtx.currentTime;
+      try {
+        gameState.audioGain.gain.cancelScheduledValues(now);
+        gameState.audioGain.gain.setValueAtTime(gameState.audioGain.gain.value, now);
+        gameState.audioGain.gain.linearRampToValueAtTime(0.0001, now + FADE_SEC);
+      } catch (e) { /* ignorar — endGame igual cierra */ }
+      // Anular onended ANTES de programar stop: si saltase el onended del
+      // src durante el fade (improbable, fin de buffer), agendaría endGame
+      // dos veces (race). Patrón canónico igual que stopGame().
+      if (gameState.src) gameState.src.onended = null;
+      setTimeout(() => {
+        if (gameState && !gameState.finished) endGame();
+      }, Math.round(FADE_SEC * 1000) + 50);
+      requestAnimationFrame(gameLoop);
+      return;
+    }
+  }
 
   if (audioTime > gameState.duration + 1) { endGame(); return; }
   requestAnimationFrame(gameLoop);
