@@ -22,6 +22,18 @@ function audioFlagBadge(audioFlags) {
   const tip = `Salto de volumen ${sign}${audioFlags.deltaDb.toFixed(1)} dB a ${formatTime(audioFlags.tSec || 0)}`;
   return ` <span class="audio-flag-badge" title="${escapeHtml(tip)}" style="cursor:help;font-size:0.9em" aria-label="${escapeHtml(tip)}">⚠️</span>`;
 }
+// Comparador alfabético por (título, artista) usado en las bibliotecas de
+// gestión "Mis canciones" (SM library.js y GH refreshManageList). El propósito
+// es que las canciones repetidas queden contiguas y el usuario las detecte de
+// un vistazo. Usa `localeCompare` con sensitivity:'base' para ignorar acentos
+// y mayúsculas ("Café" y "cafe" juntos), y numeric:true para que "Track 2"
+// vaya antes que "Track 10". Locale 'es' por la audiencia del proyecto.
+function compareByTitleArtist(a, b) {
+  const opts = { sensitivity: 'base', numeric: true };
+  const t = (a.title || '').localeCompare(b.title || '', 'es', opts);
+  if (t !== 0) return t;
+  return (a.artist || '').localeCompare(b.artist || '', 'es', opts);
+}
 function safeFn(s) { return String(s).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim() || 'song'; }
 function getExt(n) { const m = n.match(/\.[^.]+$/); return m ? m[0] : '.mp3'; }
 function yieldUI() { return new Promise(r => setTimeout(r, 0)); }

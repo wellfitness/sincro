@@ -2851,6 +2851,18 @@ function audioFlagBadge(audioFlags) {
   const tip = `Salto de volumen ${sign}${audioFlags.deltaDb.toFixed(1)} dB a ${mm}:${ss}`;
   return ` <span class="audio-flag-badge" title="${escHtml(tip)}" style="cursor:help;font-size:0.9em" aria-label="${escHtml(tip)}">⚠️</span>`;
 }
+// Helper local — gh-play.html es self-contained (NO carga `core.js`), así que
+// el `compareByTitleArtist` global (`stepmania-web/js/core.js`) no está
+// disponible aquí. Comparador alfabético (título → artista) usado por
+// refreshManageList para que canciones repetidas queden contiguas en "Mis
+// canciones". Locale 'es', sensitivity:'base' ignora acentos y mayúsculas,
+// numeric:true ordena "Track 2" antes que "Track 10".
+function compareByTitleArtist(a, b) {
+  const opts = { sensitivity: 'base', numeric: true };
+  const t = (a.title || '').localeCompare(b.title || '', 'es', opts);
+  if (t !== 0) return t;
+  return (a.artist || '').localeCompare(b.artist || '', 'es', opts);
+}
 
 // ---- Drop zone handlers ----
 ['zip', 'chart', 'audio'].forEach(t => {
@@ -4623,8 +4635,10 @@ async function refreshManageList() {
     getGHStorageInfo(),
     dbRunsAll(),
   ]);
-  // Sort UNA vez aquí; el render solo filtra y pinta.
-  entries.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+  // Sort UNA vez aquí (alfabético por título → artista); el render solo
+  // filtra y pinta. Orden alfabético para que las canciones repetidas queden
+  // contiguas y se detecten a simple vista. Ver compareByTitleArtist en core.
+  entries.sort(compareByTitleArtist);
   // Mapa songId → runs[], igual que en refreshLibraryList. Permite mostrar
   // el chip de líder en la columna derecha del título sin N+1 transacciones.
   _ghManageRunsBySong = new Map();

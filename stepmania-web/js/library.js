@@ -51,8 +51,10 @@ async function refreshLibrary() {
     _libraryRunsBySong.get(r.songId).push(r);
   }
   _libraryStorageInfo = info;
-  // Sort UNA vez aquí (más recientes primero); el render solo filtra y pinta.
-  songs.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+  // Sort UNA vez aquí (alfabético por título → artista); el render solo
+  // filtra y pinta. Orden alfabético para que las canciones repetidas queden
+  // contiguas y se detecten a simple vista. Ver compareByTitleArtist en core.
+  songs.sort(compareByTitleArtist);
   _libraryCache = songs;
   renderLibraryFromCache();
   // Auto-corrección silenciosa de tags rotos en background. NO bloquea el
@@ -63,7 +65,7 @@ async function refreshLibrary() {
     if (fixed > 0) {
       // Recargar caché desde DB para reflejar los cambios y re-renderizar.
       dbAll().then((fresh) => {
-        fresh.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+        fresh.sort(compareByTitleArtist);
         _libraryCache = fresh;
         if (typeof _allSongsCache !== 'undefined') _allSongsCache = fresh;
         renderLibraryFromCache();
