@@ -190,14 +190,26 @@ Suite con **Vitest**. Filosofía: testeamos lo matemáticamente verificable sin 
 
 - **`manifest.webmanifest`**: `start_url: /app.html#/play`, `display: standalone`, `theme_color: #00bec8`, 4 shortcuts.
 - **`sw.js`** (raíz, scope `/`):
-  - `install`: precache del shell estático (lista en `PRECACHE_URLS`).
+  - `install`: precache del shell estático (lista en `PRECACHE_URLS`). **NO** llama a `self.skipWaiting()` adrede — el SW nuevo queda en `waiting` hasta que el usuario lo confirme.
   - HTML navigation: network-first con fallback inteligente por ruta (shell SPA → `/app.html`, otras → `/index.html`).
   - CSS/JS/iconos same-origin: cache-first.
   - Range requests: passthrough (no romper audio segmentado).
+  - `message: SKIP_WAITING`: handler para que el cliente fuerce la activación cuando el usuario pulse "Actualizar ahora".
   - `CACHE_VERSION` debe bumpearse en cada deploy con cambios en precache.
 - **Headers HTTP**: `sw.js` y `*.html` con `Cache-Control: no-cache`; `manifest.webmanifest` con `Content-Type: application/manifest+json`.
 
 Cada HTML inyecta en `<head>` link al manifest, theme-color, icon SVG, apple-touch-icon, y `pwa-bootstrap.js`.
+
+### Flujo de update manual (toast persistente, 2026-05-18)
+
+Hasta v87 el SW se auto-activaba en segundo plano (`skipWaiting` + `clients.claim`). Daba sensación de "refresh fantasma" durante partidas (favicon parpadeando + precache re-fetcheándose). Ahora el flujo es:
+
+1. `pwa-bootstrap.js` detecta `updatefound` o un `reg.waiting` existente al cargar y dispara `sincro-pwa-update-available`.
+2. Muestra un toast bottom-right persistente "✨ Nueva versión disponible · [Actualizar ahora]". **No se puede descartar** — adrede, evita que el usuario quede en versión antigua sin enterarse.
+3. Al pulsar: `swRegistration.waiting.postMessage({type:'SKIP_WAITING'})` → SW activa → dispara `controllerchange` → `location.reload()` controlado.
+4. Si la página corre dentro del shell SPA (iframe), suprime su propio toast y su propio listener de `controllerchange` — el shell padre gestiona ambos para evitar doble reload.
+
+API pública: `window.SincroPWA.applyUpdate()` por si algún HTML quiere ofrecer un botón propio.
 
 ---
 

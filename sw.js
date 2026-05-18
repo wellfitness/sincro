@@ -18,7 +18,7 @@
 // Aviso: NO interceptamos requests POST ni con header Range (audio range
 // requests del motor son delicados — los dejamos pasar a network).
 
-const CACHE_VERSION = 'sincro-v87';
+const CACHE_VERSION = 'sincro-v88';
 const PRECACHE      = `${CACHE_VERSION}-shell`;
 const RUNTIME       = `${CACHE_VERSION}-runtime`;
 
@@ -73,7 +73,11 @@ self.addEventListener('install', (event) => {
       .then((cache) => cache.addAll(
         PRECACHE_URLS.map((url) => new Request(url, { cache: 'reload' }))
       ))
-      .then(() => self.skipWaiting())
+      // NOTA: NO llamamos a self.skipWaiting() aquí adrede. El SW recién
+      // instalado queda en estado "waiting" hasta que el usuario pulse el
+      // botón "Actualizar ahora" del toast (pwa-bootstrap.js). Eso le envía
+      // el mensaje SKIP_WAITING (handler abajo) y entonces sí pasa a active
+      // + reload controlado. Evita el "refresh fantasma" durante partidas.
   );
 });
 
